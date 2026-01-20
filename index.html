@@ -1527,6 +1527,230 @@
         .admin-view-tab:hover:not(.active) {
             background: #d1d5db;
         }
+
+        /* Camera button styling */
+        .camera-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 14px 24px;
+            background: #374151;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .camera-btn:hover {
+            background: #1f2937;
+        }
+
+        .camera-btn:active {
+            background: #111827;
+        }
+
+        /* Hide actual file input */
+        .hidden-file-input {
+            display: none;
+        }
+
+        /* Mobile Day Selector (visible only on mobile) */
+        .mobile-day-selector {
+            display: none;
+            gap: 4px;
+            overflow-x: auto;
+            padding: 8px 0;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .mobile-day-btn {
+            flex: 0 0 auto;
+            min-width: 60px;
+            padding: 10px 8px;
+            background: #f3f4f6;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .mobile-day-btn.active {
+            background: #3b82f6;
+            border-color: #3b82f6;
+            color: white;
+        }
+
+        .mobile-day-btn.today {
+            border-color: #16a34a;
+        }
+
+        .mobile-day-btn .day-name {
+            font-size: 10px;
+            font-weight: 500;
+            text-transform: uppercase;
+        }
+
+        .mobile-day-btn .day-num {
+            font-size: 18px;
+            font-weight: 700;
+        }
+
+        .mobile-day-btn .day-events {
+            font-size: 9px;
+            margin-top: 2px;
+        }
+
+        /* Mobile day detail panel */
+        .mobile-day-detail {
+            display: none;
+            background: #f8fafc;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            padding: 12px;
+            margin-top: 8px;
+        }
+
+        .mobile-day-detail.show {
+            display: block;
+        }
+
+        /* Mobile Responsive Styles */
+        @media (max-width: 768px) {
+            /* Show mobile day selector, hide desktop week view */
+            .mobile-day-selector {
+                display: flex !important;
+            }
+
+            #workerWeekView {
+                display: none !important;
+            }
+
+            /* Admin calendar - horizontal scroll on mobile */
+            #adminCalendarContainer {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+                margin: 0 -12px;
+                padding: 0 12px;
+            }
+
+            /* Ensure calendar grid has minimum width */
+            .calendar-grid {
+                min-width: 600px;
+            }
+
+            /* Signature pad - responsive width */
+            .signature-pad {
+                width: 100% !important;
+                max-width: 100%;
+                height: 150px !important;
+            }
+
+            /* POD view buttons at bottom */
+            #existingPodView .btn {
+                display: block;
+                width: 100%;
+                margin-bottom: 8px;
+            }
+
+            /* Save POD button full width */
+            #podForm > .btn-success {
+                width: 100%;
+                padding: 16px;
+                font-size: 16px;
+            }
+
+            /* Cards - reduce padding on mobile */
+            .card {
+                padding: 12px;
+            }
+
+            /* Header adjustments */
+            .header-content h1 {
+                font-size: 18px;
+            }
+
+            /* Month selector adjustments */
+            .month-display .month-name {
+                font-size: 16px;
+            }
+
+            .month-display .month-year {
+                font-size: 12px;
+            }
+
+            /* Period toggle buttons */
+            .period-toggle-btn {
+                padding: 8px 12px;
+                font-size: 13px;
+            }
+
+            /* Customer list items - more touch-friendly */
+            .customer-item {
+                padding: 14px;
+            }
+
+            /* Run day cards */
+            .run-day-card {
+                padding: 12px;
+            }
+
+            /* Form inputs - prevent iOS zoom */
+            input, select, textarea {
+                font-size: 16px !important;
+            }
+
+            /* Camera button full width */
+            .camera-btn {
+                width: 100%;
+            }
+
+            /* Photo preview sizing */
+            .photo-preview {
+                max-height: 200px;
+                object-fit: contain;
+            }
+        }
+
+        /* Extra small screens */
+        @media (max-width: 400px) {
+            .container {
+                padding: 12px;
+            }
+
+            .header-content {
+                padding: 12px;
+            }
+
+            .back-btn {
+                padding: 6px 10px;
+                font-size: 13px;
+            }
+
+            .btn {
+                padding: 10px 16px;
+                font-size: 14px;
+            }
+
+            .month-nav-btn {
+                width: 32px;
+                height: 32px;
+                font-size: 16px;
+            }
+
+            .mobile-day-btn {
+                min-width: 52px;
+                padding: 8px 6px;
+            }
+
+            .mobile-day-btn .day-num {
+                font-size: 16px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -1618,6 +1842,14 @@
                         <div id="workerWeekGrid" style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1px; background: #e2e8f0;">
                             <!-- Week days will be populated -->
                         </div>
+                    </div>
+                    
+                    <!-- Mobile Day Selector (shown on mobile instead of week grid) -->
+                    <div id="mobileDaySelector" class="mobile-day-selector">
+                        <!-- Days will be populated dynamically -->
+                    </div>
+                    <div id="mobileDayDetail" class="mobile-day-detail">
+                        <!-- Selected day's events will appear here -->
                     </div>
                     
                     <!-- List View (hidden by default) -->
@@ -1760,7 +1992,10 @@
                 <div class="card">
                     <div class="form-group">
                         <label>Photo</label>
-                        <input type="file" id="photoInput" accept="image/*" capture="environment">
+                        <input type="file" id="photoInput" class="hidden-file-input" accept="image/*" capture="environment">
+                        <button type="button" class="camera-btn" onclick="document.getElementById('photoInput').click()">
+                            📷 Take Photo
+                        </button>
                         <img id="photoPreview" class="photo-preview" style="display: none;">
                     </div>
                 </div>
@@ -3806,6 +4041,9 @@
             const canvas = document.getElementById('signaturePad');
             const ctx = canvas.getContext('2d');
             
+            // Make canvas responsive to container width
+            resizeSignatureCanvas(canvas);
+            
             ctx.strokeStyle = '#000';
             ctx.lineWidth = 2;
             ctx.lineCap = 'round';
@@ -3822,13 +4060,31 @@
             canvas.addEventListener('touchstart', handleTouchStart);
             canvas.addEventListener('touchmove', handleTouchMove);
             canvas.addEventListener('touchend', stopDrawing);
+            
+            // Resize on window resize
+            window.addEventListener('resize', () => {
+                if (signaturePad && !signaturePad.isEmpty) return; // Don't resize if there's a signature
+                resizeSignatureCanvas(canvas);
+            });
+        }
+
+        function resizeSignatureCanvas(canvas) {
+            const container = canvas.parentElement;
+            const maxWidth = Math.min(container.clientWidth - 20, 400);
+            canvas.style.width = maxWidth + 'px';
+            canvas.style.height = (maxWidth * 0.5) + 'px';
+            // Keep internal resolution for good quality
+            canvas.width = 400;
+            canvas.height = 200;
         }
 
         function startDrawing(e) {
             isDrawing = true;
             const rect = signaturePad.canvas.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
+            const scaleX = signaturePad.canvas.width / rect.width;
+            const scaleY = signaturePad.canvas.height / rect.height;
+            const x = (e.clientX - rect.left) * scaleX;
+            const y = (e.clientY - rect.top) * scaleY;
             signaturePad.ctx.beginPath();
             signaturePad.ctx.moveTo(x, y);
             signaturePad.isEmpty = false;
@@ -3837,8 +4093,10 @@
         function draw(e) {
             if (!isDrawing) return;
             const rect = signaturePad.canvas.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
+            const scaleX = signaturePad.canvas.width / rect.width;
+            const scaleY = signaturePad.canvas.height / rect.height;
+            const x = (e.clientX - rect.left) * scaleX;
+            const y = (e.clientY - rect.top) * scaleY;
             signaturePad.ctx.lineTo(x, y);
             signaturePad.ctx.stroke();
         }
@@ -4286,8 +4544,10 @@
                     }
                 </div>
 
-                <button class="btn" onclick="editExistingPod(${pod.id})">Edit POD</button>
-                <button class="btn btn-secondary" onclick="backToCustomerList()">Back to List</button>
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <button class="btn" onclick="editExistingPod(${pod.id})" style="width: 100%;">✏️ Edit POD</button>
+                    <button class="btn btn-secondary" onclick="backToCustomerList()" style="width: 100%;">← Back to List</button>
+                </div>
             `;
         }
 
@@ -5167,6 +5427,118 @@
                 gridHtml += '</div>';
             }
             gridEl.innerHTML = gridHtml;
+            
+            // Also render mobile day selector
+            renderMobileDaySelector(monday, byDate, todayStr);
+        }
+        
+        // Mobile day selector for smaller screens
+        let selectedMobileDay = null;
+        let mobileDayEvents = {}; // Store events by date for mobile selector
+        
+        function renderMobileDaySelector(monday, byDate, todayStr) {
+            const container = document.getElementById('mobileDaySelector');
+            if (!container) return;
+            
+            // Store events for mobile access
+            mobileDayEvents = byDate;
+            
+            const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+            
+            let html = '';
+            for (let i = 0; i < 5; i++) {
+                const date = new Date(monday);
+                date.setDate(date.getDate() + i);
+                const dateStr = formatDateLocal(date);
+                const isToday = dateStr === todayStr;
+                const events = byDate[dateStr] || [];
+                const eventCount = events.filter(e => e.is_service_day).length;
+                const isSelected = selectedMobileDay === dateStr || (!selectedMobileDay && isToday);
+                
+                html += `
+                    <div class="mobile-day-btn ${isSelected ? 'active' : ''} ${isToday ? 'today' : ''}" 
+                         onclick="selectMobileDay('${dateStr}')">
+                        <div class="day-name">${dayNames[i]}</div>
+                        <div class="day-num">${date.getDate()}</div>
+                        ${eventCount > 0 ? `<div class="day-events">${eventCount} job${eventCount !== 1 ? 's' : ''}</div>` : '<div class="day-events">-</div>'}
+                    </div>
+                `;
+            }
+            container.innerHTML = html;
+            
+            // Auto-select today or first day
+            if (!selectedMobileDay) {
+                const todayEvents = byDate[todayStr] || [];
+                if (todayStr >= formatDateLocal(monday)) {
+                    selectMobileDay(todayStr, true);
+                } else {
+                    const firstDayStr = formatDateLocal(monday);
+                    selectMobileDay(firstDayStr, true);
+                }
+            }
+        }
+        
+        function selectMobileDay(dateStr, skipButtonUpdate = false) {
+            selectedMobileDay = dateStr;
+            const events = mobileDayEvents[dateStr] || [];
+            
+            // Update button states
+            if (!skipButtonUpdate) {
+                document.querySelectorAll('.mobile-day-btn').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+                if (event && event.currentTarget) {
+                    event.currentTarget.classList.add('active');
+                }
+            } else {
+                // Find and activate the correct button
+                document.querySelectorAll('.mobile-day-btn').forEach(btn => {
+                    btn.classList.remove('active');
+                    if (btn.onclick && btn.onclick.toString().includes(dateStr)) {
+                        btn.classList.add('active');
+                    }
+                });
+            }
+            
+            // Show day detail
+            const detailEl = document.getElementById('mobileDayDetail');
+            if (!detailEl) return;
+            
+            const dateObj = new Date(dateStr + 'T00:00:00');
+            const dateDisplay = dateObj.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' });
+            
+            let html = `<h4 style="margin: 0 0 12px 0; color: #374151;">${dateDisplay}</h4>`;
+            
+            if (!events || events.length === 0) {
+                html += `<p style="color: #9ca3af; text-align: center; padding: 20px;">No scheduled events</p>`;
+            } else {
+                events.forEach(event => {
+                    const isServiceDay = event.is_service_day;
+                    const icon = isServiceDay ? '🚛' : '📋';
+                    const eventWorker = currentSelectedWorker || event.calendar_owner || '';
+                    const bgColor = isServiceDay ? getWorkerColorLight(eventWorker) : '#f3f4f6';
+                    const borderColor = isServiceDay ? getWorkerColor(eventWorker) : '#d1d5db';
+                    const clickable = isServiceDay;
+                    const showWorkerName = !currentSelectedWorker && event.calendar_owner;
+                    
+                    html += `
+                        <div onclick="${clickable ? `openWorkerRunsheet('${event.service_day_name}', '${dateStr}')` : ''}" 
+                             style="display: flex; align-items: center; gap: 10px; padding: 12px; background: ${bgColor}; 
+                                    border-radius: 8px; margin-bottom: 8px; border-left: 4px solid ${borderColor};
+                                    ${clickable ? 'cursor: pointer;' : ''}">
+                            <span style="font-size: 20px;">${icon}</span>
+                            <div style="flex: 1;">
+                                <div style="font-weight: 600; font-size: 14px; color: #1e3a5f;">${event.service_day_name || event.event_title}</div>
+                                ${showWorkerName ? `<div style="font-size: 12px; color: #6b7280;">👤 ${event.calendar_owner}</div>` : ''}
+                            </div>
+                            ${clickable ? '<span style="color: #6b7280;">›</span>' : ''}
+                        </div>
+                    `;
+                });
+            }
+            
+            detailEl.innerHTML = html;
+            detailEl.classList.add('show');
         }
         
         function renderWorkerMonthView(byDate, todayStr) {
