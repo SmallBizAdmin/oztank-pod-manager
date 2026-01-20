@@ -484,23 +484,27 @@
             gap: 8px;
             margin-bottom: 12px;
             align-items: center;
+            flex-wrap: wrap;
         }
 
         .product-line select {
             flex: 1;
+            min-width: 120px;
         }
 
         .product-line input[type="number"] {
-            width: 80px;
+            width: 70px;
+            flex-shrink: 0;
         }
 
         .product-line button {
-            padding: 8px 12px;
+            padding: 8px 14px;
             border: none;
             border-radius: 6px;
             cursor: pointer;
-            font-size: 14px;
+            font-size: 16px;
             white-space: nowrap;
+            flex-shrink: 0;
         }
 
         .product-line .product-confirm-btn {
@@ -722,16 +726,18 @@
 
         .toast {
             position: fixed;
-            top: 80px;
+            top: 20px;
             left: 50%;
             transform: translateX(-50%);
             background: #16a34a;
             color: white;
             padding: 16px 24px;
             border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
-            z-index: 1000;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            z-index: 10000;
             animation: slideDown 0.3s ease;
+            max-width: 90%;
+            text-align: center;
         }
 
         .toast.error {
@@ -1621,13 +1627,46 @@
 
         /* Mobile Responsive Styles */
         @media (max-width: 768px) {
-            /* Show mobile day selector, hide desktop week view */
+            /* Show mobile day selector, hide desktop week view and toggle */
             .mobile-day-selector {
                 display: flex !important;
             }
 
             #workerWeekView {
                 display: none !important;
+            }
+
+            /* Hide week/list toggle on mobile - we just use day selector */
+            #weekListToggle {
+                display: none !important;
+            }
+
+            /* Also hide list view on mobile */
+            #workerListView {
+                display: none !important;
+            }
+
+            /* Always show mobile day detail on mobile when selector is visible */
+            .mobile-day-detail {
+                display: block;
+            }
+
+            /* Product line - row layout with wrapping on mobile */
+            .product-line {
+                gap: 6px;
+            }
+
+            .product-line select {
+                flex: 1 1 60%;
+                min-width: 0;
+            }
+
+            .product-line input[type="number"] {
+                width: 60px;
+            }
+
+            .product-line button {
+                padding: 10px 14px;
             }
 
             /* Admin calendar - horizontal scroll on mobile */
@@ -1713,6 +1752,11 @@
             .photo-preview {
                 max-height: 200px;
                 object-fit: contain;
+            }
+
+            /* Radio groups on mobile */
+            .radio-group {
+                flex-wrap: wrap;
             }
         }
 
@@ -1827,7 +1871,7 @@
                 <!-- Worker's Calendar Events (hidden by default) -->
                 <div id="workerCalendarEvents" style="display: none; margin-top: 16px;">
                     <!-- Week/List View Toggle -->
-                    <div style="display: flex; align-items: center; justify-content: flex-start; margin-bottom: 12px;">
+                    <div id="weekListToggle" style="display: flex; align-items: center; justify-content: flex-start; margin-bottom: 12px;">
                         <div style="display: flex; gap: 4px; background: #e5e7eb; padding: 4px; border-radius: 8px; width: fit-content;">
                             <button class="period-toggle-btn active" id="workerWeekViewBtn" onclick="setWorkerCalendarView('week')">Week View</button>
                             <button class="period-toggle-btn" id="workerListViewBtn" onclick="setWorkerCalendarView('list')">List View</button>
@@ -4620,8 +4664,8 @@
                             ${getProductOptionsHtml('sale')}
                         </select>
                         <input type="number" class="product-quantity" disabled placeholder="Qty" min="0" value="${product.quantity}" onchange="checkProductLineComplete(this)">
-                        <button type="button" class="product-confirm-btn" disabled style="background: #16a34a; cursor: default;">Locked ✓</button>
-                        <button type="button" onclick="removeProductLine(this)">Remove</button>
+                        <button type="button" class="product-confirm-btn" disabled style="background: #16a34a; cursor: default;">✓</button>
+                        <button type="button" onclick="removeProductLine(this)">✕</button>
                     `;
                     // Set selected value
                     line.querySelector('.product-select').value = product.product;
@@ -4644,8 +4688,8 @@
                                 ${getProductOptionsHtml('repair')}
                             </select>
                             <input type="number" class="product-quantity" disabled placeholder="Qty" min="0" value="${product.quantity}" onchange="checkProductLineComplete(this)">
-                            <button type="button" class="product-confirm-btn" disabled style="background: #16a34a; cursor: default;">Locked ✓</button>
-                            <button type="button" onclick="removeProductLine(this)">Remove</button>
+                            <button type="button" class="product-confirm-btn" disabled style="background: #16a34a; cursor: default;">✓</button>
+                            <button type="button" onclick="removeProductLine(this)">✕</button>
                         `;
                         // Set selected value
                         line.querySelector('.product-select').value = product.product;
@@ -6466,8 +6510,8 @@
                         ${getProductOptionsHtml('sale')}
                     </select>
                     <input type="number" class="product-quantity" placeholder="Qty" min="0" value="0" onchange="checkProductLineComplete(this)">
-                    <button type="button" class="product-confirm-btn" onclick="confirmProductLine(this)" disabled style="background: #9ca3af; cursor: not-allowed;">Confirm</button>
-                    <button type="button" onclick="removeProductLine(this)">Remove</button>
+                    <button type="button" class="product-confirm-btn" onclick="confirmProductLine(this)" disabled style="background: #9ca3af; cursor: not-allowed;">✓</button>
+                    <button type="button" onclick="removeProductLine(this)">✕</button>
                 </div>
             `;
             
@@ -6480,8 +6524,8 @@
                             ${getProductOptionsHtml('repair')}
                         </select>
                         <input type="number" class="product-quantity" placeholder="Qty" min="0" value="0" onchange="checkProductLineComplete(this)">
-                        <button type="button" class="product-confirm-btn" onclick="confirmProductLine(this)" disabled style="background: #9ca3af; cursor: not-allowed;">Confirm</button>
-                        <button type="button" onclick="removeProductLine(this)">Remove</button>
+                        <button type="button" class="product-confirm-btn" onclick="confirmProductLine(this)" disabled style="background: #9ca3af; cursor: not-allowed;">✓</button>
+                        <button type="button" onclick="removeProductLine(this)">✕</button>
                     </div>
                 `;
             }
@@ -6498,8 +6542,8 @@
                     ${getProductOptionsHtml(category)}
                 </select>
                 <input type="number" class="product-quantity" placeholder="Qty" min="0" value="0" onchange="checkProductLineComplete(this)">
-                <button type="button" class="product-confirm-btn" onclick="confirmProductLine(this)" disabled style="background: #9ca3af; cursor: not-allowed;">Confirm</button>
-                <button type="button" onclick="removeProductLine(this)">Remove</button>
+                <button type="button" class="product-confirm-btn" onclick="confirmProductLine(this)" disabled style="background: #9ca3af; cursor: not-allowed;">✓</button>
+                <button type="button" onclick="removeProductLine(this)">✕</button>
             `;
             container.appendChild(line);
         }
@@ -6540,8 +6584,8 @@
             line.querySelector('.product-select').disabled = true;
             line.querySelector('.product-quantity').disabled = true;
             
-            // Change confirm button to "Locked ✓"
-            button.textContent = 'Locked ✓';
+            // Keep confirm button as checkmark but disabled
+            button.textContent = '✓';
             button.disabled = true;
             button.style.background = '#16a34a';
             button.style.cursor = 'default';
