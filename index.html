@@ -1042,55 +1042,6 @@
             border-radius: 6px;
         }
 
-        .upload-area {
-            border: 2px dashed #d1d5db;
-            border-radius: 8px;
-            padding: 32px;
-            text-align: center;
-            background: #f9fafb;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .upload-area:hover {
-            border-color: #374151;
-            background: #eff6ff;
-        }
-
-        .upload-area.dragover {
-            border-color: #374151;
-            background: #f3f4f6;
-        }
-
-        .upload-icon {
-            font-size: 48px;
-            color: #9ca3af;
-            margin-bottom: 12px;
-        }
-
-        .file-input {
-            display: none;
-        }
-
-        .import-status {
-            margin-top: 16px;
-            padding: 12px;
-            border-radius: 6px;
-            font-size: 14px;
-        }
-
-        .import-status.success {
-            background: #f0fdf4;
-            color: #16a34a;
-            border: 1px solid #16a34a;
-        }
-
-        .import-status.error {
-            background: #fef2f2;
-            color: #dc2626;
-            border: 1px solid #dc2626;
-        }
-
         /* Worker Selector Styles */
         .worker-selector-container {
             display: flex;
@@ -1608,7 +1559,7 @@
             <div class="admin-quick-actions" style="display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap;">
                 <button class="btn btn-secondary" style="flex: 1; min-width: 120px;" onclick="showAdminDashboard()">📊 Admin</button>
                 <button class="btn btn-secondary" style="flex: 1; min-width: 120px;" onclick="showAdminPanelView()">📥 Import</button>
-                <button class="btn btn-secondary" style="flex: 1; min-width: 120px;" onclick="showExportView()">📤 Export PODs</button>
+                <button class="btn btn-secondary" style="flex: 1; min-width: 120px;" onclick="showExportView()">🔍 Search PODs</button>
             </div>
             
             <!-- Week/Month Selector -->
@@ -1858,21 +1809,7 @@
             <!-- Customer Management -->
             <div id="customersTab" class="admin-tab">
                 <div class="card">
-                    <h2 style="margin-bottom: 16px;">Import Customers from Excel</h2>
-                    <div class="upload-area" id="uploadArea" onclick="document.getElementById('excelFileInput').click()">
-                        <div class="upload-icon">📄</div>
-                        <p style="color: #374151; font-weight: 500; margin-bottom: 4px;">Click to upload Excel file</p>
-                        <p style="color: #6b7280; font-size: 14px;">or drag and drop</p>
-                        <p style="color: #9ca3af; font-size: 12px; margin-top: 8px;">
-                            Columns: Name | Service Day | Address | Phone | Service Type | Carbsolve | Waste | Code | Notes
-                        </p>
-                    </div>
-                    <input type="file" id="excelFileInput" class="file-input" accept=".xlsx,.xls,.csv" onchange="handleFileUpload(event)">
-                    <div id="importStatus"></div>
-                </div>
-
-                <div class="card">
-                    <h2 style="margin-bottom: 16px;">Add Single Customer</h2>
+                    <h2 style="margin-bottom: 16px;">Add Customer</h2>
                     <form id="addCustomerForm">
                         <div class="form-group">
                             <label>Customer Name</label>
@@ -2046,34 +1983,33 @@
         </div>
     </div>
 
-    <!-- Export View -->
+    <!-- Search PODs View -->
     <div id="exportView" class="view">
         <div class="header">
             <div class="header-content">
                 <button class="back-btn" onclick="showHomeView()">← Back</button>
                 <div>
-                    <h1>Export PODs</h1>
-                    <p class="subtitle">Download completed PODs</p>
+                    <h1>Search PODs</h1>
+                    <p class="subtitle">Find and view completed PODs</p>
                 </div>
             </div>
         </div>
         <div class="container">
             <div class="card">
+                <h2 style="margin-bottom: 16px;">Search by Customer</h2>
                 <div class="form-group">
-                    <label>Filter by Service Day</label>
-                    <select id="exportRunDayFilter">
-                        <option value="all">All Service Days</option>
-                    </select>
+                    <input type="text" id="podCustomerSearch" placeholder="🔍 Start typing customer name..." 
+                           oninput="searchPodsByCustomer(this.value)"
+                           style="width: 100%; padding: 14px; font-size: 16px;">
                 </div>
-                <div class="form-group">
-                    <label>Filter by Date</label>
-                    <input type="date" id="exportDateFilter">
-                </div>
-                <button class="btn" onclick="filterPODs()">Filter PODs</button>
+                <p id="podSearchResultCount" style="font-size: 13px; color: #6b7280; margin-top: 8px;"></p>
             </div>
 
             <div id="exportPodList">
-                <!-- Filtered PODs will appear here -->
+                <!-- Search results will appear here -->
+                <div style="text-align: center; color: #6b7280; padding: 40px;">
+                    Enter a customer name above to search for their PODs
+                </div>
             </div>
         </div>
     </div>
@@ -4867,8 +4803,14 @@
 
         function showExportView() {
             showView('exportView');
-            populateExportServiceDayFilter();
-            filterPODs();
+            // Clear previous search
+            document.getElementById('podCustomerSearch').value = '';
+            document.getElementById('podSearchResultCount').textContent = '';
+            document.getElementById('exportPodList').innerHTML = `
+                <div style="text-align: center; color: #6b7280; padding: 40px;">
+                    Enter a customer name above to search for their PODs
+                </div>
+            `;
         }
 
         function backToCustomerList() {
@@ -6544,52 +6486,61 @@
             const customer = db.customers.find(c => c.id === id);
             if (!customer) return;
             
+            // Helper to safely escape HTML
+            const esc = (str) => (str || '').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            
+            // Helper to check if value matches (case-insensitive, trimmed)
+            const sel = (val, option) => {
+                if (!val) return '';
+                return val.toString().trim().toLowerCase() === option.toLowerCase() ? 'selected' : '';
+            };
+            
             const div = document.getElementById(`customer-${id}`);
             div.innerHTML = `
                 <div style="flex: 1;">
                     <div class="form-group" style="margin-bottom: 8px;">
-                        <input type="text" id="edit-name-${id}" value="${customer.name}" placeholder="Customer Name" style="width: 100%; padding: 8px; margin-bottom: 4px;">
-                        <input type="text" id="edit-runday-${id}" value="${customer.runDay}" placeholder="Service Day" style="width: 100%; padding: 8px; margin-bottom: 4px;">
-                        <input type="text" id="edit-address-${id}" value="${customer.address || ''}" placeholder="Address" style="width: 100%; padding: 8px; margin-bottom: 4px;">
-                        <input type="text" id="edit-phone-${id}" value="${customer.phone || ''}" placeholder="Phone" style="width: 100%; padding: 8px; margin-bottom: 4px;">
+                        <input type="text" id="edit-name-${id}" value="${esc(customer.name)}" placeholder="Customer Name" style="width: 100%; padding: 8px; margin-bottom: 4px;">
+                        <input type="text" id="edit-runday-${id}" value="${esc(customer.runDay)}" placeholder="Service Day" style="width: 100%; padding: 8px; margin-bottom: 4px;">
+                        <input type="text" id="edit-address-${id}" value="${esc(customer.address)}" placeholder="Address" style="width: 100%; padding: 8px; margin-bottom: 4px;">
+                        <input type="text" id="edit-phone-${id}" value="${esc(customer.phone)}" placeholder="Phone" style="width: 100%; padding: 8px; margin-bottom: 4px;">
                         
                         <select id="edit-servicetype-${id}" style="width: 100%; padding: 8px; margin-bottom: 4px;">
                             <option value="">Service Type...</option>
-                            <option value="Service" ${customer.serviceType === 'Service' ? 'selected' : ''}>Service</option>
-                            <option value="Delivery" ${customer.serviceType === 'Delivery' ? 'selected' : ''}>Delivery</option>
-                            <option value="Check" ${customer.serviceType === 'Check' ? 'selected' : ''}>Check</option>
+                            <option value="Service" ${sel(customer.serviceType, 'Service')}>Service</option>
+                            <option value="Delivery" ${sel(customer.serviceType, 'Delivery')}>Delivery</option>
+                            <option value="Check" ${sel(customer.serviceType, 'Check')}>Check</option>
                         </select>
                         
                         <select id="edit-frequency-${id}" style="width: 100%; padding: 8px; margin-bottom: 4px;">
                             <option value="">Frequency...</option>
-                            <option value="Weekly" ${customer.frequency === 'Weekly' ? 'selected' : ''}>Weekly</option>
-                            <option value="Fortnightly" ${customer.frequency === 'Fortnightly' ? 'selected' : ''}>Fortnightly</option>
-                            <option value="Monthly" ${customer.frequency === 'Monthly' ? 'selected' : ''}>Monthly</option>
-                            <option value="Bi-monthly" ${customer.frequency === 'Bi-monthly' ? 'selected' : ''}>Bi-monthly</option>
-                            <option value="Quarterly" ${customer.frequency === 'Quarterly' ? 'selected' : ''}>Quarterly</option>
-                            <option value="On Call" ${customer.frequency === 'On Call' ? 'selected' : ''}>On Call</option>
+                            <option value="Weekly" ${sel(customer.frequency, 'Weekly')}>Weekly</option>
+                            <option value="Fortnightly" ${sel(customer.frequency, 'Fortnightly')}>Fortnightly</option>
+                            <option value="Monthly" ${sel(customer.frequency, 'Monthly')}>Monthly</option>
+                            <option value="Bi-monthly" ${sel(customer.frequency, 'Bi-monthly')}>Bi-monthly</option>
+                            <option value="Quarterly" ${sel(customer.frequency, 'Quarterly')}>Quarterly</option>
+                            <option value="On Call" ${sel(customer.frequency, 'On Call')}>On Call</option>
                         </select>
                         
                         <select id="edit-carbsolve-${id}" style="width: 100%; padding: 8px; margin-bottom: 4px;">
                             <option value="">Carbsolve...</option>
-                            <option value="4kg" ${customer.carbsolve === '4kg' ? 'selected' : ''}>4kg</option>
-                            <option value="4kg spcl" ${customer.carbsolve === '4kg spcl' ? 'selected' : ''}>4kg spcl</option>
-                            <option value="7kg" ${customer.carbsolve === '7kg' ? 'selected' : ''}>7kg</option>
-                            <option value="7kg spcl" ${customer.carbsolve === '7kg spcl' ? 'selected' : ''}>7kg spcl</option>
-                            <option value="10kg" ${customer.carbsolve === '10kg' ? 'selected' : ''}>10kg</option>
-                            <option value="11kg spcl" ${customer.carbsolve === '11kg spcl' ? 'selected' : ''}>11kg spcl</option>
-                            <option value="14kg" ${customer.carbsolve === '14kg' ? 'selected' : ''}>14kg</option>
-                            <option value="17kg" ${customer.carbsolve === '17kg' ? 'selected' : ''}>17kg</option>
-                            <option value="21kg" ${customer.carbsolve === '21kg' ? 'selected' : ''}>21kg</option>
+                            <option value="4kg" ${sel(customer.carbsolve, '4kg')}>4kg</option>
+                            <option value="4kg spcl" ${sel(customer.carbsolve, '4kg spcl')}>4kg spcl</option>
+                            <option value="7kg" ${sel(customer.carbsolve, '7kg')}>7kg</option>
+                            <option value="7kg spcl" ${sel(customer.carbsolve, '7kg spcl')}>7kg spcl</option>
+                            <option value="10kg" ${sel(customer.carbsolve, '10kg')}>10kg</option>
+                            <option value="11kg spcl" ${sel(customer.carbsolve, '11kg spcl')}>11kg spcl</option>
+                            <option value="14kg" ${sel(customer.carbsolve, '14kg')}>14kg</option>
+                            <option value="17kg" ${sel(customer.carbsolve, '17kg')}>17kg</option>
+                            <option value="21kg" ${sel(customer.carbsolve, '21kg')}>21kg</option>
                         </select>
                         
                         <select id="edit-waste-${id}" style="width: 100%; padding: 8px; margin-bottom: 4px;">
                             <option value="">Waste...</option>
-                            <option value="Drum" ${customer.waste === 'Drum' ? 'selected' : ''}>Drum</option>
+                            <option value="Drum" ${sel(customer.waste, 'Drum')}>Drum</option>
                         </select>
                         
-                        <input type="text" id="edit-code-${id}" value="${customer.code || ''}" placeholder="Code" style="width: 100%; padding: 8px; margin-bottom: 4px;">
-                        <textarea id="edit-notes-${id}" placeholder="Notes" style="width: 100%; padding: 8px; min-height: 60px;">${customer.notes || ''}</textarea>
+                        <input type="text" id="edit-code-${id}" value="${esc(customer.code)}" placeholder="Code" style="width: 100%; padding: 8px; margin-bottom: 4px;">
+                        <textarea id="edit-notes-${id}" placeholder="Notes" style="width: 100%; padding: 8px; min-height: 60px;">${esc(customer.notes)}</textarea>
                     </div>
                 </div>
                 <div style="display: flex; gap: 8px;">
@@ -7355,17 +7306,6 @@
             showToast(`Marked ${uncheckedCount} POD(s) as invoiced`, 'success');
         }
 
-        function populateExportServiceDayFilter() {
-            const select = document.getElementById('exportRunDayFilter');
-            select.innerHTML = '<option value="all">All Service Days</option>';
-            db.serviceDays.forEach(sd => {
-                const option = document.createElement('option');
-                option.value = sd.name;
-                option.textContent = sd.name;
-                select.appendChild(option);
-            });
-        }
-
         async function exportRunsheetExcel() {
             if (!currentAdminServiceDay) return;
             
@@ -7640,29 +7580,64 @@
             }
         }
 
-        // Export PODs
-        function filterPODs() {
-            const runDayFilter = document.getElementById('exportRunDayFilter').value;
-            const dateFilter = document.getElementById('exportDateFilter').value;
+        // Search PODs
+        async function searchPodsByCustomer(searchTerm) {
+            const list = document.getElementById('exportPodList');
+            const countEl = document.getElementById('podSearchResultCount');
             
-            let filteredPODs = db.pods;
-            
-            if (runDayFilter !== 'all') {
-                filteredPODs = filteredPODs.filter(pod => pod.runDay === runDayFilter);
+            if (!searchTerm || searchTerm.length < 2) {
+                list.innerHTML = `
+                    <div style="text-align: center; color: #6b7280; padding: 40px;">
+                        Enter a customer name above to search for their PODs
+                    </div>
+                `;
+                countEl.textContent = '';
+                return;
             }
             
-            if (dateFilter) {
-                filteredPODs = filteredPODs.filter(pod => pod.date === dateFilter);
+            // Search across ALL pods, not just current month
+            try {
+                const { data: allPods, error } = await supabase
+                    .from('pods')
+                    .select('*')
+                    .ilike('customer_name', `%${searchTerm}%`)
+                    .order('date', { ascending: false })
+                    .limit(100);
+                
+                if (error) throw error;
+                
+                // Map to JS format
+                const matchingPods = (allPods || []).map(p => ({
+                    id: p.id,
+                    customerId: p.customer_id,
+                    customerName: p.customer_name,
+                    customerAddress: p.customer_address,
+                    runDay: p.run_day,
+                    date: p.date,
+                    timestamp: p.timestamp,
+                    tankServiced: p.tank_serviced,
+                    serviceNotes: p.service_notes,
+                    products: p.products,
+                    signature: p.signature,
+                    photos: p.photos,
+                    serviceType: p.service_type,
+                    carbsolve: p.carbsolve
+                }));
+                
+                countEl.textContent = `Found ${matchingPods.length} POD${matchingPods.length !== 1 ? 's' : ''}${matchingPods.length >= 100 ? ' (showing first 100)' : ''}`;
+                renderPodSearchResults(matchingPods);
+                
+            } catch (e) {
+                console.error('Error searching PODs:', e);
+                list.innerHTML = `<div class="card"><p style="color: #dc2626;">Error searching: ${e.message}</p></div>`;
             }
-            
-            renderExportList(filteredPODs);
         }
 
-        function renderExportList(pods) {
+        function renderPodSearchResults(pods) {
             const list = document.getElementById('exportPodList');
             
             if (pods.length === 0) {
-                list.innerHTML = '<div class="card"><p style="text-align: center; color: #6b7280;">No PODs found matching the filters.</p></div>';
+                list.innerHTML = '<div class="card"><p style="text-align: center; color: #6b7280;">No PODs found for this customer.</p></div>';
                 return;
             }
             
@@ -7670,26 +7645,86 @@
             pods.forEach(pod => {
                 const card = document.createElement('div');
                 card.className = 'card';
+                
+                // Format date nicely
+                const dateObj = new Date(pod.date + 'T00:00:00');
+                const formattedDate = dateObj.toLocaleDateString('en-AU', { 
+                    weekday: 'short', 
+                    day: 'numeric', 
+                    month: 'short', 
+                    year: 'numeric' 
+                });
+                
                 card.innerHTML = `
                     <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px;">
-                        <div>
+                        <div style="flex: 1;">
                             <strong style="font-size: 16px;">${pod.customerName}</strong>
-                            <div style="color: #6b7280; font-size: 14px;">${pod.date} - ${pod.runDay}</div>
-                            <div style="color: #9ca3af; font-size: 12px; font-style: italic; margin-top: 4px;">${formatTimestamp(pod.timestamp)}</div>
+                            <div style="color: #374151; font-size: 14px; margin-top: 4px;">
+                                📅 ${formattedDate}
+                            </div>
+                            <div style="color: #6b7280; font-size: 13px; margin-top: 2px;">
+                                Day ${pod.runDay} • ${pod.serviceType || 'Service'}${pod.carbsolve ? ` • ${pod.carbsolve}` : ''}
+                            </div>
+                            <div style="color: #9ca3af; font-size: 12px; margin-top: 4px;">
+                                Tank: ${pod.tankServiced || 'N/A'}${pod.serviceNotes ? ` • ${pod.serviceNotes.substring(0, 50)}${pod.serviceNotes.length > 50 ? '...' : ''}` : ''}
+                            </div>
                         </div>
                     </div>
                     <div style="display: flex; gap: 8px;">
-                        <button class="btn" onclick="viewPOD(${pod.id})" style="flex: 1;">View</button>
-                        <button class="btn btn-success" onclick="downloadPOD(${pod.id})" style="flex: 1;">Download PDF</button>
+                        <button class="btn btn-secondary" onclick="viewPOD(${pod.id})" style="flex: 1;">👁️ View</button>
+                        <button class="btn btn-success" onclick="downloadPOD(${pod.id})" style="flex: 1;">📥 Download</button>
                     </div>
                 `;
                 list.appendChild(card);
             });
         }
 
-        function viewPOD(podId) {
-            const pod = db.pods.find(p => p.id === podId);
-            if (!pod) return;
+        function renderExportList(pods) {
+            // Legacy function - redirect to new one
+            renderPodSearchResults(pods);
+        }
+
+        async function viewPOD(podId) {
+            let pod = db.pods.find(p => p.id === podId);
+            
+            // If not in current month's pods, fetch from DB
+            if (!pod) {
+                try {
+                    const { data, error } = await supabase
+                        .from('pods')
+                        .select('*')
+                        .eq('id', podId)
+                        .single();
+                    
+                    if (error || !data) {
+                        showToast('POD not found', 'error');
+                        return;
+                    }
+                    
+                    pod = {
+                        id: data.id,
+                        customerId: data.customer_id,
+                        customerName: data.customer_name,
+                        customerAddress: data.customer_address,
+                        runDay: data.run_day,
+                        date: data.date,
+                        timestamp: data.timestamp,
+                        tankServiced: data.tank_serviced,
+                        serviceNotes: data.service_notes,
+                        products: data.products,
+                        signature: data.signature,
+                        photo: data.photo,
+                        photos: data.photos,
+                        notes: data.notes,
+                        customerNotAvailable: data.customer_not_available,
+                        serviceType: data.service_type,
+                        carbsolve: data.carbsolve
+                    };
+                } catch (e) {
+                    showToast('Error loading POD', 'error');
+                    return;
+                }
+            }
 
             const modalContent = `
                 <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; overflow: auto;" onclick="this.remove()">
@@ -7763,8 +7798,46 @@
         }
 
         async function downloadPOD(podId) {
-            const pod = db.pods.find(p => p.id === podId);
-            if (!pod) return;
+            let pod = db.pods.find(p => p.id === podId);
+            
+            // If not in current month's pods, fetch from DB
+            if (!pod) {
+                try {
+                    const { data, error } = await supabase
+                        .from('pods')
+                        .select('*')
+                        .eq('id', podId)
+                        .single();
+                    
+                    if (error || !data) {
+                        showToast('POD not found', 'error');
+                        return;
+                    }
+                    
+                    pod = {
+                        id: data.id,
+                        customerId: data.customer_id,
+                        customerName: data.customer_name,
+                        customerAddress: data.customer_address,
+                        runDay: data.run_day,
+                        date: data.date,
+                        timestamp: data.timestamp,
+                        tankServiced: data.tank_serviced,
+                        serviceNotes: data.service_notes,
+                        products: data.products,
+                        signature: data.signature,
+                        photo: data.photo,
+                        photos: data.photos,
+                        notes: data.notes,
+                        customerNotAvailable: data.customer_not_available,
+                        serviceType: data.service_type,
+                        carbsolve: data.carbsolve
+                    };
+                } catch (e) {
+                    showToast('Error loading POD', 'error');
+                    return;
+                }
+            }
 
             const { jsPDF } = window.jspdf;
             const pdf = new jsPDF();
@@ -7931,148 +8004,6 @@
                     processExcelFile(file);
                 }
             });
-        }
-
-        function handleFileUpload(event) {
-            const file = event.target.files[0];
-            if (file) {
-                processExcelFile(file);
-            }
-        }
-
-        async function processExcelFile(file) {
-            const statusDiv = document.getElementById('importStatus');
-            statusDiv.innerHTML = '<div class="import-status">Processing file...</div>';
-
-            const reader = new FileReader();
-            reader.onload = async function(e) {
-                try {
-                    const data = new Uint8Array(e.target.result);
-                    const workbook = XLSX.read(data, { type: 'array' });
-                    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-                    const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
-
-                    let importedCount = 0;
-                    let errorCount = 0;
-
-                    // Process rows (skip header if exists)
-                    // Expected columns: Name | Service Day | Address | Phone | Service Type | Carbsolve | Waste | Code | Notes
-                    for (let index = 0; index < jsonData.length; index++) {
-                        const row = jsonData[index];
-                        // Skip empty rows
-                        if (!row[0] || !row[1]) continue;
-                        
-                        let customerName = String(row[0]).trim();
-                        const serviceDay = String(row[1]).trim();
-                        const address = row[2] ? String(row[2]).trim() : '';
-                        const phone = row[3] ? String(row[3]).trim() : '';
-                        const serviceType = row[4] ? String(row[4]).trim() : '';
-                        const carbsolve = row[5] ? String(row[5]).trim() : '';
-                        const waste = row[6] ? String(row[6]).trim() : '';
-                        const code = row[7] ? String(row[7]).trim() : '';
-                        const notes = row[8] ? String(row[8]).trim() : '';
-                        
-                        // Check for existing customers with same name (handle multi-tank scenarios)
-                        const existingWithSameName = db.customers.filter(c => 
-                            c.name.toLowerCase() === customerName.toLowerCase() ||
-                            c.name.toLowerCase().startsWith(customerName.toLowerCase() + ' - tank')
-                        );
-                        
-                        // Check if exact match exists (same name, same day, same carbsolve)
-                        const exactMatch = existingWithSameName.find(c => 
-                            c.runDay === serviceDay && 
-                            c.carbsolve === carbsolve &&
-                            !c.name.toLowerCase().includes(' - tank')
-                        );
-                        
-                        if (exactMatch) {
-                            // Skip true duplicates
-                            continue;
-                        }
-                        
-                        // Check if this is a multi-tank situation (same name, same day, different carbsolve)
-                        const sameDayEntries = existingWithSameName.filter(c => c.runDay === serviceDay);
-                        
-                        if (sameDayEntries.length > 0) {
-                            // This is a multi-tank customer - append tank number
-                            const tankNumber = sameDayEntries.length + 1;
-                            
-                            // If first entry doesn't have tank suffix, rename it
-                            const firstEntry = sameDayEntries.find(c => !c.name.toLowerCase().includes(' - tank'));
-                            if (firstEntry) {
-                                firstEntry.name = `${firstEntry.name} - Tank 1`;
-                                await db.saveCustomer(firstEntry);
-                            }
-                            
-                            customerName = `${customerName} - Tank ${tankNumber}`;
-                        }
-                        
-                        // Check if this exact name now exists (after potential renaming)
-                        const stillExists = db.customers.some(c => 
-                            c.name.toLowerCase() === customerName.toLowerCase()
-                        );
-                        
-                        if (!stillExists) {
-                            const customer = {
-                                id: Date.now() + index,
-                                name: customerName,
-                                runDay: serviceDay,
-                                address: address,
-                                phone: phone,
-                                serviceType: serviceType,
-                                carbsolve: carbsolve,
-                                waste: waste,
-                                code: code,
-                                notes: notes,
-                                order: db.customers.length + importedCount
-                            };
-                            
-                            await db.saveCustomer(customer);
-                            db.customers.push(customer);
-                            importedCount++;
-                            
-                            // Add service day if it doesn't exist
-                            if (!db.serviceDays.some(sd => sd.name === serviceDay)) {
-                                const newServiceDay = {
-                                    name: serviceDay,
-                                    employee: '',
-                                    date: null
-                                };
-                                await db.saveServiceDay(newServiceDay);
-                                db.serviceDays.push(newServiceDay);
-                            }
-                        }
-                    }
-
-                    renderCustomerAdminList();
-                    renderServiceDayAdminList();
-                    renderRunDays();
-
-                    statusDiv.innerHTML = `
-                        <div class="import-status success">
-                            ✓ Successfully imported ${importedCount} customers
-                            ${errorCount > 0 ? `<br>⚠ ${errorCount} rows skipped (invalid data)` : ''}
-                        </div>
-                    `;
-
-                    // Clear file input
-                    document.getElementById('excelFileInput').value = '';
-
-                } catch (error) {
-                    statusDiv.innerHTML = `
-                        <div class="import-status error">
-                            ✗ Error processing file: ${error.message}
-                            <br>Expected columns: Name | Service Day | Address | Phone | Service Type | Carbsolve | Waste | Code | Notes
-                        </div>
-                    `;
-                }
-            };
-
-            reader.onerror = function() {
-                statusDiv.innerHTML = '<div class="import-status error">✗ Error reading file</div>';
-            };
-
-            reader.readAsArrayBuffer(file);
         }
 
         // Customer Search Modal Functions
