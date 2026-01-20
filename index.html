@@ -2048,15 +2048,6 @@
                         <p style="margin-top: 8px;"><strong>4. Invoicing:</strong> Click any service day on the calendar to open the runsheet for that date and manage invoicing</p>
                     </div>
                 </div>
-                
-                <div class="card" style="background: #fef3c7; border: 1px solid #f59e0b;">
-                    <h2 style="margin-bottom: 12px; color: #92400e;">⚠️ Setup Required</h2>
-                    <p style="color: #92400e; font-size: 14px; line-height: 1.6;">
-                        For the nightly sync to work, you need to deploy the Supabase Edge Function. 
-                        This requires running a few commands in your terminal. Contact your developer to set this up,
-                        or you can manually trigger syncs by clicking "Sync Now" after saving your ICS URL.
-                    </p>
-                </div>
             </div>
         </div>
     </div>
@@ -7663,15 +7654,31 @@
                 statusIcon = '✗';
             }
             
-            const lastSyncTime = settings.last_sync_at 
-                ? new Date(settings.last_sync_at).toLocaleString('en-AU')
+            // Handle both column naming conventions
+            const lastSyncTime = settings.last_sync || settings.last_sync_at 
+                ? new Date(settings.last_sync || settings.last_sync_at).toLocaleString('en-AU')
                 : 'Never';
+            
+            // Parse last_sync_details if it's an object
+            let detailsMessage = '';
+            if (settings.last_sync_details) {
+                const details = typeof settings.last_sync_details === 'string' 
+                    ? JSON.parse(settings.last_sync_details) 
+                    : settings.last_sync_details;
+                if (details.service_days_synced !== undefined) {
+                    detailsMessage = `Synced ${details.service_days_synced} service days, ${details.total_events} total events`;
+                } else if (details.error) {
+                    detailsMessage = details.error;
+                }
+            } else if (settings.last_sync_message) {
+                detailsMessage = settings.last_sync_message;
+            }
             
             statusDiv.innerHTML = `
                 <div style="display: grid; gap: 8px;">
                     <div><strong>Last Sync:</strong> ${lastSyncTime}</div>
                     <div><strong>Status:</strong> <span style="color: ${statusColor};">${statusIcon} ${settings.last_sync_status || 'Not synced'}</span></div>
-                    ${settings.last_sync_message ? `<div><strong>Details:</strong> ${settings.last_sync_message}</div>` : ''}
+                    ${detailsMessage ? `<div><strong>Details:</strong> ${detailsMessage}</div>` : ''}
                     <div><strong>Scheduled Days Loaded:</strong> ${db.scheduledDays.length} for current month</div>
                 </div>
             `;
@@ -7716,7 +7723,10 @@
             const result = await db.triggerCalendarSync();
             
             if (result.success) {
-                showToast(`Sync complete! ${result.message}`, 'success');
+                const syncMsg = result.service_days_synced !== undefined 
+                    ? `Synced ${result.service_days_synced} service days` 
+                    : 'Sync complete';
+                showToast(syncMsg, 'success');
                 // Reload data
                 await db.loadCalendarSyncSettings();
                 await db.loadScheduledDaysForMonth();
