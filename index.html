@@ -1571,6 +1571,7 @@
             overflow-x: auto;
             padding: 8px 0;
             -webkit-overflow-scrolling: touch;
+            justify-content: center;
         }
 
         .mobile-day-btn {
@@ -1638,6 +1639,11 @@
 
             /* Hide week/list toggle on mobile - we just use day selector */
             #weekListToggle {
+                display: none !important;
+            }
+
+            /* Hide week/month period toggle on mobile - just use week */
+            #workerPeriodToggle {
                 display: none !important;
             }
 
@@ -1847,7 +1853,7 @@
             </div>
             
             <!-- Week/Month Toggle -->
-            <div class="period-toggle">
+            <div id="workerPeriodToggle" class="period-toggle">
                 <button class="period-toggle-btn active" id="workerWeekPeriodBtn" onclick="setWorkerPeriod('week')">Week</button>
                 <button class="period-toggle-btn" id="workerMonthPeriodBtn" onclick="setWorkerPeriod('month')">Month</button>
             </div>
@@ -1857,7 +1863,7 @@
             
             <!-- Worker Selector Card -->
             <div class="card">
-                <h2 style="margin-bottom: 16px;">Select Service Day</h2>
+                <h2 style="margin-bottom: 16px; text-align: center;">Select Service Day</h2>
                 
                 <!-- Worker Selector -->
                 <div class="worker-selector-container">
@@ -4453,6 +4459,7 @@
 
         function showNewPodForm() {
             showView('podView');
+            window.scrollTo(0, 0); // Scroll to top of page
             document.getElementById('podCustomerName').textContent = currentCustomer.name;
             document.getElementById('podForm').style.display = 'block';
             document.getElementById('existingPodView').style.display = 'none';
@@ -4500,6 +4507,7 @@
 
         function showExistingPod(pod) {
             showView('podView');
+            window.scrollTo(0, 0); // Scroll to top of page
             document.getElementById('podCustomerName').textContent = currentCustomer.name;
             document.getElementById('podForm').style.display = 'none';
             
@@ -5184,6 +5192,10 @@
             const select = document.getElementById('workerSelect');
             currentSelectedWorker = select.value;
             localStorage.setItem('selectedWorker', currentSelectedWorker);
+            
+            // Reset mobile day selector to refresh with new worker's events
+            selectedMobileDay = null;
+            
             renderRunDays();
             await loadWorkerCalendarEvents();
         }
@@ -5510,16 +5522,9 @@
             }
             container.innerHTML = html;
             
-            // Auto-select today or first day
-            if (!selectedMobileDay) {
-                const todayEvents = byDate[todayStr] || [];
-                if (todayStr >= formatDateLocal(monday)) {
-                    selectMobileDay(todayStr, true);
-                } else {
-                    const firstDayStr = formatDateLocal(monday);
-                    selectMobileDay(firstDayStr, true);
-                }
-            }
+            // Auto-select today or maintain current selection, but always refresh events
+            const dayToSelect = selectedMobileDay || (todayStr >= formatDateLocal(monday) ? todayStr : formatDateLocal(monday));
+            selectMobileDay(dayToSelect, true);
         }
         
         function selectMobileDay(dateStr, skipButtonUpdate = false) {
