@@ -7654,25 +7654,13 @@
                 statusIcon = '✗';
             }
             
-            // Handle both column naming conventions
-            const lastSyncTime = settings.last_sync || settings.last_sync_at 
-                ? new Date(settings.last_sync || settings.last_sync_at).toLocaleString('en-AU')
+            // Use last_sync_at (the actual column name)
+            const lastSyncTime = settings.last_sync_at 
+                ? new Date(settings.last_sync_at).toLocaleString('en-AU')
                 : 'Never';
             
-            // Parse last_sync_details if it's an object
-            let detailsMessage = '';
-            if (settings.last_sync_details) {
-                const details = typeof settings.last_sync_details === 'string' 
-                    ? JSON.parse(settings.last_sync_details) 
-                    : settings.last_sync_details;
-                if (details.service_days_synced !== undefined) {
-                    detailsMessage = `Synced ${details.service_days_synced} service days, ${details.total_events} total events`;
-                } else if (details.error) {
-                    detailsMessage = details.error;
-                }
-            } else if (settings.last_sync_message) {
-                detailsMessage = settings.last_sync_message;
-            }
+            // Use last_sync_message (the actual column name)
+            const detailsMessage = settings.last_sync_message || '';
             
             statusDiv.innerHTML = `
                 <div style="display: grid; gap: 8px;">
