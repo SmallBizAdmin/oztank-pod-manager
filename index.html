@@ -2014,21 +2014,15 @@
                 <div class="card">
                     <h2 style="margin-bottom: 16px;">📅 Google Calendar Integration</h2>
                     <p style="color: #6b7280; margin-bottom: 16px;">
-                        Connect your Google Calendar to automatically populate scheduled service days on the admin calendar.
-                        This helps track which days are expected to be invoiced.
+                        Service days are automatically synced from all worker Google Calendars via Google Apps Script.
+                        The sync runs automatically every day at 2:35 AM Brisbane time.
                     </p>
                     
-                    <div class="form-group">
-                        <label>Google Calendar ICS URL</label>
-                        <input type="text" id="calendarIcsUrl" placeholder="https://calendar.google.com/calendar/ical/..." style="font-size: 13px;">
-                        <p style="font-size: 12px; color: #9ca3af; margin-top: 6px;">
-                            To get this URL: Google Calendar → Settings → [Your Calendar] → Integrate calendar → "Secret address in iCal format"
+                    <div style="background: #ecfdf5; border: 1px solid #10b981; border-radius: 8px; padding: 16px;">
+                        <h3 style="color: #059669; margin-bottom: 8px;">✅ Automatic Sync Active</h3>
+                        <p style="color: #047857; font-size: 14px;">
+                            Calendars synced: Allan, Drew, Matt, Michael, Red, Stephen
                         </p>
-                    </div>
-                    
-                    <div style="display: flex; gap: 8px;">
-                        <button class="btn" onclick="saveCalendarIcsUrl()">Save ICS URL</button>
-                        <button class="btn btn-secondary" onclick="triggerCalendarSync()">🔄 Sync Now</button>
                     </div>
                 </div>
                 
@@ -2043,7 +2037,7 @@
                     <h2 style="margin-bottom: 16px;">How It Works</h2>
                     <div style="color: #6b7280; font-size: 14px; line-height: 1.6;">
                         <p><strong>1. Calendar Event Naming:</strong> Name your calendar events with the service day at the start, e.g., "Day 12.2 - Drew" or "Spare Day 2 - Michael"</p>
-                        <p style="margin-top: 8px;"><strong>2. Automatic Sync:</strong> Once configured, the system syncs nightly at 2 AM to pull upcoming service days from your calendar</p>
+                        <p style="margin-top: 8px;"><strong>2. Automatic Sync:</strong> Google Apps Script syncs all worker calendars daily at 2:35 AM Brisbane time</p>
                         <p style="margin-top: 8px;"><strong>3. Admin Calendar:</strong> Scheduled service days appear on the Admin Dashboard calendar, showing expected vs completed work</p>
                         <p style="margin-top: 8px;"><strong>4. Invoicing:</strong> Click any service day on the calendar to open the runsheet for that date and manage invoicing</p>
                     </div>
@@ -3280,45 +3274,6 @@
                 } catch (e) {
                     console.log('Error loading scheduled days:', e);
                     this.scheduledDays = [];
-                }
-            },
-            
-            async saveCalendarIcsUrl(icsUrl) {
-                try {
-                    const { error } = await supabase
-                        .from('calendar_sync_settings')
-                        .upsert({
-                            id: 1,
-                            ics_url: icsUrl,
-                            updated_at: new Date().toISOString()
-                        });
-                    
-                    if (error) throw error;
-                    this.calendarSyncSettings = { ...this.calendarSyncSettings, ics_url: icsUrl };
-                    return true;
-                } catch (e) {
-                    console.error('Error saving ICS URL:', e);
-                    return false;
-                }
-            },
-            
-            async triggerCalendarSync() {
-                try {
-                    const response = await fetch(
-                        'https://mslgedwzgbyccevnbdsk.supabase.co/functions/v1/sync-calendar',
-                        {
-                            method: 'POST',
-                            headers: {
-                                'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1zbGdlZHd6Z2J5Y2Nldm5iZHNrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgyNDAyNDksImV4cCI6MjA4MzgxNjI0OX0.vnwOHjDKTg0kCtXW9zrln9beoVbTxoHX7_tozYSu8Ko`,
-                                'Content-Type': 'application/json'
-                            }
-                        }
-                    );
-                    const result = await response.json();
-                    return result;
-                } catch (e) {
-                    console.error('Error triggering calendar sync:', e);
-                    return { success: false, error: e.message };
                 }
             },
             
@@ -7623,111 +7578,65 @@
         }
         
         function loadCalendarSyncUI() {
-            // Load current ICS URL
-            const icsInput = document.getElementById('calendarIcsUrl');
-            if (db.calendarSyncSettings && db.calendarSyncSettings.ics_url) {
-                icsInput.value = db.calendarSyncSettings.ics_url;
-            }
+            // Load current ICS URL - no longer needed
             
             // Show sync status
             updateCalendarSyncStatusUI();
         }
         
-        function updateCalendarSyncStatusUI() {
+        async function updateCalendarSyncStatusUI() {
             const statusDiv = document.getElementById('calendarSyncStatus');
-            const settings = db.calendarSyncSettings;
             
-            if (!settings) {
-                statusDiv.innerHTML = `
-                    <p style="color: #6b7280;">Calendar sync not configured yet. Add your ICS URL above to get started.</p>
-                `;
-                return;
-            }
-            
-            let statusColor = '#6b7280';
-            let statusIcon = '⏳';
-            if (settings.last_sync_status === 'success') {
-                statusColor = '#16a34a';
-                statusIcon = '✓';
-            } else if (settings.last_sync_status === 'error') {
-                statusColor = '#dc2626';
-                statusIcon = '✗';
-            }
-            
-            // Use last_sync_at (the actual column name)
-            const lastSyncTime = settings.last_sync_at 
-                ? new Date(settings.last_sync_at).toLocaleString('en-AU')
-                : 'Never';
-            
-            // Use last_sync_message (the actual column name)
-            const detailsMessage = settings.last_sync_message || '';
-            
-            statusDiv.innerHTML = `
-                <div style="display: grid; gap: 8px;">
-                    <div><strong>Last Sync:</strong> ${lastSyncTime}</div>
-                    <div><strong>Status:</strong> <span style="color: ${statusColor};">${statusIcon} ${settings.last_sync_status || 'Not synced'}</span></div>
-                    ${detailsMessage ? `<div><strong>Details:</strong> ${detailsMessage}</div>` : ''}
-                    <div><strong>Scheduled Days Loaded:</strong> ${db.scheduledDays.length} for current month</div>
-                </div>
-            `;
-        }
-        
-        async function saveCalendarIcsUrl() {
-            const icsUrl = document.getElementById('calendarIcsUrl').value.trim();
-            
-            if (!icsUrl) {
-                showToast('Please enter an ICS URL', 'error');
-                return;
-            }
-            
-            // Basic validation
-            if (!icsUrl.includes('calendar.google.com') && !icsUrl.endsWith('.ics')) {
-                showToast('This doesn\'t look like a valid Google Calendar ICS URL', 'error');
-                return;
-            }
-            
-            showToast('Saving ICS URL...', 'success');
-            const success = await db.saveCalendarIcsUrl(icsUrl);
-            
-            if (success) {
-                showToast('ICS URL saved! Click "Sync Now" to pull calendar data.', 'success');
-                await db.loadCalendarSyncSettings();
-                updateCalendarSyncStatusUI();
-            } else {
-                showToast('Failed to save ICS URL', 'error');
-            }
-        }
-        
-        async function triggerCalendarSync() {
-            const icsUrl = document.getElementById('calendarIcsUrl').value.trim();
-            
-            if (!icsUrl && (!db.calendarSyncSettings || !db.calendarSyncSettings.ics_url)) {
-                showToast('Please save an ICS URL first', 'error');
-                return;
-            }
-            
-            showToast('Starting calendar sync...', 'success');
-            
-            const result = await db.triggerCalendarSync();
-            
-            if (result.success) {
-                const syncMsg = result.service_days_synced !== undefined 
-                    ? `Synced ${result.service_days_synced} service days` 
-                    : 'Sync complete';
-                showToast(syncMsg, 'success');
-                // Reload data
-                await db.loadCalendarSyncSettings();
-                await db.loadScheduledDaysForMonth();
-                updateCalendarSyncStatusUI();
-                // Refresh calendar if visible
-                if (document.getElementById('adminCalendarContainer') && 
-                    document.getElementById('adminCalendarContainer').style.display !== 'none') {
-                    renderAdminCalendar();
+            // Get event count and most recent created_at from worker_calendar_events
+            try {
+                const { data: events, error } = await supabase
+                    .from('worker_calendar_events')
+                    .select('created_at')
+                    .order('created_at', { ascending: false })
+                    .limit(1);
+                
+                const { count, error: countError } = await supabase
+                    .from('worker_calendar_events')
+                    .select('*', { count: 'exact', head: true });
+                
+                const { data: serviceDayCount, error: sdError } = await supabase
+                    .from('worker_calendar_events')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('is_service_day', true);
+                
+                if (events && events.length > 0) {
+                    const lastSyncTime = new Date(events[0].created_at).toLocaleString('en-AU', {
+                        timeZone: 'Australia/Brisbane',
+                        day: '2-digit',
+                        month: '2-digit', 
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        hour12: true
+                    });
+                    
+                    const totalEvents = count || 0;
+                    const serviceDays = serviceDayCount?.length || serviceDayCount || 0;
+                    
+                    statusDiv.innerHTML = `
+                        <div style="display: grid; gap: 8px;">
+                            <div><strong>Last Sync:</strong> ${lastSyncTime}</div>
+                            <div><strong>Status:</strong> <span style="color: #16a34a;">✓ success</span></div>
+                            <div><strong>Details:</strong> ${totalEvents} total events, ${db.scheduledDays.length} service days for current month</div>
+                        </div>
+                    `;
+                } else {
+                    statusDiv.innerHTML = `
+                        <div style="display: grid; gap: 8px;">
+                            <div><strong>Last Sync:</strong> Never</div>
+                            <div><strong>Status:</strong> <span style="color: #6b7280;">⏳ Waiting for first sync</span></div>
+                            <div><strong>Details:</strong> Google Apps Script will sync at 2:35 AM Brisbane time</div>
+                        </div>
+                    `;
                 }
-            } else {
-                showToast(`Sync failed: ${result.error || 'Unknown error'}`, 'error');
-                await db.loadCalendarSyncSettings();
-                updateCalendarSyncStatusUI();
+            } catch (e) {
+                console.error('Error getting sync status:', e);
+                statusDiv.innerHTML = `<p style="color: #dc2626;">Error loading sync status</p>`;
             }
         }
 
