@@ -1900,6 +1900,18 @@
                             </select>
                         </div>
                         <div class="form-group">
+                            <label>Frequency</label>
+                            <select id="newCustomerFrequency">
+                                <option value="">Select...</option>
+                                <option value="Weekly">Weekly</option>
+                                <option value="Fortnightly">Fortnightly</option>
+                                <option value="Monthly">Monthly</option>
+                                <option value="Bi-monthly">Bi-monthly</option>
+                                <option value="Quarterly">Quarterly</option>
+                                <option value="On Call">On Call</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
                             <label>Carbsolve Requirement</label>
                             <select id="newCustomerCarbsolve">
                                 <option value="">None</option>
@@ -3144,6 +3156,7 @@
                         address: c.address,
                         phone: c.phone,
                         serviceType: c.service_type,
+                        frequency: c.frequency,
                         carbsolve: c.carbsolve,
                         waste: c.waste,
                         code: c.code,
@@ -3497,6 +3510,7 @@
                             address: customer.address,
                             phone: customer.phone,
                             service_type: customer.serviceType,
+                            frequency: customer.frequency,
                             carbsolve: customer.carbsolve,
                             waste: customer.waste,
                             code: customer.code,
@@ -6455,6 +6469,7 @@
                 address: document.getElementById('newCustomerAddress').value,
                 phone: document.getElementById('newCustomerPhone').value,
                 serviceType: document.getElementById('newCustomerServiceType').value,
+                frequency: document.getElementById('newCustomerFrequency').value,
                 carbsolve: document.getElementById('newCustomerCarbsolve').value,
                 waste: document.getElementById('newCustomerWaste').value,
                 code: document.getElementById('newCustomerCode').value,
@@ -6549,12 +6564,13 @@
                 div.className = 'customer-admin-item';
                 div.id = `customer-${customer.id}`;
                 
+                // Build details line - always show service type and frequency
                 const details = [];
-                details.push(customer.runDay);
-                if (customer.serviceType && customer.serviceType !== 'Service') details.push(customer.serviceType);
+                details.push(customer.runDay || '-');
+                details.push(customer.serviceType || 'Service');
+                details.push(customer.frequency || 'Monthly');
                 if (customer.carbsolve) details.push(customer.carbsolve);
                 if (customer.waste) details.push('Drum');
-                if (customer.phone) details.push(customer.phone);
                 
                 div.innerHTML = `
                     <div class="customer-admin-info">
@@ -6598,6 +6614,16 @@
                             <option value="Check" ${customer.serviceType === 'Check' ? 'selected' : ''}>Check</option>
                         </select>
                         
+                        <select id="edit-frequency-${id}" style="width: 100%; padding: 8px; margin-bottom: 4px;">
+                            <option value="">Frequency...</option>
+                            <option value="Weekly" ${customer.frequency === 'Weekly' ? 'selected' : ''}>Weekly</option>
+                            <option value="Fortnightly" ${customer.frequency === 'Fortnightly' ? 'selected' : ''}>Fortnightly</option>
+                            <option value="Monthly" ${customer.frequency === 'Monthly' ? 'selected' : ''}>Monthly</option>
+                            <option value="Bi-monthly" ${customer.frequency === 'Bi-monthly' ? 'selected' : ''}>Bi-monthly</option>
+                            <option value="Quarterly" ${customer.frequency === 'Quarterly' ? 'selected' : ''}>Quarterly</option>
+                            <option value="On Call" ${customer.frequency === 'On Call' ? 'selected' : ''}>On Call</option>
+                        </select>
+                        
                         <select id="edit-carbsolve-${id}" style="width: 100%; padding: 8px; margin-bottom: 4px;">
                             <option value="">Carbsolve...</option>
                             <option value="4kg" ${customer.carbsolve === '4kg' ? 'selected' : ''}>4kg</option>
@@ -6636,6 +6662,7 @@
             customer.address = document.getElementById(`edit-address-${id}`).value;
             customer.phone = document.getElementById(`edit-phone-${id}`).value;
             customer.serviceType = document.getElementById(`edit-servicetype-${id}`).value;
+            customer.frequency = document.getElementById(`edit-frequency-${id}`).value;
             customer.carbsolve = document.getElementById(`edit-carbsolve-${id}`).value;
             customer.waste = document.getElementById(`edit-waste-${id}`).value;
             customer.code = document.getElementById(`edit-code-${id}`).value;
