@@ -2282,10 +2282,14 @@
         <div class="container">
             <div class="card">
                 <h2 style="margin-bottom: 16px;">Search by Customer</h2>
-                <div class="form-group">
+                <div class="form-group" style="position: relative;">
                     <input type="text" id="podCustomerSearch" placeholder="🔍 Start typing customer name..." 
-                           oninput="searchPodsByCustomer(this.value)"
+                           oninput="handlePodCustomerSearch(this.value)"
+                           onblur="setTimeout(() => document.getElementById('podCustomerSuggestions').style.display = 'none', 200)"
                            style="width: 100%; padding: 14px; font-size: 16px;">
+                    <div id="podCustomerSuggestions" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px; max-height: 300px; overflow-y: auto; z-index: 100; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                        <!-- Customer suggestions will appear here -->
+                    </div>
                 </div>
                 <p id="podSearchResultCount" style="font-size: 13px; color: #6b7280; margin-top: 8px;"></p>
             </div>
@@ -5118,6 +5122,7 @@
             // Clear previous search
             document.getElementById('podCustomerSearch').value = '';
             document.getElementById('podSearchResultCount').textContent = '';
+            document.getElementById('podCustomerSuggestions').style.display = 'none';
             document.getElementById('exportPodList').innerHTML = `
                 <div style="text-align: center; color: #6b7280; padding: 40px;">
                     Enter a customer name above to search for their PODs
@@ -8002,26 +8007,95 @@
         }
 
         // Search PODs
-        async function searchPodsByCustomer(searchTerm) {
-            const list = document.getElementById('exportPodList');
+        // POD Search - show customer suggestions first
+        function handlePodCustomerSearch(query) {
+            const suggestionsDiv = document.getElementById('podCustomerSuggestions');
             const countEl = document.getElementById('podSearchResultCount');
+            const list = document.getElementById('exportPodList');
             
-            if (!searchTerm || searchTerm.length < 2) {
+            if (query.length < 2) {
+                suggestionsDiv.style.display = 'none';
+                countEl.textContent = '';
                 list.innerHTML = `
                     <div style="text-align: center; color: #6b7280; padding: 40px;">
                         Enter a customer name above to search for their PODs
                     </div>
                 `;
-                countEl.textContent = '';
                 return;
             }
             
-            // Search across ALL pods, not just current month
+            const queryLower = query.toLowerCase();
+            const allMatches = db.customers.filter(c => {
+                return c.name && c.name.toLowerCase().includes(queryLower);
+            });
+            
+            // Sort alphabetically
+            allMatches.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+            
+            // Take first 30 results for suggestions
+            const matches = allMatches.slice(0, 30);
+            
+            if (allMatches.length === 0) {
+                suggestionsDiv.style.display = 'block';
+                suggestionsDiv.innerHTML = '<div style="padding: 16px; text-align: center; color: #6b7280;">No customers found</div>';
+                return;
+            }
+            
+            suggestionsDiv.style.display = 'block';
+            
+            let html = '';
+            
+            // Show count header
+            if (allMatches.length > 30) {
+                html += `<div style="padding: 8px 12px; background: #f3f4f6; font-size: 12px; color: #6b7280; border-bottom: 1px solid #e5e7eb;">
+                    Showing 30 of ${allMatches.length} matches
+                </div>`;
+            }
+            
+            html += matches.map(c => {
+                const escapedName = (c.name || '').replace(/'/g, "\\'");
+                return `
+                <div onclick="selectPodSearchCustomer(${c.id}, '${escapedName}')" 
+                     style="padding: 12px 16px; border-bottom: 1px solid #f3f4f6; cursor: pointer; transition: background 0.15s;"
+                     onmouseover="this.style.background='#f8fafc'" 
+                     onmouseout="this.style.background='white'">
+                    <div style="font-weight: 600; color: #1f2937;">${c.name}</div>
+                    <div style="font-size: 12px; color: #6b7280; margin-top: 2px;">
+                        ${c.runDay ? `Day ${c.runDay}` : 'No regular day'}
+                        ${c.serviceType ? ` • ${c.serviceType}` : ''}
+                        ${c.carbsolve ? ` • ${c.carbsolve}` : ''}
+                    </div>
+                </div>
+            `}).join('');
+            
+            suggestionsDiv.innerHTML = html;
+        }
+        
+        async function selectPodSearchCustomer(customerId, customerName) {
+            // Hide suggestions
+            document.getElementById('podCustomerSuggestions').style.display = 'none';
+            
+            // Update search input with selected customer name
+            document.getElementById('podCustomerSearch').value = customerName;
+            
+            // Now search for PODs for this customer
+            await searchPodsByCustomerId(customerId, customerName);
+        }
+        
+        async function searchPodsByCustomerId(customerId, customerName) {
+            const list = document.getElementById('exportPodList');
+            const countEl = document.getElementById('podSearchResultCount');
+            
+            list.innerHTML = `<div style="text-align: center; color: #6b7280; padding: 40px;">
+                <div style="font-size: 24px; margin-bottom: 8px;">⏳</div>
+                Searching PODs for ${customerName}...
+            </div>`;
+            
             try {
                 const { data: allPods, error } = await supabase
                     .from('pods')
                     .select('*')
-                    .ilike('customer_name', `%${searchTerm}%`)
+                    .eq('customer_id', customerId)
                     .order('date', { ascending: false })
                     .limit(100);
                 
@@ -8045,13 +8119,18 @@
                     carbsolve: p.carbsolve
                 }));
                 
-                countEl.textContent = `Found ${matchingPods.length} POD${matchingPods.length !== 1 ? 's' : ''}${matchingPods.length >= 100 ? ' (showing first 100)' : ''}`;
+                countEl.textContent = `Found ${matchingPods.length} POD${matchingPods.length !== 1 ? 's' : ''} for ${customerName}`;
                 renderPodSearchResults(matchingPods);
                 
             } catch (e) {
                 console.error('Error searching PODs:', e);
                 list.innerHTML = `<div class="card"><p style="color: #dc2626;">Error searching: ${e.message}</p></div>`;
             }
+        }
+        
+        async function searchPodsByCustomer(searchTerm) {
+            // Legacy function - now redirects to handlePodCustomerSearch
+            handlePodCustomerSearch(searchTerm);
         }
 
         function renderPodSearchResults(pods) {
