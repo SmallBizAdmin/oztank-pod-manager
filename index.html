@@ -8032,8 +8032,8 @@
             // Sort alphabetically
             allMatches.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
             
-            // Take first 30 results for suggestions
-            const matches = allMatches.slice(0, 30);
+            // Take first 50 results for suggestions
+            const matches = allMatches.slice(0, 50);
             
             if (allMatches.length === 0) {
                 suggestionsDiv.style.display = 'block';
@@ -8045,10 +8045,14 @@
             
             let html = '';
             
-            // Show count header
-            if (allMatches.length > 30) {
+            // Show count header - match style of other search functions
+            if (allMatches.length > 50) {
                 html += `<div style="padding: 8px 12px; background: #f3f4f6; font-size: 12px; color: #6b7280; border-bottom: 1px solid #e5e7eb;">
-                    Showing 30 of ${allMatches.length} matches
+                    50 of ${allMatches.length} matches shown
+                </div>`;
+            } else if (allMatches.length > 1) {
+                html += `<div style="padding: 8px 12px; background: #f3f4f6; font-size: 12px; color: #6b7280; border-bottom: 1px solid #e5e7eb;">
+                    ${allMatches.length} matches found
                 </div>`;
             }
             
