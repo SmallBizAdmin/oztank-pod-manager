@@ -1813,11 +1813,12 @@
             <div id="loginError" class="login-error">
                 Access denied. Please use an authorized Oz Tank account.
             </div>
-            <div id="googleSignInDiv"></div>
-            <button id="googleSignInBtn" onclick="initiateGoogleSignIn()" style="margin-top: 16px;">
+            <div id="googleSignInDiv" style="display: flex; justify-content: center; margin: 16px 0;"></div>
+            <button id="googleSignInBtn" onclick="initiateGoogleSignIn()" style="margin-top: 8px;">
                 <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google">
                 Sign in with Google
             </button>
+            <p style="font-size: 12px; color: #9ca3af; margin-top: 16px;">Having trouble? Try refreshing the page.</p>
         </div>
     </div>
 
@@ -2736,10 +2737,29 @@
                     client_id: GOOGLE_CLIENT_ID,
                     callback: handleCredentialResponse,
                     auto_select: true, // Auto sign-in if single account
-                    cancel_on_tap_outside: false
+                    cancel_on_tap_outside: false,
+                    use_fedcm_for_prompt: true // Use FedCM API where available (better iOS support)
                 });
                 
-                // Render the One Tap prompt
+                // Render the official Google Sign-In button (works on iOS)
+                const buttonDiv = document.getElementById('googleSignInDiv');
+                if (buttonDiv) {
+                    google.accounts.id.renderButton(buttonDiv, {
+                        type: 'standard',
+                        theme: 'outline',
+                        size: 'large',
+                        text: 'signin_with',
+                        shape: 'rectangular',
+                        width: 280
+                    });
+                    // Hide our custom button since the official one is now showing
+                    const customBtn = document.getElementById('googleSignInBtn');
+                    if (customBtn) {
+                        customBtn.style.display = 'none';
+                    }
+                }
+                
+                // Also try One Tap prompt (works on desktop, may not show on iOS)
                 google.accounts.id.prompt((notification) => {
                     if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
                         console.log('One Tap not displayed:', notification.getNotDisplayedReason() || notification.getSkippedReason());
@@ -2790,10 +2810,19 @@
             return JSON.parse(jsonPayload);
         }
         
-        // Manual sign-in button click
+        // Manual sign-in button click (fallback)
         function initiateGoogleSignIn() {
             if (typeof google !== 'undefined' && google.accounts) {
-                google.accounts.id.prompt();
+                // Try to trigger One Tap
+                google.accounts.id.prompt((notification) => {
+                    // If prompt fails on iOS, show helpful message
+                    if (notification.isNotDisplayed()) {
+                        const reason = notification.getNotDisplayedReason();
+                        if (reason === 'opt_out_or_no_session' || reason === 'suppressed_by_user') {
+                            showLoginError('Please use the "Sign in with Google" button above, or check your browser settings allow Google Sign-In.');
+                        }
+                    }
+                });
             } else {
                 showLoginError('Google Sign-In is still loading. Please wait a moment and try again.');
             }
