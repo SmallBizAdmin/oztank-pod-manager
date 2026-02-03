@@ -1828,7 +1828,7 @@
             <div class="admin-quick-actions" style="display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap;">
                 <button class="btn btn-secondary" style="flex: 1; min-width: 120px;" onclick="showAdminDashboard()">📊 Admin</button>
                 <button class="btn btn-secondary" style="flex: 1; min-width: 120px;" onclick="showAdminPanelView()">📥 Import</button>
-                <button class="btn btn-secondary" style="flex: 1; min-width: 120px;" onclick="showExportView()">📤 Export PODs</button>
+                <button class="btn btn-secondary" style="flex: 1; min-width: 120px;" onclick="showSearchPodsView()">🔍 Search PODs</button>
             </div>
             
             <!-- Week/Month Selector -->
@@ -2297,28 +2297,37 @@
             <div class="header-content">
                 <button class="back-btn" onclick="showHomeView()">← Back</button>
                 <div>
-                    <h1>Export PODs</h1>
-                    <p class="subtitle">Download completed PODs</p>
+                    <h1>🔍 Search PODs</h1>
+                    <p class="subtitle">Search customer service history</p>
                 </div>
             </div>
         </div>
         <div class="container">
             <div class="card">
                 <div class="form-group">
-                    <label>Filter by Service Day</label>
-                    <select id="exportRunDayFilter">
-                        <option value="all">All Service Days</option>
-                    </select>
+                    <label>Search by Customer Name</label>
+                    <div class="search-input-container">
+                        <span class="search-icon">🔍</span>
+                        <input type="text" id="searchPodsInput" class="search-input" placeholder="Type customer name (2+ characters)..." oninput="handleSearchPods(this.value)">
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label>Filter by Date</label>
-                    <input type="date" id="exportDateFilter">
-                </div>
-                <button class="btn" onclick="filterPODs()">Filter PODs</button>
+                <div id="searchPodsResults" style="display: none;"></div>
+                <div id="searchPodsHint" class="search-hint">Type at least 2 characters to search</div>
             </div>
 
-            <div id="exportPodList">
-                <!-- Filtered PODs will appear here -->
+            <!-- Customer History Results -->
+            <div id="searchPodsHistoryContainer" style="display: none;">
+                <div class="card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                        <h3 id="searchPodsCustomerName" style="color: #1e3a8a;"></h3>
+                        <button onclick="clearSearchPodsHistory()" style="background: #e5e7eb; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 13px;">✕ Clear</button>
+                    </div>
+                    <div id="searchPodsStats" class="customer-stats"></div>
+                </div>
+                
+                <div id="searchPodsTable">
+                    <!-- POD history table will be rendered here -->
+                </div>
             </div>
         </div>
     </div>
@@ -5151,7 +5160,9 @@
                 // Set new status
                 db.saveCalendarEventStatus(eventId, status);
             }
+            // Re-render whichever calendar view is active
             renderAdminCalendar();
+            loadWorkerCalendarEvents();
         }
         
         // Show modal for calendar event (to add notes or create ad-hoc)
@@ -5162,14 +5173,85 @@
                 return;
             }
             
-            // For now, show a simple alert with option to create ad-hoc
             const status = db.getCalendarEventStatus(eventId);
-            const statusText = status === 'completed' ? '✓ Completed' : status === 'cancelled' ? '✗ Cancelled' : 'Pending';
+            const statusText = status === 'completed' ? '✓ Completed' : status === 'cancelled' ? '✗ Cancelled' : '⏳ Pending';
+            const statusColor = status === 'completed' ? '#16a34a' : status === 'cancelled' ? '#dc2626' : '#f59e0b';
             
-            if (confirm(`Calendar Event: ${event.eventTitle}\nDate: ${dateStr}\nStatus: ${statusText}\n\nWould you like to create an Ad-Hoc service for this event?`)) {
-                // Show ad-hoc service modal
-                showCustomerSearchModal(null);
+            // Create a modal overlay
+            const existingModal = document.getElementById('calendarEventChooserModal');
+            if (existingModal) existingModal.remove();
+            
+            const modal = document.createElement('div');
+            modal.id = 'calendarEventChooserModal';
+            modal.className = 'search-modal-overlay active';
+            modal.innerHTML = `
+                <div class="search-modal" style="max-width: 380px;">
+                    <div class="search-modal-header" style="background: #374151;">
+                        <h2>📋 Calendar Event</h2>
+                        <button class="search-modal-close" onclick="document.getElementById('calendarEventChooserModal').remove()">×</button>
+                    </div>
+                    <div class="search-modal-body">
+                        <div style="margin-bottom: 16px; padding: 12px; background: #f9fafb; border-radius: 8px;">
+                            <div style="font-weight: 700; font-size: 16px; color: #111827; margin-bottom: 4px;">${event.eventTitle}</div>
+                            <div style="font-size: 13px; color: #6b7280;">${dateStr} ${event.calendarOwner ? '• 👤 ' + event.calendarOwner : ''}</div>
+                            <div style="margin-top: 8px;"><span style="color: ${statusColor}; font-weight: 600;">${statusText}</span></div>
+                        </div>
+                        
+                        <div style="display: flex; flex-direction: column; gap: 10px;">
+                            <button class="btn btn-adhoc" onclick="document.getElementById('calendarEventChooserModal').remove(); showCustomerSearchModal(null);" style="padding: 16px; font-size: 16px;">
+                                ➕ Ad-Hoc Service / Delivery
+                            </button>
+                            <button class="btn" onclick="document.getElementById('calendarEventChooserModal').remove(); showTankMovementModal(null);" style="padding: 16px; font-size: 16px; background: #0891b2;">
+                                🔄 Tank Movement
+                            </button>
+                            <button class="btn btn-secondary" onclick="showCalendarEventNotes('${eventId}', '${dateStr}')" style="padding: 16px; font-size: 16px;">
+                                📝 Enter Notes
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+        
+        function showCalendarEventNotes(eventId, dateStr) {
+            const existingModal = document.getElementById('calendarEventChooserModal');
+            if (existingModal) existingModal.remove();
+            
+            // Get existing notes from localStorage
+            const storedNotes = localStorage.getItem(`calEventNotes_${eventId}`) || '';
+            
+            const modal = document.createElement('div');
+            modal.id = 'calendarEventNotesModal';
+            modal.className = 'search-modal-overlay active';
+            modal.innerHTML = `
+                <div class="search-modal" style="max-width: 400px;">
+                    <div class="search-modal-header" style="background: #64748b;">
+                        <h2>📝 Event Notes</h2>
+                        <button class="search-modal-close" onclick="document.getElementById('calendarEventNotesModal').remove()">×</button>
+                    </div>
+                    <div class="search-modal-body">
+                        <div class="form-group">
+                            <label>Notes for this event</label>
+                            <textarea id="calEventNotesInput" placeholder="Enter notes..." style="min-height: 120px;">${storedNotes}</textarea>
+                        </div>
+                        <button class="btn btn-success" onclick="saveCalendarEventNotes('${eventId}')">💾 Save Notes</button>
+                        <button class="btn btn-secondary" onclick="document.getElementById('calendarEventNotesModal').remove()" style="margin-top: 8px;">Cancel</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+        
+        function saveCalendarEventNotes(eventId) {
+            const notes = document.getElementById('calEventNotesInput').value.trim();
+            if (notes) {
+                localStorage.setItem(`calEventNotes_${eventId}`, notes);
+            } else {
+                localStorage.removeItem(`calEventNotes_${eventId}`);
             }
+            document.getElementById('calendarEventNotesModal').remove();
+            showToast('Notes saved', 'success');
         }
         
         async function openRunsheetForDate(runDay, dateStr) {
@@ -5220,10 +5302,222 @@
         // Track date filter for admin runsheet
         let currentAdminDateFilter = null;
 
-        function showExportView() {
+        function showSearchPodsView() {
             showView('exportView');
-            populateExportServiceDayFilter();
-            filterPODs();
+            document.getElementById('searchPodsInput').value = '';
+            document.getElementById('searchPodsResults').style.display = 'none';
+            document.getElementById('searchPodsHint').style.display = 'block';
+            document.getElementById('searchPodsHistoryContainer').style.display = 'none';
+            // Focus the search input
+            setTimeout(() => document.getElementById('searchPodsInput').focus(), 100);
+        }
+        
+        function handleSearchPods(query) {
+            const resultsDiv = document.getElementById('searchPodsResults');
+            const hintDiv = document.getElementById('searchPodsHint');
+            
+            if (query.length < 2) {
+                resultsDiv.style.display = 'none';
+                hintDiv.style.display = 'block';
+                hintDiv.textContent = 'Type at least 2 characters to search';
+                return;
+            }
+            
+            const queryLower = query.toLowerCase();
+            const allMatches = db.customers.filter(c => c.name && c.name.toLowerCase().includes(queryLower));
+            allMatches.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+            const matches = allMatches.slice(0, 30);
+            
+            hintDiv.style.display = 'none';
+            
+            if (allMatches.length === 0) {
+                resultsDiv.style.display = 'block';
+                resultsDiv.innerHTML = '<div style="padding: 12px; color: #6b7280; text-align: center;">No customers found</div>';
+                return;
+            }
+            
+            resultsDiv.style.display = 'block';
+            let html = '';
+            if (allMatches.length > 30) {
+                html += `<div style="padding: 8px 12px; background: #f3f4f6; font-size: 12px; color: #6b7280;">Showing 30 of ${allMatches.length} matches</div>`;
+            }
+            
+            html += matches.map(c => `
+                <div class="search-result-item" onclick="loadSearchPodsHistory(${c.id})" style="cursor: pointer;">
+                    <div class="search-result-name">${c.name}</div>
+                    <div class="search-result-meta">
+                        ${c.address || ''} ${c.runDay ? ` • Day: ${c.runDay}` : ''}
+                    </div>
+                </div>
+            `).join('');
+            
+            resultsDiv.innerHTML = html;
+        }
+        
+        async function loadSearchPodsHistory(customerId) {
+            const customer = db.customers.find(c => c.id === customerId);
+            if (!customer) return;
+            
+            // Hide search results, show history
+            document.getElementById('searchPodsResults').style.display = 'none';
+            document.getElementById('searchPodsHint').style.display = 'none';
+            document.getElementById('searchPodsHistoryContainer').style.display = 'block';
+            document.getElementById('searchPodsCustomerName').textContent = customer.name;
+            document.getElementById('searchPodsStats').innerHTML = '<div style="text-align: center; padding: 12px;">Loading...</div>';
+            document.getElementById('searchPodsTable').innerHTML = '';
+            
+            try {
+                const { data: pods, error } = await supabase
+                    .from('pods')
+                    .select('*')
+                    .eq('customer_id', customerId)
+                    .order('date', { ascending: false });
+                
+                if (error) throw error;
+                
+                // Stats
+                const totalPods = pods.length;
+                const servicesCompleted = pods.filter(p => p.tank_serviced === 'yes').length;
+                const rentalOnly = pods.filter(p => p.tank_serviced === 'no' && (p.service_notes || '').toLowerCase().includes('no service required')).length;
+                const totalProducts = pods.reduce((sum, p) => {
+                    const products = p.products || [];
+                    return sum + products.reduce((pSum, prod) => pSum + (prod.quantity || 0), 0);
+                }, 0);
+                
+                document.getElementById('searchPodsStats').innerHTML = `
+                    <div class="customer-stat-card">
+                        <div class="customer-stat-value">${totalPods}</div>
+                        <div class="customer-stat-label">Total PODs</div>
+                    </div>
+                    <div class="customer-stat-card">
+                        <div class="customer-stat-value">${servicesCompleted}</div>
+                        <div class="customer-stat-label">Services Done</div>
+                    </div>
+                    <div class="customer-stat-card">
+                        <div class="customer-stat-value">${rentalOnly}</div>
+                        <div class="customer-stat-label">Rental Only</div>
+                    </div>
+                    <div class="customer-stat-card">
+                        <div class="customer-stat-value">${totalProducts}</div>
+                        <div class="customer-stat-label">Products</div>
+                    </div>
+                `;
+                
+                // Build table similar to admin runsheet
+                if (pods.length === 0) {
+                    document.getElementById('searchPodsTable').innerHTML = '<div class="card" style="text-align: center; color: #6b7280; padding: 20px;">No service history found</div>';
+                    return;
+                }
+                
+                let tableHtml = '<div class="card" style="overflow-x: auto;"><table style="width: 100%; border-collapse: collapse; font-size: 13px;">';
+                tableHtml += `<thead><tr style="background: #1e3a8a; color: white;">
+                    <th style="padding: 10px 8px; text-align: left;">Date</th>
+                    <th style="padding: 10px 8px; text-align: left;">Day</th>
+                    <th style="padding: 10px 8px; text-align: left;">Type</th>
+                    <th style="padding: 10px 8px; text-align: left;">Serviced</th>
+                    <th style="padding: 10px 8px; text-align: left;">Status</th>
+                    <th style="padding: 10px 8px; text-align: left;">Products</th>
+                    <th style="padding: 10px 8px; text-align: left;">All Notes</th>
+                </tr></thead><tbody>`;
+                
+                pods.forEach((pod, idx) => {
+                    const date = new Date(pod.date);
+                    const formattedDate = date.toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' });
+                    const isRentalOnly = pod.tank_serviced === 'no' && (pod.service_notes || '').toLowerCase().includes('no service required');
+                    const isQuick = pod.is_quick_complete;
+                    
+                    // Products
+                    const products = pod.products || [];
+                    const productsText = products.map(p => `${p.quantity}x ${p.product}`).join(', ');
+                    
+                    // All notes
+                    let allNotes = [];
+                    if (pod.service_notes) allNotes.push(`<strong>Service:</strong> ${pod.service_notes}`);
+                    if (pod.notes) allNotes.push(`<strong>Notes:</strong> ${pod.notes}`);
+                    
+                    // Status badge
+                    let statusBadge = '';
+                    if (isRentalOnly) statusBadge = '<span style="background: #fef3c7; color: #92400e; padding: 2px 8px; border-radius: 12px; font-size: 11px;">Rental Only</span>';
+                    else if (isQuick) statusBadge = '<span style="background: #dbeafe; color: #1e40af; padding: 2px 8px; border-radius: 12px; font-size: 11px;">Quick</span>';
+                    
+                    // Tank serviced
+                    let servicedDisplay = '-';
+                    if (pod.tank_serviced === 'yes') servicedDisplay = '<span style="color: #16a34a;">✓ Yes</span>';
+                    else if (pod.tank_serviced === 'no') servicedDisplay = '<span style="color: #dc2626;">✗ No</span>';
+                    
+                    const bgColor = idx % 2 === 0 ? 'white' : '#f9fafb';
+                    
+                    tableHtml += `<tr style="background: ${bgColor}; cursor: pointer; border-bottom: 1px solid #e5e7eb;" 
+                                      onclick="viewSearchPodDetail('${pod.id}', ${customerId})"
+                                      onmouseover="this.style.background='#eff6ff'" onmouseout="this.style.background='${bgColor}'">
+                        <td style="padding: 10px 8px; white-space: nowrap;">${formattedDate}</td>
+                        <td style="padding: 10px 8px;">${pod.run_day || '-'}</td>
+                        <td style="padding: 10px 8px;">${pod.service_type || 'Service'}</td>
+                        <td style="padding: 10px 8px;">${servicedDisplay}</td>
+                        <td style="padding: 10px 8px;">${statusBadge}</td>
+                        <td style="padding: 10px 8px; font-size: 12px;">${productsText || '-'}</td>
+                        <td style="padding: 10px 8px; font-size: 12px;">${allNotes.join('<br>') || '-'}</td>
+                    </tr>`;
+                });
+                
+                tableHtml += '</tbody></table></div>';
+                document.getElementById('searchPodsTable').innerHTML = tableHtml;
+                
+            } catch (error) {
+                console.error('Error loading search PODs history:', error);
+                document.getElementById('searchPodsStats').innerHTML = '<div style="text-align: center; color: #dc2626;">Error loading history</div>';
+            }
+        }
+        
+        async function viewSearchPodDetail(podId, customerId) {
+            const customer = db.customers.find(c => c.id === customerId);
+            if (!customer) return;
+            
+            currentCustomer = customer;
+            currentRunDay = customer.runDay || 'Ad-Hoc';
+            
+            // Try local cache first
+            const localPod = db.pods.find(p => p.id === podId);
+            if (localPod) {
+                showExistingPod(localPod);
+                return;
+            }
+            
+            // Load from database
+            try {
+                const { data: pod, error } = await supabase
+                    .from('pods')
+                    .select('*')
+                    .eq('id', podId)
+                    .single();
+                
+                if (error) throw error;
+                
+                if (pod) {
+                    const mappedPod = {
+                        id: pod.id, customerId: pod.customer_id, customerName: pod.customer_name,
+                        customerAddress: pod.customer_address, runDay: pod.run_day, date: pod.date,
+                        timestamp: pod.timestamp, serviceType: pod.service_type, carbsolve: pod.carbsolve,
+                        tankServiced: pod.tank_serviced, serviceNotes: pod.service_notes, products: pod.products,
+                        notes: pod.notes, photo: pod.photo, signature: pod.signature,
+                        signatureName: pod.signature_name, isRentalOnly: pod.is_rental_only || false,
+                        isQuickComplete: pod.is_quick_complete || false, isAdHoc: pod.is_ad_hoc || false,
+                        sourceRunDay: pod.source_run_day, archived: pod.archived
+                    };
+                    showExistingPod(mappedPod);
+                }
+            } catch (error) {
+                console.error('Error loading POD detail:', error);
+                showToast('Error loading POD details', 'error');
+            }
+        }
+        
+        function clearSearchPodsHistory() {
+            document.getElementById('searchPodsHistoryContainer').style.display = 'none';
+            document.getElementById('searchPodsResults').style.display = 'none';
+            document.getElementById('searchPodsHint').style.display = 'block';
+            document.getElementById('searchPodsInput').value = '';
+            document.getElementById('searchPodsInput').focus();
         }
 
         function backToCustomerList() {
@@ -5261,8 +5555,9 @@
                     workers.add(sd.employee.trim());
                 }
             });
-            // Always include Matt (does ad-hoc services, not regular service days)
+            // Always include Matt and Red (do ad-hoc services, not regular service days)
             workers.add('Matt');
+            workers.add('Red');
             return Array.from(workers).sort();
         }
         
@@ -5560,20 +5855,39 @@
                         // Show worker name when viewing all workers
                         const showWorkerName = !currentSelectedWorker && event.calendar_owner;
                         
-                        gridHtml += `
-                            <div onclick="${clickable ? `openWorkerRunsheet('${event.service_day_name}', '${dateStr}')` : ''}" 
-                                 style="display: flex; align-items: flex-start; gap: 6px; padding: 8px; background: ${bgColor}; 
-                                        border-radius: 6px; margin-bottom: 6px; border-left: 3px solid ${borderColor};
-                                        ${clickable ? 'cursor: pointer;' : ''} transition: transform 0.1s; overflow: hidden;"
-                                 ${clickable ? 'onmouseover="this.style.transform=\'scale(1.02)\'" onmouseout="this.style.transform=\'scale(1)\'"' : ''}>
-                                <span style="font-size: 14px; flex-shrink: 0;">${icon}</span>
-                                <div style="flex: 1; min-width: 0; overflow: hidden;">
-                                    <div style="font-weight: 600; font-size: 12px; color: #1e3a5f; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${event.service_day_name || event.event_title}</div>
-                                    ${showWorkerName ? `<div style="font-size: 10px; color: #6b7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">👤 ${event.calendar_owner}</div>` : ''}
-                                    ${isServiceDay && event.event_title !== event.service_day_name ? `<div style="font-size: 10px; color: #6b7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${event.event_title}</div>` : ''}
+                        if (isServiceDay) {
+                            gridHtml += `
+                                <div onclick="openWorkerRunsheet('${event.service_day_name}', '${dateStr}')" 
+                                     style="display: flex; align-items: flex-start; gap: 6px; padding: 8px; background: ${bgColor}; 
+                                            border-radius: 6px; margin-bottom: 6px; border-left: 3px solid ${borderColor};
+                                            cursor: pointer; transition: transform 0.1s; overflow: hidden;"
+                                     onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
+                                    <span style="font-size: 14px; flex-shrink: 0;">${icon}</span>
+                                    <div style="flex: 1; min-width: 0; overflow: hidden;">
+                                        <div style="font-weight: 600; font-size: 12px; color: #1e3a5f; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${event.service_day_name || event.event_title}</div>
+                                        ${showWorkerName ? `<div style="font-size: 10px; color: #6b7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">👤 ${event.calendar_owner}</div>` : ''}
+                                        ${event.event_title !== event.service_day_name ? `<div style="font-size: 10px; color: #6b7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${event.event_title}</div>` : ''}
+                                    </div>
                                 </div>
-                            </div>
-                        `;
+                            `;
+                        } else {
+                            // Non-service-day event: show with tick/cross
+                            const eventStatus = db.getCalendarEventStatus(event.id);
+                            const completedClass = eventStatus === 'completed' ? ' event-completed' : '';
+                            const cancelledClass = eventStatus === 'cancelled' ? ' event-cancelled' : '';
+                            
+                            gridHtml += `
+                                <div class="calendar-event-item${completedClass}${cancelledClass}" style="margin-bottom: 4px;">
+                                    <span class="calendar-event-title" onclick="showCalendarEventModal('${event.id}', '${dateStr}')" style="font-size: 11px;">
+                                        ${showWorkerName ? `<span style="color: #9ca3af;">👤</span> ` : ''}${event.event_title}
+                                    </span>
+                                    <div class="calendar-event-actions">
+                                        <button class="event-tick-btn${eventStatus === 'completed' ? ' active' : ''}" onclick="toggleCalendarEventStatus('${event.id}', 'completed')" title="Done">✓</button>
+                                        <button class="event-cross-btn${eventStatus === 'cancelled' ? ' active' : ''}" onclick="toggleCalendarEventStatus('${event.id}', 'cancelled')" title="Not done">✗</button>
+                                    </div>
+                                </div>
+                            `;
+                        }
                     });
                 }
                 
@@ -5645,16 +5959,32 @@
                 const isServiceDay = event.is_service_day;
                 const eventWorker = event.calendar_owner || '';
                 const employeeClass = 'employee-' + eventWorker.toLowerCase().replace(/[^a-z]/g, '');
-                const clickable = isServiceDay;
                 
-                html += `
-                    <div class="calendar-service-day ${employeeClass}"
-                         onclick="${clickable ? `openWorkerRunsheet('${event.service_day_name}', '${dateStr}')` : ''}"
-                         style="${clickable ? 'cursor: pointer;' : ''}"
-                         title="${event.event_title || ''}">
-                        <span class="pod-count">${event.event_title || event.service_day_name}</span>
-                    </div>
-                `;
+                if (isServiceDay) {
+                    html += `
+                        <div class="calendar-service-day ${employeeClass}"
+                             onclick="openWorkerRunsheet('${event.service_day_name}', '${dateStr}')"
+                             style="cursor: pointer;"
+                             title="${event.event_title || ''}">
+                            <span class="pod-count">${event.event_title || event.service_day_name}</span>
+                        </div>
+                    `;
+                } else {
+                    // Non-service-day event with tick/cross
+                    const eventStatus = db.getCalendarEventStatus(event.id);
+                    const completedClass = eventStatus === 'completed' ? ' event-completed' : '';
+                    const cancelledClass = eventStatus === 'cancelled' ? ' event-cancelled' : '';
+                    
+                    html += `
+                        <div class="calendar-event-item${completedClass}${cancelledClass}" style="font-size: 10px; padding: 4px 6px;">
+                            <span class="calendar-event-title" onclick="showCalendarEventModal('${event.id}', '${dateStr}')" style="font-size: 10px;">${event.event_title}</span>
+                            <div class="calendar-event-actions">
+                                <button class="event-tick-btn${eventStatus === 'completed' ? ' active' : ''}" onclick="event.stopPropagation(); toggleCalendarEventStatus('${event.id}', 'completed')" style="width: 18px; height: 18px; font-size: 10px;" title="Done">✓</button>
+                                <button class="event-cross-btn${eventStatus === 'cancelled' ? ' active' : ''}" onclick="event.stopPropagation(); toggleCalendarEventStatus('${event.id}', 'cancelled')" style="width: 18px; height: 18px; font-size: 10px;" title="Not done">✗</button>
+                            </div>
+                        </div>
+                    `;
+                }
             });
             
             if (events.length > maxEvents) {
@@ -5696,18 +6026,39 @@
                     const eventWorker = currentSelectedWorker || event.calendar_owner || '';
                     const showWorkerName = !currentSelectedWorker && event.calendar_owner;
                     
-                    html += `
-                        <div onclick="${isServiceDay ? `openWorkerRunsheet('${event.service_day_name}', '${dateStr}')` : ''}"
-                             style="display: flex; align-items: center; gap: 8px; padding: 8px; background: ${bgColor}; border-radius: 6px; margin-bottom: 4px; margin-left: 12px; border-left: 3px solid ${getWorkerColor(eventWorker)}; ${isServiceDay ? 'cursor: pointer;' : ''}">
-                            <span>${icon}</span>
-                            <div style="flex: 1;">
-                                                <div style="font-weight: 500; font-size: 13px;">${event.service_day_name || event.event_title}</div>
-                                                ${showWorkerName ? `<div style="font-size: 11px; color: #6b7280;">👤 ${event.calendar_owner}</div>` : ''}
-                                                ${isServiceDay && event.event_title !== event.service_day_name ? `<div style="font-size: 11px; color: #6b7280;">${event.event_title}</div>` : ''}
-                                            </div>
-                            ${isServiceDay ? '<span style="color: #6b7280; font-size: 12px;">→</span>' : ''}
-                        </div>
-                    `;
+                    if (isServiceDay) {
+                        html += `
+                            <div onclick="openWorkerRunsheet('${event.service_day_name}', '${dateStr}')"
+                                 style="display: flex; align-items: center; gap: 8px; padding: 8px; background: ${bgColor}; border-radius: 6px; margin-bottom: 4px; margin-left: 12px; border-left: 3px solid ${getWorkerColor(eventWorker)}; cursor: pointer;">
+                                <span>${icon}</span>
+                                <div style="flex: 1;">
+                                    <div style="font-weight: 500; font-size: 13px;">${event.service_day_name || event.event_title}</div>
+                                    ${showWorkerName ? `<div style="font-size: 11px; color: #6b7280;">👤 ${event.calendar_owner}</div>` : ''}
+                                    ${event.event_title !== event.service_day_name ? `<div style="font-size: 11px; color: #6b7280;">${event.event_title}</div>` : ''}
+                                </div>
+                                <span style="color: #6b7280; font-size: 12px;">→</span>
+                            </div>
+                        `;
+                    } else {
+                        // Non-service-day event: show with tick/cross
+                        const eventStatus = db.getCalendarEventStatus(event.id);
+                        const completedClass = eventStatus === 'completed' ? ' event-completed' : '';
+                        const cancelledClass = eventStatus === 'cancelled' ? ' event-cancelled' : '';
+                        
+                        html += `
+                            <div class="calendar-event-item${completedClass}${cancelledClass}" style="margin-bottom: 4px; margin-left: 12px;">
+                                <span style="margin-right: 6px;">${icon}</span>
+                                <span class="calendar-event-title" onclick="showCalendarEventModal('${event.id}', '${dateStr}')">
+                                    ${event.event_title}
+                                    ${showWorkerName ? `<span style="font-size: 10px; color: #9ca3af;"> (${event.calendar_owner})</span>` : ''}
+                                </span>
+                                <div class="calendar-event-actions">
+                                    <button class="event-tick-btn${eventStatus === 'completed' ? ' active' : ''}" onclick="toggleCalendarEventStatus('${event.id}', 'completed')" title="Done">✓</button>
+                                    <button class="event-cross-btn${eventStatus === 'cancelled' ? ' active' : ''}" onclick="toggleCalendarEventStatus('${event.id}', 'cancelled')" title="Not done">✗</button>
+                                </div>
+                            </div>
+                        `;
+                    }
                 });
                 
                 html += '</div>';
