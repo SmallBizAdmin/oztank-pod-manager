@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oz Tank - Service POD Manager v11.8</title>
-    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <title>Oz Tank - Service POD Manager v11.9</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -20,119 +19,6 @@
             background: #f5f5f5;
             padding-bottom: 80px;
         }
-        
-        /* Login Screen Styles */
-        #loginScreen {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: linear-gradient(135deg, #374151 0%, #1f2937 100%);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            z-index: 10000;
-        }
-        
-        #loginScreen.hidden {
-            display: none;
-        }
-        
-        .login-box {
-            background: white;
-            padding: 40px;
-            border-radius: 16px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
-            text-align: center;
-            max-width: 400px;
-            width: 90%;
-        }
-        
-        .login-logo {
-            font-size: 48px;
-            margin-bottom: 16px;
-        }
-        
-        .login-title {
-            font-size: 24px;
-            font-weight: 700;
-            color: #1f2937;
-            margin-bottom: 8px;
-        }
-        
-        .login-subtitle {
-            color: #6b7280;
-            margin-bottom: 32px;
-        }
-        
-        .login-error {
-            background: #fee2e2;
-            color: #dc2626;
-            padding: 12px;
-            border-radius: 8px;
-            margin-bottom: 16px;
-            display: none;
-        }
-        
-        .login-error.show {
-            display: block;
-        }
-        
-        #googleSignInBtn {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 12px;
-            background: white;
-            border: 2px solid #e5e7eb;
-            padding: 12px 24px;
-            border-radius: 8px;
-            font-size: 16px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        
-        #googleSignInBtn:hover {
-            border-color: #3b82f6;
-            background: #f8fafc;
-        }
-        
-        #googleSignInBtn img {
-            width: 20px;
-            height: 20px;
-        }
-        
-        .user-info {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 12px;
-            color: rgba(255,255,255,0.8);
-        }
-        
-        .user-info img {
-            width: 24px;
-            height: 24px;
-            border-radius: 50%;
-        }
-        
-        .logout-btn {
-            background: transparent;
-            border: 1px solid rgba(255,255,255,0.3);
-            color: rgba(255,255,255,0.8);
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 11px;
-            cursor: pointer;
-            margin-left: 8px;
-        }
-        
-        .logout-btn:hover {
-            background: rgba(255,255,255,0.1);
-        }
 
         .header {
             background: linear-gradient(135deg, #374151 0%, #1f2937 100%);
@@ -142,11 +28,6 @@
             position: sticky;
             top: 0;
             z-index: 100;
-        }
-        
-        /* Make header container for user info positioning */
-        #homeView > .header {
-            position: relative;
         }
 
         .header-logo {
@@ -484,27 +365,23 @@
             gap: 8px;
             margin-bottom: 12px;
             align-items: center;
-            flex-wrap: wrap;
         }
 
         .product-line select {
             flex: 1;
-            min-width: 120px;
         }
 
         .product-line input[type="number"] {
-            width: 70px;
-            flex-shrink: 0;
+            width: 80px;
         }
 
         .product-line button {
-            padding: 8px 14px;
+            padding: 8px 12px;
             border: none;
             border-radius: 6px;
             cursor: pointer;
-            font-size: 16px;
+            font-size: 14px;
             white-space: nowrap;
-            flex-shrink: 0;
         }
 
         .product-line .product-confirm-btn {
@@ -526,6 +403,50 @@
             cursor: pointer;
             font-size: 14px;
             margin-top: 8px;
+        }
+
+        .quick-comment-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .quick-comment-btn {
+            background: #e5e7eb;
+            color: #374151;
+            border: 1px solid #d1d5db;
+            padding: 6px 12px;
+            border-radius: 16px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+
+        .quick-comment-btn:hover {
+            background: #d1d5db;
+        }
+
+        .quick-comment-btn.selected {
+            background: #059669;
+            color: white;
+            border-color: #059669;
+        }
+
+        .quick-comment-btn.gyg-only {
+            background: #fef3c7;
+            border-color: #f59e0b;
+            color: #92400e;
+        }
+
+        .quick-comment-btn.gyg-only:hover {
+            background: #fde68a;
+        }
+
+        .quick-comment-btn.gyg-only.selected {
+            background: #f59e0b;
+            color: white;
+            border-color: #f59e0b;
         }
 
         .back-btn {
@@ -726,18 +647,16 @@
 
         .toast {
             position: fixed;
-            top: 20px;
+            top: 80px;
             left: 50%;
             transform: translateX(-50%);
             background: #16a34a;
             color: white;
             padding: 16px 24px;
             border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-            z-index: 10000;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+            z-index: 1000;
             animation: slideDown 0.3s ease;
-            max-width: 90%;
-            text-align: center;
         }
 
         .toast.error {
@@ -1046,6 +965,55 @@
             height: 500px;
             border: none;
             border-radius: 6px;
+        }
+
+        .upload-area {
+            border: 2px dashed #d1d5db;
+            border-radius: 8px;
+            padding: 32px;
+            text-align: center;
+            background: #f9fafb;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .upload-area:hover {
+            border-color: #374151;
+            background: #eff6ff;
+        }
+
+        .upload-area.dragover {
+            border-color: #374151;
+            background: #f3f4f6;
+        }
+
+        .upload-icon {
+            font-size: 48px;
+            color: #9ca3af;
+            margin-bottom: 12px;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .import-status {
+            margin-top: 16px;
+            padding: 12px;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .import-status.success {
+            background: #f0fdf4;
+            color: #16a34a;
+            border: 1px solid #16a34a;
+        }
+
+        .import-status.error {
+            background: #fef2f2;
+            color: #dc2626;
+            border: 1px solid #dc2626;
         }
 
         /* Worker Selector Styles */
@@ -1401,6 +1369,96 @@
             font-weight: 500;
         }
 
+        /* Calendar Event (non-service-day) items */
+        .calendar-event-item {
+            font-size: 12px;
+            padding: 6px 8px;
+            border-radius: 4px;
+            background: #f3f4f6;
+            color: #374151;
+            border-left: 3px solid #9ca3af;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .calendar-event-item.event-completed {
+            background: #dcfce7;
+            border-left-color: #16a34a;
+            text-decoration: line-through;
+            opacity: 0.8;
+        }
+
+        .calendar-event-item.event-cancelled {
+            background: #fee2e2;
+            border-left-color: #dc2626;
+            text-decoration: line-through;
+            opacity: 0.6;
+        }
+
+        .calendar-event-title {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            cursor: pointer;
+        }
+
+        .calendar-event-actions {
+            display: flex;
+            gap: 2px;
+            flex-shrink: 0;
+        }
+
+        .event-tick-btn, .event-cross-btn {
+            border: none;
+            width: 22px;
+            height: 22px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .event-tick-btn {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .event-tick-btn:hover {
+            background: #16a34a;
+            color: white;
+        }
+
+        .event-tick-btn.active {
+            background: #16a34a;
+            color: white;
+        }
+
+        .event-cross-btn {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .event-cross-btn:hover {
+            background: #dc2626;
+            color: white;
+        }
+
+        .event-cross-btn.active {
+            background: #dc2626;
+            color: white;
+        }
+
+        .calendar-events-section {
+            margin-top: 8px;
+            padding-top: 6px;
+            border-top: 1px dashed #e5e7eb;
+        }
+
         .legend-item {
             display: flex;
             align-items: center;
@@ -1534,298 +1592,234 @@
             background: #d1d5db;
         }
 
-        /* Camera button styling */
-        .camera-btn {
-            display: inline-flex;
+        /* Quick Complete Summary Table Styles */
+        .quick-complete-summary {
+            background: white;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 16px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .quick-complete-summary h3 {
+            margin-bottom: 12px;
+            color: #374151;
+            font-size: 16px;
+        }
+
+        .quick-complete-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+
+        .quick-complete-table th {
+            background: #f3f4f6;
+            padding: 10px 12px;
+            text-align: left;
+            border-bottom: 2px solid #e5e7eb;
+            font-weight: 600;
+            color: #374151;
+        }
+
+        .quick-complete-table td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #f3f4f6;
+        }
+
+        .quick-complete-table tr:hover {
+            background: #f9fafb;
+        }
+
+        .quick-complete-table tr.completed {
+            background: #f0fdf4;
+        }
+
+        .quick-complete-table tr.rental-only {
+            background: #fef3c7;
+        }
+
+        .quick-complete-checkbox {
+            width: 24px;
+            height: 24px;
+            cursor: pointer;
+            accent-color: #16a34a;
+        }
+
+        .quick-complete-btn {
+            padding: 6px 12px;
+            border-radius: 6px;
+            border: 1px solid #d1d5db;
+            background: white;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+
+        .quick-complete-btn:hover {
+            background: #f3f4f6;
+        }
+
+        .quick-complete-btn.completed {
+            background: #16a34a;
+            color: white;
+            border-color: #16a34a;
+        }
+
+        .quick-complete-timestamp {
+            font-size: 11px;
+            color: #6b7280;
+            margin-top: 4px;
+        }
+
+        /* Calendar Event Status Styles */
+        .calendar-event-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .calendar-event-tick, .calendar-event-cross {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            border: 2px solid #d1d5db;
+            display: flex;
             align-items: center;
             justify-content: center;
-            gap: 8px;
-            padding: 14px 24px;
-            background: #374151;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-size: 16px;
-            font-weight: 500;
             cursor: pointer;
-            transition: background 0.2s;
+            transition: all 0.2s;
+            font-size: 14px;
         }
 
-        .camera-btn:hover {
-            background: #1f2937;
+        .calendar-event-tick:hover {
+            background: #dcfce7;
+            border-color: #16a34a;
         }
 
-        .camera-btn:active {
-            background: #111827;
+        .calendar-event-cross:hover {
+            background: #fee2e2;
+            border-color: #dc2626;
         }
 
-        /* Hide actual file input */
-        .hidden-file-input {
-            display: none;
+        .calendar-event-tick.active {
+            background: #16a34a;
+            border-color: #16a34a;
+            color: white;
         }
 
-        /* Mobile Day Selector (visible only on mobile) */
-        .mobile-day-selector {
-            display: none;
-            gap: 4px;
-            overflow-x: auto;
-            padding: 8px 0;
-            -webkit-overflow-scrolling: touch;
-            justify-content: center;
+        .calendar-event-cross.active {
+            background: #dc2626;
+            border-color: #dc2626;
+            color: white;
         }
 
-        .mobile-day-btn {
-            flex: 0 0 auto;
-            min-width: 60px;
-            padding: 10px 8px;
-            background: #f3f4f6;
-            border: 2px solid #e5e7eb;
+        /* Search POD Customer History Styles */
+        .customer-history-summary {
+            background: #f8fafc;
             border-radius: 8px;
+            padding: 16px;
+            margin-top: 16px;
+        }
+
+        .customer-history-summary h4 {
+            margin-bottom: 12px;
+            color: #1e3a8a;
+        }
+
+        .customer-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .customer-stat-card {
+            background: white;
+            padding: 12px;
+            border-radius: 6px;
             text-align: center;
+            border: 1px solid #e5e7eb;
+        }
+
+        .customer-stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: #1e3a8a;
+        }
+
+        .customer-stat-label {
+            font-size: 12px;
+            color: #6b7280;
+        }
+
+        .pod-history-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .pod-history-item {
+            background: white;
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            border: 1px solid #e5e7eb;
             cursor: pointer;
             transition: all 0.2s;
         }
 
-        .mobile-day-btn.active {
-            background: #3b82f6;
+        .pod-history-item:hover {
+            background: #f0f9ff;
             border-color: #3b82f6;
-            color: white;
         }
 
-        .mobile-day-btn.today {
-            border-color: #16a34a;
+        .pod-history-date {
+            font-weight: 600;
+            color: #111827;
         }
 
-        .mobile-day-btn .day-name {
-            font-size: 10px;
-            font-weight: 500;
-            text-transform: uppercase;
+        .pod-history-details {
+            font-size: 13px;
+            color: #6b7280;
+            margin-top: 4px;
         }
 
-        .mobile-day-btn .day-num {
-            font-size: 18px;
-            font-weight: 700;
+        .pod-history-notes {
+            font-size: 12px;
+            color: #f59e0b;
+            font-style: italic;
+            margin-top: 4px;
         }
 
-        .mobile-day-btn .day-events {
-            font-size: 9px;
-            margin-top: 2px;
+        /* Rental Only Badge */
+        .rental-only-badge {
+            background: #fef3c7;
+            color: #92400e;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: 600;
         }
 
-        /* Mobile day detail panel */
-        .mobile-day-detail {
-            display: none;
-            background: #f8fafc;
-            border-radius: 8px;
-            border: 1px solid #e2e8f0;
-            padding: 12px;
-            margin-top: 8px;
+        /* Signature Name Field */
+        .signature-name-field {
+            margin-bottom: 12px;
         }
 
-        .mobile-day-detail.show {
-            display: block;
-        }
-
-        /* Mobile Responsive Styles */
-        @media (max-width: 768px) {
-            /* Show mobile day selector, hide desktop week view and toggle */
-            .mobile-day-selector {
-                display: flex !important;
-            }
-
-            #workerWeekView {
-                display: none !important;
-            }
-
-            /* Hide week/list toggle on mobile - we just use day selector */
-            #weekListToggle {
-                display: none !important;
-            }
-
-            /* Hide week/month period toggle on mobile - just use week */
-            #workerPeriodToggle {
-                display: none !important;
-            }
-
-            /* Also hide list view on mobile */
-            #workerListView {
-                display: none !important;
-            }
-
-            /* Always show mobile day detail on mobile when selector is visible */
-            .mobile-day-detail {
-                display: block;
-            }
-
-            /* Product line - row layout with wrapping on mobile */
-            .product-line {
-                gap: 6px;
-            }
-
-            .product-line select {
-                flex: 1 1 60%;
-                min-width: 0;
-            }
-
-            .product-line input[type="number"] {
-                width: 60px;
-            }
-
-            .product-line button {
-                padding: 10px 14px;
-            }
-
-            /* Admin calendar - horizontal scroll on mobile */
-            #adminCalendarContainer {
-                overflow-x: auto;
-                -webkit-overflow-scrolling: touch;
-                margin: 0 -12px;
-                padding: 0 12px;
-            }
-
-            /* Ensure calendar grid has minimum width */
-            .calendar-grid {
-                min-width: 600px;
-            }
-
-            /* Signature pad - responsive width */
-            .signature-pad {
-                width: 100% !important;
-                max-width: 100%;
-                height: 150px !important;
-            }
-
-            /* POD view buttons at bottom */
-            #existingPodView .btn {
-                display: block;
-                width: 100%;
-                margin-bottom: 8px;
-            }
-
-            /* Save POD button full width */
-            #podForm > .btn-success {
-                width: 100%;
-                padding: 16px;
-                font-size: 16px;
-            }
-
-            /* Cards - reduce padding on mobile */
-            .card {
-                padding: 12px;
-            }
-
-            /* Header adjustments */
-            .header-content h1 {
-                font-size: 18px;
-            }
-
-            /* Month selector adjustments */
-            .month-display .month-name {
-                font-size: 16px;
-            }
-
-            .month-display .month-year {
-                font-size: 12px;
-            }
-
-            /* Period toggle buttons */
-            .period-toggle-btn {
-                padding: 8px 12px;
-                font-size: 13px;
-            }
-
-            /* Customer list items - more touch-friendly */
-            .customer-item {
-                padding: 14px;
-            }
-
-            /* Run day cards */
-            .run-day-card {
-                padding: 12px;
-            }
-
-            /* Form inputs - prevent iOS zoom */
-            input, select, textarea {
-                font-size: 16px !important;
-            }
-
-            /* Camera button full width */
-            .camera-btn {
-                width: 100%;
-            }
-
-            /* Photo preview sizing */
-            .photo-preview {
-                max-height: 200px;
-                object-fit: contain;
-            }
-
-            /* Radio groups on mobile */
-            .radio-group {
-                flex-wrap: wrap;
-            }
-        }
-
-        /* Extra small screens */
-        @media (max-width: 400px) {
-            .container {
-                padding: 12px;
-            }
-
-            .header-content {
-                padding: 12px;
-            }
-
-            .back-btn {
-                padding: 6px 10px;
-                font-size: 13px;
-            }
-
-            .btn {
-                padding: 10px 16px;
-                font-size: 14px;
-            }
-
-            .month-nav-btn {
-                width: 32px;
-                height: 32px;
-                font-size: 16px;
-            }
-
-            .mobile-day-btn {
-                min-width: 52px;
-                padding: 8px 6px;
-            }
-
-            .mobile-day-btn .day-num {
-                font-size: 16px;
-            }
+        .signature-name-field input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 16px;
         }
     </style>
 </head>
 <body>
-    <!-- Login Screen -->
-    <div id="loginScreen">
-        <div class="login-box">
-            <div class="login-logo">🚛</div>
-            <h1 class="login-title">Oz Tank POD Manager</h1>
-            <p class="login-subtitle">Sign in with your Oz Tank Google account</p>
-            <div id="loginError" class="login-error">
-                Access denied. Please use an authorized Oz Tank account.
-            </div>
-            <div id="googleSignInDiv" style="display: flex; justify-content: center; margin: 16px 0;"></div>
-            <button id="googleSignInBtn" onclick="initiateGoogleSignIn()" style="margin-top: 8px;">
-                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google">
-                Sign in with Google
-            </button>
-            <p style="font-size: 12px; color: #9ca3af; margin-top: 16px;">Having trouble? Try refreshing the page.</p>
-        </div>
-    </div>
-
     <!-- Home View -->
     <div id="homeView" class="view active">
         <div class="header" style="text-align: center;">
-            <div id="userInfoDisplay" class="user-info" style="position: absolute; top: 8px; right: 8px;"></div>
             <img src="https://www.oztank.com.au/wp-content/uploads/2017/09/australia-soaking-tanks.png" alt="Oz Tank" class="header-logo" style="height: 60px; margin-bottom: 8px;">
             <p class="subtitle" style="font-size: 18px; font-weight: 600; margin-top: 4px;">Service POD Manager</p>
         </div>
@@ -1834,7 +1828,7 @@
             <div class="admin-quick-actions" style="display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap;">
                 <button class="btn btn-secondary" style="flex: 1; min-width: 120px;" onclick="showAdminDashboard()">📊 Admin</button>
                 <button class="btn btn-secondary" style="flex: 1; min-width: 120px;" onclick="showAdminPanelView()">📥 Import</button>
-                <button class="btn btn-secondary" style="flex: 1; min-width: 120px;" onclick="showExportView()">🔍 Search PODs</button>
+                <button class="btn btn-secondary" style="flex: 1; min-width: 120px;" onclick="showExportView()">📤 Export PODs</button>
             </div>
             
             <!-- Week/Month Selector -->
@@ -1854,7 +1848,7 @@
             </div>
             
             <!-- Week/Month Toggle -->
-            <div id="workerPeriodToggle" class="period-toggle">
+            <div class="period-toggle">
                 <button class="period-toggle-btn active" id="workerWeekPeriodBtn" onclick="setWorkerPeriod('week')">Week</button>
                 <button class="period-toggle-btn" id="workerMonthPeriodBtn" onclick="setWorkerPeriod('month')">Month</button>
             </div>
@@ -1864,7 +1858,7 @@
             
             <!-- Worker Selector Card -->
             <div class="card">
-                <h2 style="margin-bottom: 16px; text-align: center;">Select Service Day</h2>
+                <h2 style="margin-bottom: 16px;">Select Service Day</h2>
                 
                 <!-- Worker Selector -->
                 <div class="worker-selector-container">
@@ -1878,7 +1872,7 @@
                 <!-- Worker's Calendar Events (hidden by default) -->
                 <div id="workerCalendarEvents" style="display: none; margin-top: 16px;">
                     <!-- Week/List View Toggle -->
-                    <div id="weekListToggle" style="display: flex; align-items: center; justify-content: flex-start; margin-bottom: 12px;">
+                    <div style="display: flex; align-items: center; justify-content: flex-start; margin-bottom: 12px;">
                         <div style="display: flex; gap: 4px; background: #e5e7eb; padding: 4px; border-radius: 8px; width: fit-content;">
                             <button class="period-toggle-btn active" id="workerWeekViewBtn" onclick="setWorkerCalendarView('week')">Week View</button>
                             <button class="period-toggle-btn" id="workerListViewBtn" onclick="setWorkerCalendarView('list')">List View</button>
@@ -1893,14 +1887,6 @@
                         <div id="workerWeekGrid" style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1px; background: #e2e8f0;">
                             <!-- Week days will be populated -->
                         </div>
-                    </div>
-                    
-                    <!-- Mobile Day Selector (shown on mobile instead of week grid) -->
-                    <div id="mobileDaySelector" class="mobile-day-selector">
-                        <!-- Days will be populated dynamically -->
-                    </div>
-                    <div id="mobileDayDetail" class="mobile-day-detail">
-                        <!-- Selected day's events will appear here -->
                     </div>
                     
                     <!-- List View (hidden by default) -->
@@ -1945,6 +1931,26 @@
             </div>
         </div>
         <div class="container">
+            <!-- Quick Complete Summary Table -->
+            <div class="quick-complete-summary" id="quickCompleteSummary">
+                <h3>📋 Quick Complete</h3>
+                <p style="font-size: 13px; color: #6b7280; margin-bottom: 12px;">Tick to mark service done. Click customer row for full POD (notes, photos, signature).</p>
+                <table class="quick-complete-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 50px;">Done</th>
+                            <th>Customer</th>
+                            <th style="width: 80px;">Type</th>
+                            <th style="width: 120px;">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="quickCompleteTableBody">
+                        <!-- Quick complete rows will be inserted here -->
+                    </tbody>
+                </table>
+            </div>
+            
+            <h3 style="margin-bottom: 12px; color: #374151;">📍 Full Runsheet</h3>
             <ul class="customer-list" id="customerList">
                 <!-- Customers will be inserted here -->
             </ul>
@@ -2010,6 +2016,10 @@
                     <div class="form-group">
                         <label>Service Notes</label>
                         <textarea id="serviceNotes" placeholder="Enter service notes..."></textarea>
+                        <div class="quick-comment-container" id="quickCommentContainer">
+                            <button type="button" class="quick-comment-btn" onclick="toggleQuickComment('No service required')">No service required</button>
+                            <button type="button" class="quick-comment-btn gyg-only" id="gotHookBtn" style="display: none;" onclick="toggleQuickComment('Got Hook')">Got Hook</button>
+                        </div>
                     </div>
                 </div>
 
@@ -2043,10 +2053,7 @@
                 <div class="card">
                     <div class="form-group">
                         <label>Photo</label>
-                        <input type="file" id="photoInput" class="hidden-file-input" accept="image/*" capture="environment">
-                        <button type="button" class="camera-btn" onclick="document.getElementById('photoInput').click()">
-                            📷 Take Photo
-                        </button>
+                        <input type="file" id="photoInput" accept="image/*" capture="environment">
                         <img id="photoPreview" class="photo-preview" style="display: none;">
                     </div>
                 </div>
@@ -2055,11 +2062,9 @@
                 <div class="card">
                     <div class="form-group">
                         <label>Customer Signature</label>
-                        <div style="margin-bottom: 12px;">
-                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: normal;">
-                                <input type="checkbox" id="customerNotAvailable" onchange="toggleSignatureRequirement()" style="width: auto;">
-                                Customer not available (signature not required)
-                            </label>
+                        <div class="signature-name-field">
+                            <label style="font-size: 13px; color: #6b7280; margin-bottom: 4px; display: block;">Signatory Name</label>
+                            <input type="text" id="signatureName" placeholder="Enter name of person signing...">
                         </div>
                         <canvas id="signaturePad" class="signature-pad" width="400" height="200"></canvas>
                         <div class="signature-controls">
@@ -2095,7 +2100,21 @@
             <!-- Customer Management -->
             <div id="customersTab" class="admin-tab">
                 <div class="card">
-                    <h2 style="margin-bottom: 16px;">Add Customer</h2>
+                    <h2 style="margin-bottom: 16px;">Import Customers from Excel</h2>
+                    <div class="upload-area" id="uploadArea" onclick="document.getElementById('excelFileInput').click()">
+                        <div class="upload-icon">📄</div>
+                        <p style="color: #374151; font-weight: 500; margin-bottom: 4px;">Click to upload Excel file</p>
+                        <p style="color: #6b7280; font-size: 14px;">or drag and drop</p>
+                        <p style="color: #9ca3af; font-size: 12px; margin-top: 8px;">
+                            Columns: Name | Service Day | Address | Phone | Service Type | Carbsolve | Waste | Code | Notes
+                        </p>
+                    </div>
+                    <input type="file" id="excelFileInput" class="file-input" accept=".xlsx,.xls,.csv" onchange="handleFileUpload(event)">
+                    <div id="importStatus"></div>
+                </div>
+
+                <div class="card">
+                    <h2 style="margin-bottom: 16px;">Add Single Customer</h2>
                     <form id="addCustomerForm">
                         <div class="form-group">
                             <label>Customer Name</label>
@@ -2120,18 +2139,6 @@
                                 <option value="Service">Service</option>
                                 <option value="Delivery">Delivery</option>
                                 <option value="Check">Check</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>Frequency</label>
-                            <select id="newCustomerFrequency">
-                                <option value="">Select...</option>
-                                <option value="Weekly">Weekly</option>
-                                <option value="Fortnightly">Fortnightly</option>
-                                <option value="Monthly">Monthly</option>
-                                <option value="Bi-monthly">Bi-monthly</option>
-                                <option value="Quarterly">Quarterly</option>
-                                <option value="On Call">On Call</option>
                             </select>
                         </div>
                         <div class="form-group">
@@ -2237,15 +2244,21 @@
                 <div class="card">
                     <h2 style="margin-bottom: 16px;">📅 Google Calendar Integration</h2>
                     <p style="color: #6b7280; margin-bottom: 16px;">
-                        Service days are automatically synced from all worker Google Calendars via Google Apps Script.
-                        The sync runs automatically every day at 2:35 AM Brisbane time.
+                        Connect your Google Calendar to automatically populate scheduled service days on the admin calendar.
+                        This helps track which days are expected to be invoiced.
                     </p>
                     
-                    <div style="background: #ecfdf5; border: 1px solid #10b981; border-radius: 8px; padding: 16px;">
-                        <h3 style="color: #059669; margin-bottom: 8px;">✅ Automatic Sync Active</h3>
-                        <p style="color: #047857; font-size: 14px;">
-                            Calendars synced: Allan, Drew, Matt, Michael, Red, Stephen
+                    <div class="form-group">
+                        <label>Google Calendar ICS URL</label>
+                        <input type="text" id="calendarIcsUrl" placeholder="https://calendar.google.com/calendar/ical/..." style="font-size: 13px;">
+                        <p style="font-size: 12px; color: #9ca3af; margin-top: 6px;">
+                            To get this URL: Google Calendar → Settings → [Your Calendar] → Integrate calendar → "Secret address in iCal format"
                         </p>
+                    </div>
+                    
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn" onclick="saveCalendarIcsUrl()">Save ICS URL</button>
+                        <button class="btn btn-secondary" onclick="triggerCalendarSync()">🔄 Sync Now</button>
                     </div>
                 </div>
                 
@@ -2260,46 +2273,52 @@
                     <h2 style="margin-bottom: 16px;">How It Works</h2>
                     <div style="color: #6b7280; font-size: 14px; line-height: 1.6;">
                         <p><strong>1. Calendar Event Naming:</strong> Name your calendar events with the service day at the start, e.g., "Day 12.2 - Drew" or "Spare Day 2 - Michael"</p>
-                        <p style="margin-top: 8px;"><strong>2. Automatic Sync:</strong> Google Apps Script syncs all worker calendars daily at 2:35 AM Brisbane time</p>
+                        <p style="margin-top: 8px;"><strong>2. Automatic Sync:</strong> Once configured, the system syncs nightly at 2 AM to pull upcoming service days from your calendar</p>
                         <p style="margin-top: 8px;"><strong>3. Admin Calendar:</strong> Scheduled service days appear on the Admin Dashboard calendar, showing expected vs completed work</p>
                         <p style="margin-top: 8px;"><strong>4. Invoicing:</strong> Click any service day on the calendar to open the runsheet for that date and manage invoicing</p>
                     </div>
+                </div>
+                
+                <div class="card" style="background: #fef3c7; border: 1px solid #f59e0b;">
+                    <h2 style="margin-bottom: 12px; color: #92400e;">⚠️ Setup Required</h2>
+                    <p style="color: #92400e; font-size: 14px; line-height: 1.6;">
+                        For the nightly sync to work, you need to deploy the Supabase Edge Function. 
+                        This requires running a few commands in your terminal. Contact your developer to set this up,
+                        or you can manually trigger syncs by clicking "Sync Now" after saving your ICS URL.
+                    </p>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Search PODs View -->
+    <!-- Export View -->
     <div id="exportView" class="view">
         <div class="header">
             <div class="header-content">
                 <button class="back-btn" onclick="showHomeView()">← Back</button>
                 <div>
-                    <h1>Search PODs</h1>
-                    <p class="subtitle">Find and view completed PODs</p>
+                    <h1>Export PODs</h1>
+                    <p class="subtitle">Download completed PODs</p>
                 </div>
             </div>
         </div>
         <div class="container">
             <div class="card">
-                <h2 style="margin-bottom: 16px;">Search by Customer</h2>
-                <div class="form-group" style="position: relative;">
-                    <input type="text" id="podCustomerSearch" placeholder="🔍 Start typing customer name..." 
-                           oninput="handlePodCustomerSearch(this.value)"
-                           onblur="setTimeout(() => document.getElementById('podCustomerSuggestions').style.display = 'none', 200)"
-                           style="width: 100%; padding: 14px; font-size: 16px;">
-                    <div id="podCustomerSuggestions" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px; max-height: 300px; overflow-y: auto; z-index: 100; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-                        <!-- Customer suggestions will appear here -->
-                    </div>
+                <div class="form-group">
+                    <label>Filter by Service Day</label>
+                    <select id="exportRunDayFilter">
+                        <option value="all">All Service Days</option>
+                    </select>
                 </div>
-                <p id="podSearchResultCount" style="font-size: 13px; color: #6b7280; margin-top: 8px;"></p>
+                <div class="form-group">
+                    <label>Filter by Date</label>
+                    <input type="date" id="exportDateFilter">
+                </div>
+                <button class="btn" onclick="filterPODs()">Filter PODs</button>
             </div>
 
             <div id="exportPodList">
-                <!-- Search results will appear here -->
-                <div style="text-align: center; color: #6b7280; padding: 40px;">
-                    Enter a customer name above to search for their PODs
-                </div>
+                <!-- Filtered PODs will appear here -->
             </div>
         </div>
     </div>
@@ -2454,7 +2473,8 @@
                                 <th style="padding: 12px; border-bottom: 2px solid #e5e7eb;">Type</th>
                                 <th style="padding: 12px; border-bottom: 2px solid #e5e7eb;">Carbsolve</th>
                                 <th style="padding: 12px; border-bottom: 2px solid #e5e7eb;">Products</th>
-                                <th style="padding: 12px; border-bottom: 2px solid #e5e7eb;">Notes</th>
+                                <th style="padding: 12px; border-bottom: 2px solid #e5e7eb;">All Notes</th>
+                                <th style="padding: 12px; border-bottom: 2px solid #e5e7eb;">Status</th>
                             </tr>
                         </thead>
                         <tbody id="adminRunsheetTableBody">
@@ -2689,212 +2709,25 @@
         </div>
     </div>
 
-    <script>
-        // ==================== GOOGLE AUTHENTICATION ====================
-        const GOOGLE_CLIENT_ID = '776401812901-dvloaf4ajtdf5uplbaqohbdh08q79oqq.apps.googleusercontent.com';
-        
-        // Allowed email addresses (whitelist)
-        const ALLOWED_EMAILS = [
-            'allan.oztank@gmail.com',
-            'drew.oztank@gmail.com',
-            'mattoztank@gmail.com',
-            'michael.oztank85@gmail.com',
-            'officegroup.oztank@gmail.com',
-            'red.oztank@gmail.com',
-            'stephenp.oztank@gmail.com',
-            'steve.oztank@gmail.com'
-        ];
-        
-        let currentUser = null;
-        let supabaseReady = false; // Track if Supabase is loaded
-        
-        // Check for existing session on load
-        function checkExistingSession() {
-            const savedUser = localStorage.getItem('oztank_user');
-            if (savedUser) {
-                try {
-                    currentUser = JSON.parse(savedUser);
-                    // Verify token hasn't expired (Google tokens last ~1 hour, but we'll be lenient)
-                    const savedTime = localStorage.getItem('oztank_login_time');
-                    const hoursSinceLogin = (Date.now() - parseInt(savedTime || 0)) / (1000 * 60 * 60);
-                    
-                    // Re-authenticate after 24 hours
-                    if (hoursSinceLogin < 24) {
-                        onAuthSuccess(currentUser);
-                        return true;
-                    }
-                } catch (e) {
-                    console.log('Invalid saved session');
-                }
-            }
-            return false;
-        }
-        
-        // Initialize Google Sign-In
-        function initGoogleAuth() {
-            if (typeof google !== 'undefined' && google.accounts) {
-                google.accounts.id.initialize({
-                    client_id: GOOGLE_CLIENT_ID,
-                    callback: handleCredentialResponse,
-                    auto_select: true, // Auto sign-in if single account
-                    cancel_on_tap_outside: false,
-                    use_fedcm_for_prompt: true // Use FedCM API where available (better iOS support)
-                });
+    <!-- Customer History Modal -->
+    <div id="customerHistoryModal" class="search-modal-overlay">
+        <div class="search-modal" style="max-width: 600px; max-height: 90vh;">
+            <div class="search-modal-header" style="background: #1e3a8a;">
+                <h2>📋 Customer History</h2>
+                <button class="search-modal-close" onclick="hideCustomerHistoryModal()">×</button>
+            </div>
+            <div class="search-modal-body" style="overflow-y: auto; max-height: calc(90vh - 100px);">
+                <div id="customerHistoryName" style="font-size: 18px; font-weight: 700; color: #1e3a8a; margin-bottom: 16px;"></div>
                 
-                // Render the official Google Sign-In button (works on iOS)
-                const buttonDiv = document.getElementById('googleSignInDiv');
-                if (buttonDiv) {
-                    google.accounts.id.renderButton(buttonDiv, {
-                        type: 'standard',
-                        theme: 'outline',
-                        size: 'large',
-                        text: 'signin_with',
-                        shape: 'rectangular',
-                        width: 280
-                    });
-                    // Hide our custom button since the official one is now showing
-                    const customBtn = document.getElementById('googleSignInBtn');
-                    if (customBtn) {
-                        customBtn.style.display = 'none';
-                    }
-                }
+                <div id="customerHistoryStats" class="customer-stats"></div>
                 
-                // Also try One Tap prompt (works on desktop, may not show on iOS)
-                google.accounts.id.prompt((notification) => {
-                    if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-                        console.log('One Tap not displayed:', notification.getNotDisplayedReason() || notification.getSkippedReason());
-                    }
-                });
-            } else {
-                // Retry in 500ms if Google library not loaded yet
-                setTimeout(initGoogleAuth, 500);
-            }
-        }
-        
-        // Handle the credential response from Google
-        function handleCredentialResponse(response) {
-            try {
-                // Decode the JWT token
-                const payload = decodeJwtPayload(response.credential);
-                
-                const user = {
-                    email: payload.email,
-                    name: payload.name,
-                    picture: payload.picture,
-                    token: response.credential
-                };
-                
-                // Check if email is in whitelist
-                if (ALLOWED_EMAILS.includes(user.email.toLowerCase())) {
-                    // Save session
-                    localStorage.setItem('oztank_user', JSON.stringify(user));
-                    localStorage.setItem('oztank_login_time', Date.now().toString());
-                    currentUser = user;
-                    onAuthSuccess(user);
-                } else {
-                    showLoginError('Access denied. Your account (' + user.email + ') is not authorized.');
-                }
-            } catch (error) {
-                console.error('Auth error:', error);
-                showLoginError('Authentication failed. Please try again.');
-            }
-        }
-        
-        // Decode JWT payload (Google credential is a JWT)
-        function decodeJwtPayload(token) {
-            const base64Url = token.split('.')[1];
-            const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-            const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
-                return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-            }).join(''));
-            return JSON.parse(jsonPayload);
-        }
-        
-        // Manual sign-in button click (fallback)
-        function initiateGoogleSignIn() {
-            if (typeof google !== 'undefined' && google.accounts) {
-                // Try to trigger One Tap
-                google.accounts.id.prompt((notification) => {
-                    // If prompt fails on iOS, show helpful message
-                    if (notification.isNotDisplayed()) {
-                        const reason = notification.getNotDisplayedReason();
-                        if (reason === 'opt_out_or_no_session' || reason === 'suppressed_by_user') {
-                            showLoginError('Please use the "Sign in with Google" button above, or check your browser settings allow Google Sign-In.');
-                        }
-                    }
-                });
-            } else {
-                showLoginError('Google Sign-In is still loading. Please wait a moment and try again.');
-            }
-        }
-        
-        // Show login error
-        function showLoginError(message) {
-            const errorEl = document.getElementById('loginError');
-            errorEl.textContent = message;
-            errorEl.classList.add('show');
-        }
-        
-        // On successful authentication
-        function onAuthSuccess(user) {
-            currentUser = user;
-            
-            // Hide login screen
-            document.getElementById('loginScreen').classList.add('hidden');
-            
-            // Show user info in header
-            updateUserDisplay();
-            
-            // Wait for Supabase to be ready, then initialize the app
-            function waitForSupabase() {
-                if (supabaseReady) {
-                    initializeApp();
-                } else {
-                    setTimeout(waitForSupabase, 100);
-                }
-            }
-            waitForSupabase();
-        }
-        
-        // Update user display in header
-        function updateUserDisplay() {
-            const displayEl = document.getElementById('userInfoDisplay');
-            if (displayEl && currentUser) {
-                const firstName = currentUser.name ? currentUser.name.split(' ')[0] : currentUser.email.split('@')[0];
-                displayEl.innerHTML = `
-                    <img src="${currentUser.picture || ''}" alt="" onerror="this.style.display='none'">
-                    <span>${firstName}</span>
-                    <button class="logout-btn" onclick="logout()">Logout</button>
-                `;
-            }
-        }
-        
-        // Logout function
-        function logout() {
-            localStorage.removeItem('oztank_user');
-            localStorage.removeItem('oztank_login_time');
-            currentUser = null;
-            
-            // Disable auto-select for next sign-in
-            if (typeof google !== 'undefined' && google.accounts) {
-                google.accounts.id.disableAutoSelect();
-            }
-            
-            // Reload page to show login screen
-            location.reload();
-        }
-        
-        // Start auth check on page load
-        document.addEventListener('DOMContentLoaded', function() {
-            // Check for existing session first
-            if (!checkExistingSession()) {
-                // No valid session, initialize Google Sign-In
-                initGoogleAuth();
-            }
-        });
-        
-        // ==================== END AUTHENTICATION ====================
+                <h4 style="margin-bottom: 12px; color: #374151;">📜 Service History</h4>
+                <div id="customerHistoryList" class="pod-history-list"></div>
+            </div>
+        </div>
+    </div>
 
+    <script>
         // Load Supabase dynamically
         function loadSupabase() {
             return new Promise((resolve, reject) => {
@@ -3326,7 +3159,6 @@
             }
         }
         
-        // Load Supabase on page load, but don't initialize app until auth succeeds
         loadSupabase().then(() => {
             const SUPABASE_URL = 'https://mslgedwzgbyccevnbdsk.supabase.co';
             const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1zbGdlZHd6Z2J5Y2Nldm5iZHNrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgyNDAyNDksImV4cCI6MjA4MzgxNjI0OX0.vnwOHjDKTg0kCtXW9zrln9beoVbTxoHX7_tozYSu8Ko';
@@ -3340,9 +3172,9 @@
             
             supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
             console.log('Supabase initialized successfully');
-            supabaseReady = true;
             
-            // Don't auto-start app - wait for auth
+            // Now start the app
+            initializeApp();
         }).catch(error => {
             console.error('Error loading Supabase:', error);
             showToast('Failed to load database library. Please check your internet connection.', 'error');
@@ -3395,7 +3227,6 @@
                         address: c.address,
                         phone: c.phone,
                         serviceType: c.service_type,
-                        frequency: c.frequency,
                         carbsolve: c.carbsolve,
                         waste: c.waste,
                         code: c.code,
@@ -3484,6 +3315,8 @@
             },
             
             scheduledDays: [],
+            calendarEvents: [],
+            calendarEventStatus: {},
             calendarSyncSettings: null,
             
             async loadCalendarSyncSettings() {
@@ -3508,26 +3341,78 @@
                     const startStr = formatDateLocal(start);
                     const endStr = formatDateLocal(end);
                     
-                    // Use worker_calendar_events which syncs successfully
+                    // Load ALL calendar events (both service days and other events)
                     const { data, error } = await supabase
                         .from('worker_calendar_events')
                         .select('*')
                         .gte('event_date', startStr)
-                        .lte('event_date', endStr)
-                        .eq('is_service_day', true);
+                        .lte('event_date', endStr);
                     
                     if (!error && data) {
-                        this.scheduledDays = data.map(sd => ({
+                        // Separate service days from other events
+                        this.scheduledDays = data.filter(e => e.is_service_day).map(sd => ({
                             serviceDayName: sd.service_day_name,
                             scheduledDate: sd.event_date,
                             eventTitle: sd.event_title,
                             calendarOwner: sd.calendar_owner
                         }));
-                        console.log(`Loaded ${this.scheduledDays.length} scheduled days for ${MONTH_NAMES[selectedMonth]} ${selectedYear}`);
+                        
+                        // Store all non-service-day calendar events
+                        this.calendarEvents = data.filter(e => !e.is_service_day).map(ev => ({
+                            id: ev.id,
+                            eventTitle: ev.event_title,
+                            eventDate: ev.event_date,
+                            calendarOwner: ev.calendar_owner,
+                            googleEventId: ev.google_event_id
+                        }));
+                        
+                        console.log(`Loaded ${this.scheduledDays.length} scheduled days and ${this.calendarEvents.length} other events for ${MONTH_NAMES[selectedMonth]} ${selectedYear}`);
+                        
+                        // Load event status from localStorage (temp solution until DB table exists)
+                        this.loadCalendarEventStatus();
                     }
                 } catch (e) {
                     console.log('Error loading scheduled days:', e);
                     this.scheduledDays = [];
+                }
+            },
+            
+            async saveCalendarIcsUrl(icsUrl) {
+                try {
+                    const { error } = await supabase
+                        .from('calendar_sync_settings')
+                        .upsert({
+                            id: 1,
+                            ics_url: icsUrl,
+                            updated_at: new Date().toISOString()
+                        });
+                    
+                    if (error) throw error;
+                    this.calendarSyncSettings = { ...this.calendarSyncSettings, ics_url: icsUrl };
+                    return true;
+                } catch (e) {
+                    console.error('Error saving ICS URL:', e);
+                    return false;
+                }
+            },
+            
+            async triggerCalendarSync() {
+                try {
+                    const response = await fetch(
+                        'https://mslgedwzgbyccevnbdsk.supabase.co/functions/v1/sync-google-calendar',
+                        {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1zbGdlZHd6Z2J5Y2Nldm5iZHNrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgyNDAyNDksImV4cCI6MjA4MzgxNjI0OX0.vnwOHjDKTg0kCtXW9zrln9beoVbTxoHX7_tozYSu8Ko`,
+                                'Content-Type': 'application/json'
+                            }
+                        }
+                    );
+                    const result = await response.json();
+                    return result;
+                } catch (e) {
+                    console.error('Error triggering calendar sync:', e);
+                    return { success: false, error: e.message };
                 }
             },
             
@@ -3563,7 +3448,9 @@
                         notes: p.notes,
                         photo: p.photo,
                         signature: p.signature,
-                        customerNotAvailable: p.customer_not_available,
+                        signatureName: p.signature_name,
+                        isRentalOnly: p.is_rental_only || false,
+                        isQuickComplete: p.is_quick_complete || false,
                         isAdHoc: p.is_ad_hoc || false,
                         sourceRunDay: p.source_run_day,
                         archived: p.archived
@@ -3611,7 +3498,9 @@
                         notes: p.notes,
                         photo: p.photo,
                         signature: p.signature,
-                        customerNotAvailable: p.customer_not_available,
+                        signatureName: p.signature_name,
+                        isRentalOnly: p.is_rental_only || false,
+                        isQuickComplete: p.is_quick_complete || false,
                         isAdHoc: p.is_ad_hoc || false,
                         sourceRunDay: p.source_run_day,
                         archived: p.archived
@@ -3658,7 +3547,9 @@
                         notes: p.notes,
                         photo: p.photo,
                         signature: p.signature,
-                        customerNotAvailable: p.customer_not_available,
+                        signatureName: p.signature_name,
+                        isRentalOnly: p.is_rental_only || false,
+                        isQuickComplete: p.is_quick_complete || false,
                         isAdHoc: p.is_ad_hoc || false,
                         sourceRunDay: p.source_run_day,
                         archived: p.archived
@@ -3676,27 +3567,68 @@
                     friday.setDate(friday.getDate() + 4);
                     const endStr = formatDateLocal(friday);
                     
-                    // Use worker_calendar_events which syncs successfully
+                    // Load ALL calendar events (both service days and other events)
                     const { data, error } = await supabase
                         .from('worker_calendar_events')
                         .select('*')
                         .gte('event_date', startStr)
-                        .lte('event_date', endStr)
-                        .eq('is_service_day', true);
+                        .lte('event_date', endStr);
                     
                     if (!error && data) {
-                        this.scheduledDays = data.map(sd => ({
+                        // Separate service days from other events
+                        this.scheduledDays = data.filter(e => e.is_service_day).map(sd => ({
                             serviceDayName: sd.service_day_name,
                             scheduledDate: sd.event_date,
                             eventTitle: sd.event_title,
                             calendarOwner: sd.calendar_owner
                         }));
-                        console.log(`Loaded ${this.scheduledDays.length} scheduled days for week starting ${startStr}`);
+                        
+                        // Store all non-service-day calendar events
+                        this.calendarEvents = data.filter(e => !e.is_service_day).map(ev => ({
+                            id: ev.id,
+                            eventTitle: ev.event_title,
+                            eventDate: ev.event_date,
+                            calendarOwner: ev.calendar_owner,
+                            googleEventId: ev.google_event_id
+                        }));
+                        
+                        console.log(`Loaded ${this.scheduledDays.length} scheduled days and ${this.calendarEvents.length} other events for week starting ${startStr}`);
+                        
+                        // Load event status from localStorage
+                        this.loadCalendarEventStatus();
                     }
                 } catch (e) {
                     console.log('Error loading scheduled days:', e);
                     this.scheduledDays = [];
+                    this.calendarEvents = [];
                 }
+            },
+            
+            // Calendar event status management (using localStorage until DB table exists)
+            loadCalendarEventStatus() {
+                try {
+                    const stored = localStorage.getItem('calendarEventStatus');
+                    this.calendarEventStatus = stored ? JSON.parse(stored) : {};
+                } catch (e) {
+                    this.calendarEventStatus = {};
+                }
+            },
+            
+            saveCalendarEventStatus(eventId, status) {
+                // status: 'completed', 'cancelled', or null to remove
+                if (status) {
+                    this.calendarEventStatus[eventId] = {
+                        status: status,
+                        timestamp: new Date().toISOString()
+                    };
+                } else {
+                    delete this.calendarEventStatus[eventId];
+                }
+                localStorage.setItem('calendarEventStatus', JSON.stringify(this.calendarEventStatus));
+            },
+            
+            getCalendarEventStatus(eventId) {
+                return this.calendarEventStatus[eventId]?.status || null;
             },
             
             async saveCustomer(customer) {
@@ -3710,7 +3642,6 @@
                             address: customer.address,
                             phone: customer.phone,
                             service_type: customer.serviceType,
-                            frequency: customer.frequency,
                             carbsolve: customer.carbsolve,
                             waste: customer.waste,
                             code: customer.code,
@@ -3826,7 +3757,9 @@
                             notes: pod.notes,
                             photo: pod.photo,
                             signature: pod.signature,
-                            customer_not_available: pod.customerNotAvailable,
+                            signature_name: pod.signatureName || null,
+                            is_rental_only: pod.isRentalOnly || false,
+                            is_quick_complete: pod.isQuickComplete || false,
                             is_ad_hoc: pod.isAdHoc || false,
                             source_run_day: pod.sourceRunDay || null,
                             archived: pod.archived || false
@@ -3836,6 +3769,21 @@
                 } catch (error) {
                     console.error('Error saving POD:', error);
                     showToast('Error saving POD: ' + error.message, 'error');
+                    return false;
+                }
+            },
+            
+            async deletePOD(podId) {
+                try {
+                    const { error } = await supabase
+                        .from('pods')
+                        .delete()
+                        .eq('id', podId);
+                    if (error) throw error;
+                    return true;
+                } catch (error) {
+                    console.error('Error deleting POD:', error);
+                    showToast('Error deleting POD: ' + error.message, 'error');
                     return false;
                 }
             },
@@ -4124,9 +4072,6 @@
             const canvas = document.getElementById('signaturePad');
             const ctx = canvas.getContext('2d');
             
-            // Make canvas responsive to container width
-            resizeSignatureCanvas(canvas);
-            
             ctx.strokeStyle = '#000';
             ctx.lineWidth = 2;
             ctx.lineCap = 'round';
@@ -4143,31 +4088,13 @@
             canvas.addEventListener('touchstart', handleTouchStart);
             canvas.addEventListener('touchmove', handleTouchMove);
             canvas.addEventListener('touchend', stopDrawing);
-            
-            // Resize on window resize
-            window.addEventListener('resize', () => {
-                if (signaturePad && !signaturePad.isEmpty) return; // Don't resize if there's a signature
-                resizeSignatureCanvas(canvas);
-            });
-        }
-
-        function resizeSignatureCanvas(canvas) {
-            const container = canvas.parentElement;
-            const maxWidth = Math.min(container.clientWidth - 20, 400);
-            canvas.style.width = maxWidth + 'px';
-            canvas.style.height = (maxWidth * 0.5) + 'px';
-            // Keep internal resolution for good quality
-            canvas.width = 400;
-            canvas.height = 200;
         }
 
         function startDrawing(e) {
             isDrawing = true;
             const rect = signaturePad.canvas.getBoundingClientRect();
-            const scaleX = signaturePad.canvas.width / rect.width;
-            const scaleY = signaturePad.canvas.height / rect.height;
-            const x = (e.clientX - rect.left) * scaleX;
-            const y = (e.clientY - rect.top) * scaleY;
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
             signaturePad.ctx.beginPath();
             signaturePad.ctx.moveTo(x, y);
             signaturePad.isEmpty = false;
@@ -4176,10 +4103,8 @@
         function draw(e) {
             if (!isDrawing) return;
             const rect = signaturePad.canvas.getBoundingClientRect();
-            const scaleX = signaturePad.canvas.width / rect.width;
-            const scaleY = signaturePad.canvas.height / rect.height;
-            const x = (e.clientX - rect.left) * scaleX;
-            const y = (e.clientY - rect.top) * scaleY;
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
             signaturePad.ctx.lineTo(x, y);
             signaturePad.ctx.stroke();
         }
@@ -4211,6 +4136,65 @@
         function clearSignature() {
             signaturePad.ctx.clearRect(0, 0, signaturePad.canvas.width, signaturePad.canvas.height);
             signaturePad.isEmpty = true;
+        }
+
+        // Quick comment functions
+        function toggleQuickComment(comment) {
+            const serviceNotesField = document.getElementById('serviceNotes');
+            const currentNotes = serviceNotesField.value.trim();
+            
+            // Check if the comment is already in the notes
+            const commentLower = comment.toLowerCase();
+            const notesLower = currentNotes.toLowerCase();
+            
+            if (notesLower.includes(commentLower)) {
+                // Remove the comment from notes
+                let newNotes = currentNotes;
+                // Try to remove with various separators
+                const patterns = [
+                    new RegExp(`\\s*[,;]\\s*${comment}`, 'gi'),
+                    new RegExp(`${comment}\\s*[,;]\\s*`, 'gi'),
+                    new RegExp(`${comment}`, 'gi')
+                ];
+                for (const pattern of patterns) {
+                    newNotes = newNotes.replace(pattern, '');
+                }
+                serviceNotesField.value = newNotes.trim();
+            } else {
+                // Add the comment to notes
+                if (currentNotes) {
+                    serviceNotesField.value = currentNotes + ', ' + comment;
+                } else {
+                    serviceNotesField.value = comment;
+                }
+            }
+            
+            // Update button states
+            updateQuickCommentButtonStates();
+        }
+        
+        function updateQuickCommentButtonStates() {
+            const serviceNotes = (document.getElementById('serviceNotes').value || '').toLowerCase();
+            
+            // Update "No service required" button
+            const noServiceBtn = document.querySelector('.quick-comment-btn:not(.gyg-only)');
+            if (noServiceBtn) {
+                if (serviceNotes.includes('no service required')) {
+                    noServiceBtn.classList.add('selected');
+                } else {
+                    noServiceBtn.classList.remove('selected');
+                }
+            }
+            
+            // Update "Got Hook" button
+            const gotHookBtn = document.getElementById('gotHookBtn');
+            if (gotHookBtn) {
+                if (serviceNotes.includes('got hook')) {
+                    gotHookBtn.classList.add('selected');
+                } else {
+                    gotHookBtn.classList.remove('selected');
+                }
+            }
         }
 
         function toggleSignatureRequirement() {
@@ -4492,7 +4476,6 @@
 
         function showNewPodForm() {
             showView('podView');
-            window.scrollTo(0, 0); // Scroll to top of page
             document.getElementById('podCustomerName').textContent = currentCustomer.name;
             document.getElementById('podForm').style.display = 'block';
             document.getElementById('existingPodView').style.display = 'none';
@@ -4500,8 +4483,11 @@
             document.getElementById('photoPreview').style.display = 'none';
             document.getElementById('photoPreview').dataset.compressed = '';
             document.getElementById('photoInput').value = '';
-            document.getElementById('customerNotAvailable').checked = false;
-            toggleSignatureRequirement();
+            
+            // Reset signature name field
+            const signatureNameField = document.getElementById('signatureName');
+            if (signatureNameField) signatureNameField.value = '';
+            
             renderProductLines();
             
             // Display service type - for ad-hoc use selected type, otherwise use customer data
@@ -4536,11 +4522,21 @@
                 const isDelivery = displayServiceType === 'Delivery';
                 tankSection.style.display = isDelivery ? 'none' : 'block';
             }
+            
+            // Show/hide GYG-specific "Got Hook" button
+            const gotHookBtn = document.getElementById('gotHookBtn');
+            if (gotHookBtn) {
+                const isGYG = (currentCustomer.name || '').toLowerCase().includes('gyg') || 
+                              (currentCustomer.name || '').toLowerCase().includes('guzman');
+                gotHookBtn.style.display = isGYG ? 'inline-block' : 'none';
+            }
+            
+            // Reset quick comment button states
+            document.querySelectorAll('.quick-comment-btn').forEach(btn => btn.classList.remove('selected'));
         }
 
         function showExistingPod(pod) {
             showView('podView');
-            window.scrollTo(0, 0); // Scroll to top of page
             document.getElementById('podCustomerName').textContent = currentCustomer.name;
             document.getElementById('podForm').style.display = 'none';
             
@@ -4562,6 +4558,9 @@
             
             // Build service details section - different for deliveries vs services
             let serviceDetailsHtml = '';
+            const isRentalOnly = pod.isRentalOnly || (pod.tankServiced === 'no' && 
+                (pod.serviceNotes || '').toLowerCase().includes('no service required'));
+                
             if (isDelivery) {
                 serviceDetailsHtml = `
                     <div style="display: flex; gap: 24px; flex-wrap: wrap;">
@@ -4574,15 +4573,27 @@
                         <div><span style="color: #6b7280; font-size: 12px;">Type</span><br><strong>${pod.serviceType || 'Service'}</strong></div>
                         <div><span style="color: #6b7280; font-size: 12px;">Carbsolve</span><br><strong>${carbsolveDisplay}</strong></div>
                         <div><span style="color: #6b7280; font-size: 12px;">Tank Serviced</span><br><strong>${pod.tankServiced === 'yes' ? 'Yes' : (pod.tankServiced === 'n/a' ? 'N/A' : 'No')}</strong></div>
+                        ${isRentalOnly ? '<div><span style="color: #6b7280; font-size: 12px;">Status</span><br><span class="rental-only-badge">Rental Only</span></div>' : ''}
                     </div>
                     ${pod.serviceNotes ? `<div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e5e7eb;"><strong>Service Notes:</strong> ${pod.serviceNotes}</div>` : ''}
                 `;
             }
             
+            // Build signature section HTML
+            let signatureHtml = '';
+            if (pod.signature) {
+                signatureHtml = `
+                    ${pod.signatureName ? `<p style="margin-bottom: 8px;"><strong>Signed by:</strong> ${pod.signatureName}</p>` : ''}
+                    <img src="${pod.signature}" style="max-width: 200px; border: 1px solid #d1d5db; border-radius: 4px;">
+                `;
+            } else {
+                signatureHtml = '<p style="color: #6b7280;">No signature captured</p>';
+            }
+            
             existingView.style.display = 'block';
             existingView.innerHTML = `
-                <div class="card" style="background: #f0fdf4; border: 2px solid #16a34a;">
-                    <h3 style="color: #16a34a; margin-bottom: 12px;">✓ POD Completed</h3>
+                <div class="card" style="background: ${isRentalOnly ? '#fef3c7' : '#f0fdf4'}; border: 2px solid ${isRentalOnly ? '#f59e0b' : '#16a34a'};">
+                    <h3 style="color: ${isRentalOnly ? '#92400e' : '#16a34a'}; margin-bottom: 12px;">${isRentalOnly ? '📋 Rental Only - No Service Required' : '✓ POD Completed'}</h3>
                     <p style="color: #6b7280; font-size: 14px;">Completed: ${formatTimestamp(pod.timestamp)}</p>
                 </div>
 
@@ -4622,17 +4633,11 @@
 
                 <div class="card">
                     <h3 style="margin-bottom: 12px;">Customer Signature</h3>
-                    ${pod.customerNotAvailable ? 
-                        '<p style="color: #f59e0b;">⚠️ Customer not available - No signature obtained</p>' : 
-                        pod.signature ? `<img src="${pod.signature}" style="max-width: 200px; border: 1px solid #d1d5db; border-radius: 4px;">` : 
-                        '<p>No signature</p>'
-                    }
+                    ${signatureHtml}
                 </div>
 
-                <div style="display: flex; flex-direction: column; gap: 8px;">
-                    <button class="btn" onclick="editExistingPod(${pod.id})" style="width: 100%;">✏️ Edit POD</button>
-                    <button class="btn btn-secondary" onclick="backToCustomerList()" style="width: 100%;">← Back to List</button>
-                </div>
+                <button class="btn" onclick="editExistingPod(${pod.id})">Edit POD</button>
+                <button class="btn btn-secondary" onclick="backToCustomerList()">Back to List</button>
             `;
         }
 
@@ -4705,8 +4710,8 @@
                             ${getProductOptionsHtml('sale')}
                         </select>
                         <input type="number" class="product-quantity" disabled placeholder="Qty" min="0" value="${product.quantity}" onchange="checkProductLineComplete(this)">
-                        <button type="button" class="product-confirm-btn" disabled style="background: #16a34a; cursor: default;">✓</button>
-                        <button type="button" onclick="removeProductLine(this)">✕</button>
+                        <button type="button" class="product-confirm-btn" disabled style="background: #16a34a; cursor: default;">Locked ✓</button>
+                        <button type="button" onclick="removeProductLine(this)">Remove</button>
                     `;
                     // Set selected value
                     line.querySelector('.product-select').value = product.product;
@@ -4729,8 +4734,8 @@
                                 ${getProductOptionsHtml('repair')}
                             </select>
                             <input type="number" class="product-quantity" disabled placeholder="Qty" min="0" value="${product.quantity}" onchange="checkProductLineComplete(this)">
-                            <button type="button" class="product-confirm-btn" disabled style="background: #16a34a; cursor: default;">✓</button>
-                            <button type="button" onclick="removeProductLine(this)">✕</button>
+                            <button type="button" class="product-confirm-btn" disabled style="background: #16a34a; cursor: default;">Locked ✓</button>
+                            <button type="button" onclick="removeProductLine(this)">Remove</button>
                         `;
                         // Set selected value
                         line.querySelector('.product-select').value = product.product;
@@ -4769,8 +4774,22 @@
                 img.src = pod.signature;
             }
             
-            document.getElementById('customerNotAvailable').checked = pod.customerNotAvailable || false;
-            toggleSignatureRequirement();
+            // Load signature name
+            const signatureNameField = document.getElementById('signatureName');
+            if (signatureNameField) {
+                signatureNameField.value = pod.signatureName || '';
+            }
+            
+            // Show/hide GYG-specific "Got Hook" button
+            const gotHookBtn = document.getElementById('gotHookBtn');
+            if (gotHookBtn) {
+                const isGYG = (currentCustomer.name || '').toLowerCase().includes('gyg') || 
+                              (currentCustomer.name || '').toLowerCase().includes('guzman');
+                gotHookBtn.style.display = isGYG ? 'inline-block' : 'none';
+            }
+            
+            // Update quick comment button states based on existing notes
+            updateQuickCommentButtonStates();
             
             // Store the POD ID so we know we're editing
             currentEditingPodId = pod.id;
@@ -5094,8 +5113,63 @@
                 serviceDaysContainer.appendChild(serviceDayEl);
             });
             
+            // Render non-service-day calendar events
+            const eventsOnDate = db.calendarEvents.filter(ev => ev.eventDate === dateStr);
+            if (eventsOnDate.length > 0) {
+                const eventsSection = document.createElement('div');
+                eventsSection.className = 'calendar-events-section';
+                
+                eventsOnDate.forEach(event => {
+                    const status = db.getCalendarEventStatus(event.id);
+                    const eventEl = document.createElement('div');
+                    eventEl.className = `calendar-event-item${status === 'completed' ? ' event-completed' : ''}${status === 'cancelled' ? ' event-cancelled' : ''}`;
+                    
+                    eventEl.innerHTML = `
+                        <span class="calendar-event-title" onclick="event.stopPropagation(); showCalendarEventModal('${event.id}', '${dateStr}')">${event.eventTitle}</span>
+                        <div class="calendar-event-actions">
+                            <button class="event-tick-btn${status === 'completed' ? ' active' : ''}" onclick="event.stopPropagation(); toggleCalendarEventStatus('${event.id}', 'completed')" title="Mark complete">✓</button>
+                            <button class="event-cross-btn${status === 'cancelled' ? ' active' : ''}" onclick="event.stopPropagation(); toggleCalendarEventStatus('${event.id}', 'cancelled')" title="Mark cancelled">✗</button>
+                        </div>
+                    `;
+                    eventsSection.appendChild(eventEl);
+                });
+                
+                serviceDaysContainer.appendChild(eventsSection);
+            }
+            
             cell.appendChild(serviceDaysContainer);
             return cell;
+        }
+        
+        // Calendar event tick/cross toggle
+        function toggleCalendarEventStatus(eventId, status) {
+            const currentStatus = db.getCalendarEventStatus(eventId);
+            if (currentStatus === status) {
+                // Toggle off
+                db.saveCalendarEventStatus(eventId, null);
+            } else {
+                // Set new status
+                db.saveCalendarEventStatus(eventId, status);
+            }
+            renderAdminCalendar();
+        }
+        
+        // Show modal for calendar event (to add notes or create ad-hoc)
+        function showCalendarEventModal(eventId, dateStr) {
+            const event = db.calendarEvents.find(e => e.id === parseInt(eventId));
+            if (!event) {
+                showToast('Event not found', 'error');
+                return;
+            }
+            
+            // For now, show a simple alert with option to create ad-hoc
+            const status = db.getCalendarEventStatus(eventId);
+            const statusText = status === 'completed' ? '✓ Completed' : status === 'cancelled' ? '✗ Cancelled' : 'Pending';
+            
+            if (confirm(`Calendar Event: ${event.eventTitle}\nDate: ${dateStr}\nStatus: ${statusText}\n\nWould you like to create an Ad-Hoc service for this event?`)) {
+                // Show ad-hoc service modal
+                showCustomerSearchModal(null);
+            }
         }
         
         async function openRunsheetForDate(runDay, dateStr) {
@@ -5148,15 +5222,8 @@
 
         function showExportView() {
             showView('exportView');
-            // Clear previous search
-            document.getElementById('podCustomerSearch').value = '';
-            document.getElementById('podSearchResultCount').textContent = '';
-            document.getElementById('podCustomerSuggestions').style.display = 'none';
-            document.getElementById('exportPodList').innerHTML = `
-                <div style="text-align: center; color: #6b7280; padding: 40px;">
-                    Enter a customer name above to search for their PODs
-                </div>
-            `;
+            populateExportServiceDayFilter();
+            filterPODs();
         }
 
         function backToCustomerList() {
@@ -5226,10 +5293,6 @@
             const select = document.getElementById('workerSelect');
             currentSelectedWorker = select.value;
             localStorage.setItem('selectedWorker', currentSelectedWorker);
-            
-            // Reset mobile day selector to refresh with new worker's events
-            selectedMobileDay = null;
-            
             renderRunDays();
             await loadWorkerCalendarEvents();
         }
@@ -5517,111 +5580,6 @@
                 gridHtml += '</div>';
             }
             gridEl.innerHTML = gridHtml;
-            
-            // Also render mobile day selector
-            renderMobileDaySelector(monday, byDate, todayStr);
-        }
-        
-        // Mobile day selector for smaller screens
-        let selectedMobileDay = null;
-        let mobileDayEvents = {}; // Store events by date for mobile selector
-        
-        function renderMobileDaySelector(monday, byDate, todayStr) {
-            const container = document.getElementById('mobileDaySelector');
-            if (!container) return;
-            
-            // Store events for mobile access
-            mobileDayEvents = byDate;
-            
-            const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
-            
-            let html = '';
-            for (let i = 0; i < 5; i++) {
-                const date = new Date(monday);
-                date.setDate(date.getDate() + i);
-                const dateStr = formatDateLocal(date);
-                const isToday = dateStr === todayStr;
-                const events = byDate[dateStr] || [];
-                const eventCount = events.filter(e => e.is_service_day).length;
-                const isSelected = selectedMobileDay === dateStr || (!selectedMobileDay && isToday);
-                
-                html += `
-                    <div class="mobile-day-btn ${isSelected ? 'active' : ''} ${isToday ? 'today' : ''}" 
-                         onclick="selectMobileDay('${dateStr}')">
-                        <div class="day-name">${dayNames[i]}</div>
-                        <div class="day-num">${date.getDate()}</div>
-                        ${eventCount > 0 ? `<div class="day-events">${eventCount} job${eventCount !== 1 ? 's' : ''}</div>` : '<div class="day-events">-</div>'}
-                    </div>
-                `;
-            }
-            container.innerHTML = html;
-            
-            // Auto-select today or maintain current selection, but always refresh events
-            const dayToSelect = selectedMobileDay || (todayStr >= formatDateLocal(monday) ? todayStr : formatDateLocal(monday));
-            selectMobileDay(dayToSelect, true);
-        }
-        
-        function selectMobileDay(dateStr, skipButtonUpdate = false) {
-            selectedMobileDay = dateStr;
-            const events = mobileDayEvents[dateStr] || [];
-            
-            // Update button states
-            if (!skipButtonUpdate) {
-                document.querySelectorAll('.mobile-day-btn').forEach(btn => {
-                    btn.classList.remove('active');
-                });
-                if (event && event.currentTarget) {
-                    event.currentTarget.classList.add('active');
-                }
-            } else {
-                // Find and activate the correct button
-                document.querySelectorAll('.mobile-day-btn').forEach(btn => {
-                    btn.classList.remove('active');
-                    if (btn.onclick && btn.onclick.toString().includes(dateStr)) {
-                        btn.classList.add('active');
-                    }
-                });
-            }
-            
-            // Show day detail
-            const detailEl = document.getElementById('mobileDayDetail');
-            if (!detailEl) return;
-            
-            const dateObj = new Date(dateStr + 'T00:00:00');
-            const dateDisplay = dateObj.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' });
-            
-            let html = `<h4 style="margin: 0 0 12px 0; color: #374151;">${dateDisplay}</h4>`;
-            
-            if (!events || events.length === 0) {
-                html += `<p style="color: #9ca3af; text-align: center; padding: 20px;">No scheduled events</p>`;
-            } else {
-                events.forEach(event => {
-                    const isServiceDay = event.is_service_day;
-                    const icon = isServiceDay ? '🚛' : '📋';
-                    const eventWorker = currentSelectedWorker || event.calendar_owner || '';
-                    const bgColor = isServiceDay ? getWorkerColorLight(eventWorker) : '#f3f4f6';
-                    const borderColor = isServiceDay ? getWorkerColor(eventWorker) : '#d1d5db';
-                    const clickable = isServiceDay;
-                    const showWorkerName = !currentSelectedWorker && event.calendar_owner;
-                    
-                    html += `
-                        <div onclick="${clickable ? `openWorkerRunsheet('${event.service_day_name}', '${dateStr}')` : ''}" 
-                             style="display: flex; align-items: center; gap: 10px; padding: 12px; background: ${bgColor}; 
-                                    border-radius: 8px; margin-bottom: 8px; border-left: 4px solid ${borderColor};
-                                    ${clickable ? 'cursor: pointer;' : ''}">
-                            <span style="font-size: 20px;">${icon}</span>
-                            <div style="flex: 1;">
-                                <div style="font-weight: 600; font-size: 14px; color: #1e3a5f;">${event.service_day_name || event.event_title}</div>
-                                ${showWorkerName ? `<div style="font-size: 12px; color: #6b7280;">👤 ${event.calendar_owner}</div>` : ''}
-                            </div>
-                            ${clickable ? '<span style="color: #6b7280;">›</span>' : ''}
-                        </div>
-                    `;
-                });
-            }
-            
-            detailEl.innerHTML = html;
-            detailEl.classList.add('show');
         }
         
         function renderWorkerMonthView(byDate, todayStr) {
@@ -5848,6 +5806,173 @@
                 'stephen': '#14b8a6'
             };
             return (worker && colors[worker.toLowerCase()]) || '#6b7280';
+        }
+        
+        // Quick Complete Table Functions
+        function renderQuickCompleteTable(customers, isHistorical) {
+            const tbody = document.getElementById('quickCompleteTableBody');
+            if (!tbody) return;
+            
+            tbody.innerHTML = '';
+            
+            // Hide quick complete in historical view
+            const summaryContainer = document.getElementById('quickCompleteSummary');
+            if (isHistorical) {
+                summaryContainer.style.display = 'none';
+                return;
+            }
+            summaryContainer.style.display = 'block';
+            
+            customers.forEach(customer => {
+                // Check if customer is skipped or off-month
+                const isSkipped = db.isCustomerSkipped(customer.id, selectedMonth, selectedYear);
+                const customerIsOffMonth = isOffMonth(customer, selectedMonth, selectedYear);
+                const effectivelySkipped = isSkipped || customerIsOffMonth;
+                
+                if (effectivelySkipped) return; // Don't show skipped/off-month in quick complete
+                
+                // Find completed POD for this month
+                const completedPod = db.pods.find(pod => {
+                    if (pod.customerId !== customer.id) return false;
+                    const podDate = new Date(pod.date + 'T00:00:00');
+                    return podDate.getMonth() === selectedMonth && podDate.getFullYear() === selectedYear;
+                });
+                
+                // Check if this is a rental-only (no service required) POD
+                const isRentalOnly = completedPod && completedPod.tankServiced === 'no' && 
+                    (completedPod.serviceNotes || '').toLowerCase().includes('no service required');
+                
+                const tr = document.createElement('tr');
+                tr.className = completedPod ? (isRentalOnly ? 'rental-only' : 'completed') : '';
+                tr.dataset.customerId = customer.id;
+                
+                // Service type display
+                const serviceType = customer.serviceType || 'Service';
+                
+                // Status display
+                let statusHtml = '';
+                if (completedPod) {
+                    if (isRentalOnly) {
+                        statusHtml = `<span class="rental-only-badge">Rental Only</span>`;
+                    } else {
+                        statusHtml = `<span style="color: #16a34a; font-weight: 600;">✓ Done</span>`;
+                    }
+                    if (completedPod.timestamp) {
+                        statusHtml += `<div class="quick-complete-timestamp">${formatTimestamp(completedPod.timestamp)}</div>`;
+                    }
+                } else {
+                    statusHtml = '<span style="color: #9ca3af;">Pending</span>';
+                }
+                
+                tr.innerHTML = `
+                    <td style="text-align: center;">
+                        <input type="checkbox" class="quick-complete-checkbox" 
+                               data-customer-id="${customer.id}"
+                               ${completedPod ? 'checked' : ''}
+                               onchange="handleQuickComplete(${customer.id}, this.checked)">
+                    </td>
+                    <td>
+                        <div style="font-weight: 500;">${customer.name}</div>
+                        ${customer.address ? `<div style="font-size: 12px; color: #6b7280;">${customer.address}</div>` : ''}
+                    </td>
+                    <td>
+                        <span style="padding: 2px 8px; border-radius: 10px; font-size: 11px; background: #e5e7eb;">${serviceType}</span>
+                    </td>
+                    <td>${statusHtml}</td>
+                `;
+                
+                // Click anywhere (except checkbox) to open full POD
+                tr.addEventListener('click', (e) => {
+                    if (e.target.type !== 'checkbox') {
+                        showPodView(customer);
+                    }
+                });
+                
+                tbody.appendChild(tr);
+            });
+        }
+        
+        async function handleQuickComplete(customerId, isCompleted) {
+            const customer = db.customers.find(c => c.id === customerId);
+            if (!customer) return;
+            
+            if (isCompleted) {
+                // Create a quick POD (minimal data, no validation)
+                const nowUTC = new Date();
+                const podDate = currentServiceDate || formatDateLocal(new Date());
+                
+                // Check if POD already exists
+                const existingPod = db.pods.find(pod => 
+                    pod.customerId === customerId && pod.date === podDate
+                );
+                
+                if (existingPod) {
+                    // POD already exists, just return
+                    showToast('POD already exists', 'warning');
+                    return;
+                }
+                
+                const serviceType = customer.serviceType || 'Service';
+                const isDelivery = serviceType === 'Delivery';
+                
+                const pod = {
+                    id: Date.now(),
+                    customerId: customer.id,
+                    customerName: customer.name,
+                    customerAddress: customer.address || '',
+                    runDay: currentRunDay,
+                    date: podDate,
+                    timestamp: nowUTC.toISOString(),
+                    serviceType: serviceType,
+                    carbsolve: customer.carbsolve || '',
+                    tankServiced: isDelivery ? 'n/a' : 'yes', // Default to yes for quick complete
+                    serviceNotes: '',
+                    products: [],
+                    notes: '',
+                    photo: null,
+                    signature: null,
+                    signatureName: '',
+                    isQuickComplete: true, // Flag to indicate this was a quick complete
+                    isAdHoc: false
+                };
+                
+                const success = await db.savePOD(pod);
+                if (success) {
+                    db.pods.push(pod);
+                    showToast('Service marked complete!', 'success');
+                    renderCustomerList();
+                    renderRunDays();
+                }
+            } else {
+                // Unchecking - remove the POD if it was a quick complete
+                const podDate = currentServiceDate || formatDateLocal(new Date());
+                const existingPod = db.pods.find(pod => 
+                    pod.customerId === customerId && pod.date === podDate
+                );
+                
+                if (existingPod) {
+                    // Only allow unchecking quick completes or PODs without additional data
+                    const hasDetails = existingPod.signature || existingPod.photo || 
+                                      existingPod.notes || (existingPod.products && existingPod.products.length > 0);
+                    
+                    if (hasDetails && !existingPod.isQuickComplete) {
+                        showToast('Cannot undo - POD has details. Edit the POD to make changes.', 'warning');
+                        // Re-check the checkbox
+                        const checkbox = document.querySelector(`input[data-customer-id="${customerId}"]`);
+                        if (checkbox) checkbox.checked = true;
+                        return;
+                    }
+                    
+                    // Delete the POD
+                    const success = await db.deletePOD(existingPod.id);
+                    if (success) {
+                        db.pods = db.pods.filter(p => p.id !== existingPod.id);
+                        showToast('Service unmarked', 'success');
+                        renderCustomerList();
+                        renderRunDays();
+                    }
+                }
+            }
         }
         
         async function renderRunDays() {
@@ -6093,6 +6218,9 @@
                 countText = `${activeCount} active (${excludedLabel})`;
             }
             document.getElementById('customerCount').textContent = countText;
+            
+            // Render quick complete table
+            renderQuickCompleteTable(customers, isHistorical);
             
             list.innerHTML = '';
             
@@ -6549,8 +6677,8 @@
                         ${getProductOptionsHtml('sale')}
                     </select>
                     <input type="number" class="product-quantity" placeholder="Qty" min="0" value="0" onchange="checkProductLineComplete(this)">
-                    <button type="button" class="product-confirm-btn" onclick="confirmProductLine(this)" disabled style="background: #9ca3af; cursor: not-allowed;">✓</button>
-                    <button type="button" onclick="removeProductLine(this)">✕</button>
+                    <button type="button" class="product-confirm-btn" onclick="confirmProductLine(this)" disabled style="background: #9ca3af; cursor: not-allowed;">Confirm</button>
+                    <button type="button" onclick="removeProductLine(this)">Remove</button>
                 </div>
             `;
             
@@ -6563,8 +6691,8 @@
                             ${getProductOptionsHtml('repair')}
                         </select>
                         <input type="number" class="product-quantity" placeholder="Qty" min="0" value="0" onchange="checkProductLineComplete(this)">
-                        <button type="button" class="product-confirm-btn" onclick="confirmProductLine(this)" disabled style="background: #9ca3af; cursor: not-allowed;">✓</button>
-                        <button type="button" onclick="removeProductLine(this)">✕</button>
+                        <button type="button" class="product-confirm-btn" onclick="confirmProductLine(this)" disabled style="background: #9ca3af; cursor: not-allowed;">Confirm</button>
+                        <button type="button" onclick="removeProductLine(this)">Remove</button>
                     </div>
                 `;
             }
@@ -6581,8 +6709,8 @@
                     ${getProductOptionsHtml(category)}
                 </select>
                 <input type="number" class="product-quantity" placeholder="Qty" min="0" value="0" onchange="checkProductLineComplete(this)">
-                <button type="button" class="product-confirm-btn" onclick="confirmProductLine(this)" disabled style="background: #9ca3af; cursor: not-allowed;">✓</button>
-                <button type="button" onclick="removeProductLine(this)">✕</button>
+                <button type="button" class="product-confirm-btn" onclick="confirmProductLine(this)" disabled style="background: #9ca3af; cursor: not-allowed;">Confirm</button>
+                <button type="button" onclick="removeProductLine(this)">Remove</button>
             `;
             container.appendChild(line);
         }
@@ -6623,8 +6751,8 @@
             line.querySelector('.product-select').disabled = true;
             line.querySelector('.product-quantity').disabled = true;
             
-            // Keep confirm button as checkmark but disabled
-            button.textContent = '✓';
+            // Change confirm button to "Locked ✓"
+            button.textContent = 'Locked ✓';
             button.disabled = true;
             button.style.background = '#16a34a';
             button.style.cursor = 'default';
@@ -6665,21 +6793,10 @@
             }
             const isDelivery = serviceType === 'Delivery';
 
-            // Check tank serviced is selected (skip for deliveries)
+            // Check tank serviced is selected (skip for deliveries) - but no longer required
             const tankServiced = document.querySelector('input[name="tankServiced"]:checked');
-            if (!isDelivery && !tankServiced) {
-                showToast('Please select whether tank was serviced', 'error');
-                return;
-            }
-
-            // Check signature requirement
-            const customerNotAvailable = document.getElementById('customerNotAvailable').checked;
-            const hasSignature = !signaturePad.isEmpty;
             
-            if (!hasSignature && !customerNotAvailable) {
-                showToast('Please provide a customer signature or check "Customer not available"', 'error');
-                return;
-            }
+            // No validation required anymore - signature and notes are all optional
 
             // Validation based on tank serviced status (skip for deliveries)
             if (!isDelivery && tankServiced && tankServiced.value === 'no') {
@@ -6723,11 +6840,13 @@
                 photoData = photoPreview.dataset.compressed;
             }
 
-            // Get signature (or note that customer wasn't available)
+            // Get signature and signatory name
+            const hasSignature = !signaturePad.isEmpty;
             let signatureData = null;
             if (hasSignature) {
                 signatureData = signaturePad.canvas.toDataURL();
             }
+            const signatureName = document.getElementById('signatureName') ? document.getElementById('signatureName').value.trim() : '';
 
             // Create or update POD with AEST timestamp
             const nowUTC = new Date();
@@ -6740,7 +6859,11 @@
             const carbsolve = currentCustomer.carbsolve || '';
             
             // For deliveries, tank serviced is N/A
-            const tankServicedValue = isDelivery ? 'n/a' : (tankServiced ? tankServiced.value : 'n/a');
+            const tankServicedValue = isDelivery ? 'n/a' : (tankServiced ? tankServiced.value : 'yes');
+            
+            // Check if this is a "no service required" (rental only) situation
+            const serviceNotes = document.getElementById('serviceNotes').value.trim();
+            const isRentalOnly = tankServicedValue === 'no' && serviceNotes.toLowerCase().includes('no service required');
             
             const podId = currentEditingPodId || Date.now();
             const pod = {
@@ -6754,12 +6877,13 @@
                 serviceType: serviceType,
                 carbsolve: carbsolve,
                 tankServiced: tankServicedValue,
-                serviceNotes: document.getElementById('serviceNotes').value,
+                serviceNotes: serviceNotes,
                 products: products,
                 notes: document.getElementById('notes').value,
                 photo: photoData,
                 signature: signatureData,
-                customerNotAvailable: customerNotAvailable,
+                signatureName: signatureName,
+                isRentalOnly: isRentalOnly, // Flag for rental-only invoicing
                 isAdHoc: isAdHocService,
                 sourceRunDay: isAdHocService ? adHocSourceRunDay : null // Track which runsheet ad-hoc was created from
             };
@@ -6812,7 +6936,6 @@
                 address: document.getElementById('newCustomerAddress').value,
                 phone: document.getElementById('newCustomerPhone').value,
                 serviceType: document.getElementById('newCustomerServiceType').value,
-                frequency: document.getElementById('newCustomerFrequency').value,
                 carbsolve: document.getElementById('newCustomerCarbsolve').value,
                 waste: document.getElementById('newCustomerWaste').value,
                 code: document.getElementById('newCustomerCode').value,
@@ -6907,13 +7030,12 @@
                 div.className = 'customer-admin-item';
                 div.id = `customer-${customer.id}`;
                 
-                // Build details line - always show service type and frequency
                 const details = [];
-                details.push(customer.runDay || '-');
-                details.push(customer.serviceType || 'Service');
-                details.push(customer.frequency || 'Monthly');
+                details.push(customer.runDay);
+                if (customer.serviceType && customer.serviceType !== 'Service') details.push(customer.serviceType);
                 if (customer.carbsolve) details.push(customer.carbsolve);
                 if (customer.waste) details.push('Drum');
+                if (customer.phone) details.push(customer.phone);
                 
                 div.innerHTML = `
                     <div class="customer-admin-info">
@@ -6941,61 +7063,42 @@
             const customer = db.customers.find(c => c.id === id);
             if (!customer) return;
             
-            // Helper to safely escape HTML
-            const esc = (str) => (str || '').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-            
-            // Helper to check if value matches (case-insensitive, trimmed)
-            const sel = (val, option) => {
-                if (!val) return '';
-                return val.toString().trim().toLowerCase() === option.toLowerCase() ? 'selected' : '';
-            };
-            
             const div = document.getElementById(`customer-${id}`);
             div.innerHTML = `
                 <div style="flex: 1;">
                     <div class="form-group" style="margin-bottom: 8px;">
-                        <input type="text" id="edit-name-${id}" value="${esc(customer.name)}" placeholder="Customer Name" style="width: 100%; padding: 8px; margin-bottom: 4px;">
-                        <input type="text" id="edit-runday-${id}" value="${esc(customer.runDay)}" placeholder="Service Day" style="width: 100%; padding: 8px; margin-bottom: 4px;">
-                        <input type="text" id="edit-address-${id}" value="${esc(customer.address)}" placeholder="Address" style="width: 100%; padding: 8px; margin-bottom: 4px;">
-                        <input type="text" id="edit-phone-${id}" value="${esc(customer.phone)}" placeholder="Phone" style="width: 100%; padding: 8px; margin-bottom: 4px;">
+                        <input type="text" id="edit-name-${id}" value="${customer.name}" placeholder="Customer Name" style="width: 100%; padding: 8px; margin-bottom: 4px;">
+                        <input type="text" id="edit-runday-${id}" value="${customer.runDay}" placeholder="Service Day" style="width: 100%; padding: 8px; margin-bottom: 4px;">
+                        <input type="text" id="edit-address-${id}" value="${customer.address || ''}" placeholder="Address" style="width: 100%; padding: 8px; margin-bottom: 4px;">
+                        <input type="text" id="edit-phone-${id}" value="${customer.phone || ''}" placeholder="Phone" style="width: 100%; padding: 8px; margin-bottom: 4px;">
                         
                         <select id="edit-servicetype-${id}" style="width: 100%; padding: 8px; margin-bottom: 4px;">
                             <option value="">Service Type...</option>
-                            <option value="Service" ${sel(customer.serviceType, 'Service')}>Service</option>
-                            <option value="Delivery" ${sel(customer.serviceType, 'Delivery')}>Delivery</option>
-                            <option value="Check" ${sel(customer.serviceType, 'Check')}>Check</option>
-                        </select>
-                        
-                        <select id="edit-frequency-${id}" style="width: 100%; padding: 8px; margin-bottom: 4px;">
-                            <option value="">Frequency...</option>
-                            <option value="Weekly" ${sel(customer.frequency, 'Weekly')}>Weekly</option>
-                            <option value="Fortnightly" ${sel(customer.frequency, 'Fortnightly')}>Fortnightly</option>
-                            <option value="Monthly" ${sel(customer.frequency, 'Monthly')}>Monthly</option>
-                            <option value="Bi-monthly" ${sel(customer.frequency, 'Bi-monthly')}>Bi-monthly</option>
-                            <option value="Quarterly" ${sel(customer.frequency, 'Quarterly')}>Quarterly</option>
-                            <option value="On Call" ${sel(customer.frequency, 'On Call')}>On Call</option>
+                            <option value="Service" ${customer.serviceType === 'Service' ? 'selected' : ''}>Service</option>
+                            <option value="Delivery" ${customer.serviceType === 'Delivery' ? 'selected' : ''}>Delivery</option>
+                            <option value="Check" ${customer.serviceType === 'Check' ? 'selected' : ''}>Check</option>
                         </select>
                         
                         <select id="edit-carbsolve-${id}" style="width: 100%; padding: 8px; margin-bottom: 4px;">
                             <option value="">Carbsolve...</option>
-                            <option value="4kg" ${sel(customer.carbsolve, '4kg')}>4kg</option>
-                            <option value="4kg spcl" ${sel(customer.carbsolve, '4kg spcl')}>4kg spcl</option>
-                            <option value="7kg" ${sel(customer.carbsolve, '7kg')}>7kg</option>
-                            <option value="7kg spcl" ${sel(customer.carbsolve, '7kg spcl')}>7kg spcl</option>
-                            <option value="10kg" ${sel(customer.carbsolve, '10kg')}>10kg</option>
-                            <option value="11kg spcl" ${sel(customer.carbsolve, '11kg spcl')}>11kg spcl</option>
-                            <option value="14kg" ${sel(customer.carbsolve, '14kg')}>14kg</option>
-                            <option value="17kg" ${sel(customer.carbsolve, '17kg')}>17kg</option>
-                            <option value="21kg" ${sel(customer.carbsolve, '21kg')}>21kg</option>
+                            <option value="4kg" ${customer.carbsolve === '4kg' ? 'selected' : ''}>4kg</option>
+                            <option value="4kg spcl" ${customer.carbsolve === '4kg spcl' ? 'selected' : ''}>4kg spcl</option>
+                            <option value="7kg" ${customer.carbsolve === '7kg' ? 'selected' : ''}>7kg</option>
+                            <option value="7kg spcl" ${customer.carbsolve === '7kg spcl' ? 'selected' : ''}>7kg spcl</option>
+                            <option value="10kg" ${customer.carbsolve === '10kg' ? 'selected' : ''}>10kg</option>
+                            <option value="11kg spcl" ${customer.carbsolve === '11kg spcl' ? 'selected' : ''}>11kg spcl</option>
+                            <option value="14kg" ${customer.carbsolve === '14kg' ? 'selected' : ''}>14kg</option>
+                            <option value="17kg" ${customer.carbsolve === '17kg' ? 'selected' : ''}>17kg</option>
+                            <option value="21kg" ${customer.carbsolve === '21kg' ? 'selected' : ''}>21kg</option>
                         </select>
                         
                         <select id="edit-waste-${id}" style="width: 100%; padding: 8px; margin-bottom: 4px;">
                             <option value="">Waste...</option>
-                            <option value="Drum" ${sel(customer.waste, 'Drum')}>Drum</option>
+                            <option value="Drum" ${customer.waste === 'Drum' ? 'selected' : ''}>Drum</option>
                         </select>
                         
-                        <input type="text" id="edit-code-${id}" value="${esc(customer.code)}" placeholder="Code" style="width: 100%; padding: 8px; margin-bottom: 4px;">
-                        <textarea id="edit-notes-${id}" placeholder="Notes" style="width: 100%; padding: 8px; min-height: 60px;">${esc(customer.notes)}</textarea>
+                        <input type="text" id="edit-code-${id}" value="${customer.code || ''}" placeholder="Code" style="width: 100%; padding: 8px; margin-bottom: 4px;">
+                        <textarea id="edit-notes-${id}" placeholder="Notes" style="width: 100%; padding: 8px; min-height: 60px;">${customer.notes || ''}</textarea>
                     </div>
                 </div>
                 <div style="display: flex; gap: 8px;">
@@ -7014,7 +7117,6 @@
             customer.address = document.getElementById(`edit-address-${id}`).value;
             customer.phone = document.getElementById(`edit-phone-${id}`).value;
             customer.serviceType = document.getElementById(`edit-servicetype-${id}`).value;
-            customer.frequency = document.getElementById(`edit-frequency-${id}`).value;
             customer.carbsolve = document.getElementById(`edit-carbsolve-${id}`).value;
             customer.waste = document.getElementById(`edit-waste-${id}`).value;
             customer.code = document.getElementById(`edit-code-${id}`).value;
@@ -7370,6 +7472,29 @@
                     statusDisplay = '-';
                 }
                 
+                // Build comprehensive notes display (all notes from POD)
+                let allNotesDisplay = [];
+                if (pod) {
+                    if (pod.serviceNotes) allNotesDisplay.push(`<strong>Service:</strong> ${pod.serviceNotes}`);
+                    if (pod.notes) allNotesDisplay.push(`<strong>Notes:</strong> ${pod.notes}`);
+                }
+                if (allNotesDisplay.length === 0 && customer.notes) {
+                    allNotesDisplay.push(customer.notes);
+                }
+                const notesHtml = allNotesDisplay.length > 0 ? allNotesDisplay.join('<br>') : '-';
+                
+                // Build status badge column (rental-only, quick complete, etc.)
+                let statusBadgeHtml = '';
+                if (pod) {
+                    const isRentalOnly = pod.isRentalOnly || (pod.tankServiced === 'no' && 
+                        (pod.serviceNotes || '').toLowerCase().includes('no service required'));
+                    if (isRentalOnly) {
+                        statusBadgeHtml = '<span class="rental-only-badge">Rental Only</span>';
+                    } else if (pod.isQuickComplete) {
+                        statusBadgeHtml = '<span style="background: #dbeafe; color: #1e40af; padding: 2px 6px; border-radius: 8px; font-size: 10px;">Quick</span>';
+                    }
+                }
+                
                 tr.innerHTML = `
                     <td style="padding: 12px; text-align: center;">
                         ${statusDisplay}
@@ -7387,7 +7512,8 @@
                     <td style="padding: 12px;">${serviceType}</td>
                     <td style="padding: 12px;">${carbsolve}</td>
                     <td style="padding: 12px;">${productsStr}</td>
-                    <td style="padding: 12px; font-size: 12px; font-style: italic;">${pod && pod.notes ? pod.notes : (customer.notes || '-')}</td>
+                    <td style="padding: 12px; font-size: 12px; font-style: italic;">${notesHtml}</td>
+                    <td style="padding: 12px; text-align: center;">${statusBadgeHtml}</td>
                 `;
                 tbody.appendChild(tr);
             });
@@ -7761,6 +7887,17 @@
             showToast(`Marked ${uncheckedCount} POD(s) as invoiced`, 'success');
         }
 
+        function populateExportServiceDayFilter() {
+            const select = document.getElementById('exportRunDayFilter');
+            select.innerHTML = '<option value="all">All Service Days</option>';
+            db.serviceDays.forEach(sd => {
+                const option = document.createElement('option');
+                option.value = sd.name;
+                option.textContent = sd.name;
+                select.appendChild(option);
+            });
+        }
+
         async function exportRunsheetExcel() {
             if (!currentAdminServiceDay) return;
             
@@ -7973,204 +8110,130 @@
         }
         
         function loadCalendarSyncUI() {
-            // Load current ICS URL - no longer needed
+            // Load current ICS URL
+            const icsInput = document.getElementById('calendarIcsUrl');
+            if (db.calendarSyncSettings && db.calendarSyncSettings.ics_url) {
+                icsInput.value = db.calendarSyncSettings.ics_url;
+            }
             
             // Show sync status
             updateCalendarSyncStatusUI();
         }
         
-        async function updateCalendarSyncStatusUI() {
+        function updateCalendarSyncStatusUI() {
             const statusDiv = document.getElementById('calendarSyncStatus');
+            const settings = db.calendarSyncSettings;
             
-            // Get event count and most recent created_at from worker_calendar_events
-            try {
-                const { data: events, error } = await supabase
-                    .from('worker_calendar_events')
-                    .select('created_at')
-                    .order('created_at', { ascending: false })
-                    .limit(1);
-                
-                const { count, error: countError } = await supabase
-                    .from('worker_calendar_events')
-                    .select('*', { count: 'exact', head: true });
-                
-                const { data: serviceDayCount, error: sdError } = await supabase
-                    .from('worker_calendar_events')
-                    .select('*', { count: 'exact', head: true })
-                    .eq('is_service_day', true);
-                
-                if (events && events.length > 0) {
-                    const lastSyncTime = new Date(events[0].created_at).toLocaleString('en-AU', {
-                        timeZone: 'Australia/Brisbane',
-                        day: '2-digit',
-                        month: '2-digit', 
-                        year: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        hour12: true
-                    });
-                    
-                    const totalEvents = count || 0;
-                    const serviceDays = serviceDayCount?.length || serviceDayCount || 0;
-                    
-                    statusDiv.innerHTML = `
-                        <div style="display: grid; gap: 8px;">
-                            <div><strong>Last Sync:</strong> ${lastSyncTime}</div>
-                            <div><strong>Status:</strong> <span style="color: #16a34a;">✓ success</span></div>
-                            <div><strong>Details:</strong> ${totalEvents} total events, ${db.scheduledDays.length} service days for current month</div>
-                        </div>
-                    `;
-                } else {
-                    statusDiv.innerHTML = `
-                        <div style="display: grid; gap: 8px;">
-                            <div><strong>Last Sync:</strong> Never</div>
-                            <div><strong>Status:</strong> <span style="color: #6b7280;">⏳ Waiting for first sync</span></div>
-                            <div><strong>Details:</strong> Google Apps Script will sync at 2:35 AM Brisbane time</div>
-                        </div>
-                    `;
-                }
-            } catch (e) {
-                console.error('Error getting sync status:', e);
-                statusDiv.innerHTML = `<p style="color: #dc2626;">Error loading sync status</p>`;
-            }
-        }
-
-        // Search PODs
-        // POD Search - show customer suggestions first
-        function handlePodCustomerSearch(query) {
-            const suggestionsDiv = document.getElementById('podCustomerSuggestions');
-            const countEl = document.getElementById('podSearchResultCount');
-            const list = document.getElementById('exportPodList');
-            
-            if (query.length < 2) {
-                suggestionsDiv.style.display = 'none';
-                countEl.textContent = '';
-                list.innerHTML = `
-                    <div style="text-align: center; color: #6b7280; padding: 40px;">
-                        Enter a customer name above to search for their PODs
-                    </div>
+            if (!settings) {
+                statusDiv.innerHTML = `
+                    <p style="color: #6b7280;">Calendar sync not configured yet. Add your ICS URL above to get started.</p>
                 `;
                 return;
             }
             
-            const queryLower = query.toLowerCase();
-            const allMatches = db.customers.filter(c => {
-                return c.name && c.name.toLowerCase().includes(queryLower);
-            });
+            let statusColor = '#6b7280';
+            let statusIcon = '⏳';
+            if (settings.last_sync_status === 'success') {
+                statusColor = '#16a34a';
+                statusIcon = '✓';
+            } else if (settings.last_sync_status === 'error') {
+                statusColor = '#dc2626';
+                statusIcon = '✗';
+            }
             
-            // Sort alphabetically
-            allMatches.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+            const lastSyncTime = settings.last_sync_at 
+                ? new Date(settings.last_sync_at).toLocaleString('en-AU')
+                : 'Never';
             
-            // Take first 50 results for suggestions
-            const matches = allMatches.slice(0, 50);
+            statusDiv.innerHTML = `
+                <div style="display: grid; gap: 8px;">
+                    <div><strong>Last Sync:</strong> ${lastSyncTime}</div>
+                    <div><strong>Status:</strong> <span style="color: ${statusColor};">${statusIcon} ${settings.last_sync_status || 'Not synced'}</span></div>
+                    ${settings.last_sync_message ? `<div><strong>Details:</strong> ${settings.last_sync_message}</div>` : ''}
+                    <div><strong>Scheduled Days Loaded:</strong> ${db.scheduledDays.length} for current month</div>
+                </div>
+            `;
+        }
+        
+        async function saveCalendarIcsUrl() {
+            const icsUrl = document.getElementById('calendarIcsUrl').value.trim();
             
-            if (allMatches.length === 0) {
-                suggestionsDiv.style.display = 'block';
-                suggestionsDiv.innerHTML = '<div style="padding: 16px; text-align: center; color: #6b7280;">No customers found</div>';
+            if (!icsUrl) {
+                showToast('Please enter an ICS URL', 'error');
                 return;
             }
             
-            suggestionsDiv.style.display = 'block';
-            
-            let html = '';
-            
-            // Show count header - match style of other search functions
-            if (allMatches.length > 50) {
-                html += `<div style="padding: 8px 12px; background: #f3f4f6; font-size: 12px; color: #6b7280; border-bottom: 1px solid #e5e7eb;">
-                    50 of ${allMatches.length} matches shown
-                </div>`;
-            } else if (allMatches.length > 1) {
-                html += `<div style="padding: 8px 12px; background: #f3f4f6; font-size: 12px; color: #6b7280; border-bottom: 1px solid #e5e7eb;">
-                    ${allMatches.length} matches found
-                </div>`;
+            // Basic validation
+            if (!icsUrl.includes('calendar.google.com') && !icsUrl.endsWith('.ics')) {
+                showToast('This doesn\'t look like a valid Google Calendar ICS URL', 'error');
+                return;
             }
             
-            html += matches.map(c => {
-                const escapedName = (c.name || '').replace(/'/g, "\\'");
-                return `
-                <div onclick="selectPodSearchCustomer(${c.id}, '${escapedName}')" 
-                     style="padding: 12px 16px; border-bottom: 1px solid #f3f4f6; cursor: pointer; transition: background 0.15s;"
-                     onmouseover="this.style.background='#f8fafc'" 
-                     onmouseout="this.style.background='white'">
-                    <div style="font-weight: 600; color: #1f2937;">${c.name}</div>
-                    <div style="font-size: 12px; color: #6b7280; margin-top: 2px;">
-                        ${c.runDay ? `Day ${c.runDay}` : 'No regular day'}
-                        ${c.serviceType ? ` • ${c.serviceType}` : ''}
-                        ${c.carbsolve ? ` • ${c.carbsolve}` : ''}
-                    </div>
-                </div>
-            `}).join('');
+            showToast('Saving ICS URL...', 'success');
+            const success = await db.saveCalendarIcsUrl(icsUrl);
             
-            suggestionsDiv.innerHTML = html;
-        }
-        
-        async function selectPodSearchCustomer(customerId, customerName) {
-            // Hide suggestions
-            document.getElementById('podCustomerSuggestions').style.display = 'none';
-            
-            // Update search input with selected customer name
-            document.getElementById('podCustomerSearch').value = customerName;
-            
-            // Now search for PODs for this customer
-            await searchPodsByCustomerId(customerId, customerName);
-        }
-        
-        async function searchPodsByCustomerId(customerId, customerName) {
-            const list = document.getElementById('exportPodList');
-            const countEl = document.getElementById('podSearchResultCount');
-            
-            list.innerHTML = `<div style="text-align: center; color: #6b7280; padding: 40px;">
-                <div style="font-size: 24px; margin-bottom: 8px;">⏳</div>
-                Searching PODs for ${customerName}...
-            </div>`;
-            
-            try {
-                const { data: allPods, error } = await supabase
-                    .from('pods')
-                    .select('*')
-                    .eq('customer_id', customerId)
-                    .order('date', { ascending: false })
-                    .limit(100);
-                
-                if (error) throw error;
-                
-                // Map to JS format
-                const matchingPods = (allPods || []).map(p => ({
-                    id: p.id,
-                    customerId: p.customer_id,
-                    customerName: p.customer_name,
-                    customerAddress: p.customer_address,
-                    runDay: p.run_day,
-                    date: p.date,
-                    timestamp: p.timestamp,
-                    tankServiced: p.tank_serviced,
-                    serviceNotes: p.service_notes,
-                    products: p.products,
-                    signature: p.signature,
-                    photos: p.photos,
-                    serviceType: p.service_type,
-                    carbsolve: p.carbsolve
-                }));
-                
-                countEl.textContent = `Found ${matchingPods.length} POD${matchingPods.length !== 1 ? 's' : ''} for ${customerName}`;
-                renderPodSearchResults(matchingPods);
-                
-            } catch (e) {
-                console.error('Error searching PODs:', e);
-                list.innerHTML = `<div class="card"><p style="color: #dc2626;">Error searching: ${e.message}</p></div>`;
+            if (success) {
+                showToast('ICS URL saved! Click "Sync Now" to pull calendar data.', 'success');
+                await db.loadCalendarSyncSettings();
+                updateCalendarSyncStatusUI();
+            } else {
+                showToast('Failed to save ICS URL', 'error');
             }
         }
         
-        async function searchPodsByCustomer(searchTerm) {
-            // Legacy function - now redirects to handlePodCustomerSearch
-            handlePodCustomerSearch(searchTerm);
+        async function triggerCalendarSync() {
+            const icsUrl = document.getElementById('calendarIcsUrl').value.trim();
+            
+            if (!icsUrl && (!db.calendarSyncSettings || !db.calendarSyncSettings.ics_url)) {
+                showToast('Please save an ICS URL first', 'error');
+                return;
+            }
+            
+            showToast('Starting calendar sync...', 'success');
+            
+            const result = await db.triggerCalendarSync();
+            
+            if (result.success) {
+                showToast(`Sync complete! ${result.message}`, 'success');
+                // Reload data
+                await db.loadCalendarSyncSettings();
+                await db.loadScheduledDaysForMonth();
+                updateCalendarSyncStatusUI();
+                // Refresh calendar if visible
+                if (document.getElementById('adminCalendarContainer') && 
+                    document.getElementById('adminCalendarContainer').style.display !== 'none') {
+                    renderAdminCalendar();
+                }
+            } else {
+                showToast(`Sync failed: ${result.error || 'Unknown error'}`, 'error');
+                await db.loadCalendarSyncSettings();
+                updateCalendarSyncStatusUI();
+            }
         }
 
-        function renderPodSearchResults(pods) {
+        // Export PODs
+        function filterPODs() {
+            const runDayFilter = document.getElementById('exportRunDayFilter').value;
+            const dateFilter = document.getElementById('exportDateFilter').value;
+            
+            let filteredPODs = db.pods;
+            
+            if (runDayFilter !== 'all') {
+                filteredPODs = filteredPODs.filter(pod => pod.runDay === runDayFilter);
+            }
+            
+            if (dateFilter) {
+                filteredPODs = filteredPODs.filter(pod => pod.date === dateFilter);
+            }
+            
+            renderExportList(filteredPODs);
+        }
+
+        function renderExportList(pods) {
             const list = document.getElementById('exportPodList');
             
             if (pods.length === 0) {
-                list.innerHTML = '<div class="card"><p style="text-align: center; color: #6b7280;">No PODs found for this customer.</p></div>';
+                list.innerHTML = '<div class="card"><p style="text-align: center; color: #6b7280;">No PODs found matching the filters.</p></div>';
                 return;
             }
             
@@ -8178,86 +8241,26 @@
             pods.forEach(pod => {
                 const card = document.createElement('div');
                 card.className = 'card';
-                
-                // Format date nicely
-                const dateObj = new Date(pod.date + 'T00:00:00');
-                const formattedDate = dateObj.toLocaleDateString('en-AU', { 
-                    weekday: 'short', 
-                    day: 'numeric', 
-                    month: 'short', 
-                    year: 'numeric' 
-                });
-                
                 card.innerHTML = `
                     <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px;">
-                        <div style="flex: 1;">
+                        <div>
                             <strong style="font-size: 16px;">${pod.customerName}</strong>
-                            <div style="color: #374151; font-size: 14px; margin-top: 4px;">
-                                📅 ${formattedDate}
-                            </div>
-                            <div style="color: #6b7280; font-size: 13px; margin-top: 2px;">
-                                Day ${pod.runDay} • ${pod.serviceType || 'Service'}${pod.carbsolve ? ` • ${pod.carbsolve}` : ''}
-                            </div>
-                            <div style="color: #9ca3af; font-size: 12px; margin-top: 4px;">
-                                Tank: ${pod.tankServiced || 'N/A'}${pod.serviceNotes ? ` • ${pod.serviceNotes.substring(0, 50)}${pod.serviceNotes.length > 50 ? '...' : ''}` : ''}
-                            </div>
+                            <div style="color: #6b7280; font-size: 14px;">${pod.date} - ${pod.runDay}</div>
+                            <div style="color: #9ca3af; font-size: 12px; font-style: italic; margin-top: 4px;">${formatTimestamp(pod.timestamp)}</div>
                         </div>
                     </div>
                     <div style="display: flex; gap: 8px;">
-                        <button class="btn btn-secondary" onclick="viewPOD(${pod.id})" style="flex: 1;">👁️ View</button>
-                        <button class="btn btn-success" onclick="downloadPOD(${pod.id})" style="flex: 1;">📥 Download</button>
+                        <button class="btn" onclick="viewPOD(${pod.id})" style="flex: 1;">View</button>
+                        <button class="btn btn-success" onclick="downloadPOD(${pod.id})" style="flex: 1;">Download PDF</button>
                     </div>
                 `;
                 list.appendChild(card);
             });
         }
 
-        function renderExportList(pods) {
-            // Legacy function - redirect to new one
-            renderPodSearchResults(pods);
-        }
-
-        async function viewPOD(podId) {
-            let pod = db.pods.find(p => p.id === podId);
-            
-            // If not in current month's pods, fetch from DB
-            if (!pod) {
-                try {
-                    const { data, error } = await supabase
-                        .from('pods')
-                        .select('*')
-                        .eq('id', podId)
-                        .single();
-                    
-                    if (error || !data) {
-                        showToast('POD not found', 'error');
-                        return;
-                    }
-                    
-                    pod = {
-                        id: data.id,
-                        customerId: data.customer_id,
-                        customerName: data.customer_name,
-                        customerAddress: data.customer_address,
-                        runDay: data.run_day,
-                        date: data.date,
-                        timestamp: data.timestamp,
-                        tankServiced: data.tank_serviced,
-                        serviceNotes: data.service_notes,
-                        products: data.products,
-                        signature: data.signature,
-                        photo: data.photo,
-                        photos: data.photos,
-                        notes: data.notes,
-                        customerNotAvailable: data.customer_not_available,
-                        serviceType: data.service_type,
-                        carbsolve: data.carbsolve
-                    };
-                } catch (e) {
-                    showToast('Error loading POD', 'error');
-                    return;
-                }
-            }
+        function viewPOD(podId) {
+            const pod = db.pods.find(p => p.id === podId);
+            if (!pod) return;
 
             const modalContent = `
                 <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; overflow: auto;" onclick="this.remove()">
@@ -8331,46 +8334,8 @@
         }
 
         async function downloadPOD(podId) {
-            let pod = db.pods.find(p => p.id === podId);
-            
-            // If not in current month's pods, fetch from DB
-            if (!pod) {
-                try {
-                    const { data, error } = await supabase
-                        .from('pods')
-                        .select('*')
-                        .eq('id', podId)
-                        .single();
-                    
-                    if (error || !data) {
-                        showToast('POD not found', 'error');
-                        return;
-                    }
-                    
-                    pod = {
-                        id: data.id,
-                        customerId: data.customer_id,
-                        customerName: data.customer_name,
-                        customerAddress: data.customer_address,
-                        runDay: data.run_day,
-                        date: data.date,
-                        timestamp: data.timestamp,
-                        tankServiced: data.tank_serviced,
-                        serviceNotes: data.service_notes,
-                        products: data.products,
-                        signature: data.signature,
-                        photo: data.photo,
-                        photos: data.photos,
-                        notes: data.notes,
-                        customerNotAvailable: data.customer_not_available,
-                        serviceType: data.service_type,
-                        carbsolve: data.carbsolve
-                    };
-                } catch (e) {
-                    showToast('Error loading POD', 'error');
-                    return;
-                }
-            }
+            const pod = db.pods.find(p => p.id === podId);
+            if (!pod) return;
 
             const { jsPDF } = window.jspdf;
             const pdf = new jsPDF();
@@ -8539,6 +8504,148 @@
             });
         }
 
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (file) {
+                processExcelFile(file);
+            }
+        }
+
+        async function processExcelFile(file) {
+            const statusDiv = document.getElementById('importStatus');
+            statusDiv.innerHTML = '<div class="import-status">Processing file...</div>';
+
+            const reader = new FileReader();
+            reader.onload = async function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+
+                    let importedCount = 0;
+                    let errorCount = 0;
+
+                    // Process rows (skip header if exists)
+                    // Expected columns: Name | Service Day | Address | Phone | Service Type | Carbsolve | Waste | Code | Notes
+                    for (let index = 0; index < jsonData.length; index++) {
+                        const row = jsonData[index];
+                        // Skip empty rows
+                        if (!row[0] || !row[1]) continue;
+                        
+                        let customerName = String(row[0]).trim();
+                        const serviceDay = String(row[1]).trim();
+                        const address = row[2] ? String(row[2]).trim() : '';
+                        const phone = row[3] ? String(row[3]).trim() : '';
+                        const serviceType = row[4] ? String(row[4]).trim() : '';
+                        const carbsolve = row[5] ? String(row[5]).trim() : '';
+                        const waste = row[6] ? String(row[6]).trim() : '';
+                        const code = row[7] ? String(row[7]).trim() : '';
+                        const notes = row[8] ? String(row[8]).trim() : '';
+                        
+                        // Check for existing customers with same name (handle multi-tank scenarios)
+                        const existingWithSameName = db.customers.filter(c => 
+                            c.name.toLowerCase() === customerName.toLowerCase() ||
+                            c.name.toLowerCase().startsWith(customerName.toLowerCase() + ' - tank')
+                        );
+                        
+                        // Check if exact match exists (same name, same day, same carbsolve)
+                        const exactMatch = existingWithSameName.find(c => 
+                            c.runDay === serviceDay && 
+                            c.carbsolve === carbsolve &&
+                            !c.name.toLowerCase().includes(' - tank')
+                        );
+                        
+                        if (exactMatch) {
+                            // Skip true duplicates
+                            continue;
+                        }
+                        
+                        // Check if this is a multi-tank situation (same name, same day, different carbsolve)
+                        const sameDayEntries = existingWithSameName.filter(c => c.runDay === serviceDay);
+                        
+                        if (sameDayEntries.length > 0) {
+                            // This is a multi-tank customer - append tank number
+                            const tankNumber = sameDayEntries.length + 1;
+                            
+                            // If first entry doesn't have tank suffix, rename it
+                            const firstEntry = sameDayEntries.find(c => !c.name.toLowerCase().includes(' - tank'));
+                            if (firstEntry) {
+                                firstEntry.name = `${firstEntry.name} - Tank 1`;
+                                await db.saveCustomer(firstEntry);
+                            }
+                            
+                            customerName = `${customerName} - Tank ${tankNumber}`;
+                        }
+                        
+                        // Check if this exact name now exists (after potential renaming)
+                        const stillExists = db.customers.some(c => 
+                            c.name.toLowerCase() === customerName.toLowerCase()
+                        );
+                        
+                        if (!stillExists) {
+                            const customer = {
+                                id: Date.now() + index,
+                                name: customerName,
+                                runDay: serviceDay,
+                                address: address,
+                                phone: phone,
+                                serviceType: serviceType,
+                                carbsolve: carbsolve,
+                                waste: waste,
+                                code: code,
+                                notes: notes,
+                                order: db.customers.length + importedCount
+                            };
+                            
+                            await db.saveCustomer(customer);
+                            db.customers.push(customer);
+                            importedCount++;
+                            
+                            // Add service day if it doesn't exist
+                            if (!db.serviceDays.some(sd => sd.name === serviceDay)) {
+                                const newServiceDay = {
+                                    name: serviceDay,
+                                    employee: '',
+                                    date: null
+                                };
+                                await db.saveServiceDay(newServiceDay);
+                                db.serviceDays.push(newServiceDay);
+                            }
+                        }
+                    }
+
+                    renderCustomerAdminList();
+                    renderServiceDayAdminList();
+                    renderRunDays();
+
+                    statusDiv.innerHTML = `
+                        <div class="import-status success">
+                            ✓ Successfully imported ${importedCount} customers
+                            ${errorCount > 0 ? `<br>⚠ ${errorCount} rows skipped (invalid data)` : ''}
+                        </div>
+                    `;
+
+                    // Clear file input
+                    document.getElementById('excelFileInput').value = '';
+
+                } catch (error) {
+                    statusDiv.innerHTML = `
+                        <div class="import-status error">
+                            ✗ Error processing file: ${error.message}
+                            <br>Expected columns: Name | Service Day | Address | Phone | Service Type | Carbsolve | Waste | Code | Notes
+                        </div>
+                    `;
+                }
+            };
+
+            reader.onerror = function() {
+                statusDiv.innerHTML = '<div class="import-status error">✗ Error reading file</div>';
+            };
+
+            reader.readAsArrayBuffer(file);
+        }
+
         // Customer Search Modal Functions
         let isAdHocService = false;
         let adHocCustomerName = '';
@@ -8598,6 +8705,191 @@
             document.getElementById('customerSearchModal').classList.remove('active');
         }
         
+        // Customer History Modal Functions
+        function showCustomerHistoryModal(customerId) {
+            const customer = db.customers.find(c => c.id === customerId);
+            if (!customer) {
+                showToast('Customer not found', 'error');
+                return;
+            }
+            
+            document.getElementById('customerHistoryName').textContent = customer.name;
+            document.getElementById('customerHistoryStats').innerHTML = '<div style="text-align: center; padding: 20px;">Loading history...</div>';
+            document.getElementById('customerHistoryList').innerHTML = '';
+            document.getElementById('customerHistoryModal').classList.add('active');
+            
+            // Load customer history
+            loadCustomerHistory(customerId, customer.name);
+        }
+        
+        function hideCustomerHistoryModal() {
+            document.getElementById('customerHistoryModal').classList.remove('active');
+        }
+        
+        async function loadCustomerHistory(customerId, customerName) {
+            try {
+                // Fetch ALL PODs for this customer from the database
+                const { data: pods, error } = await supabase
+                    .from('pods')
+                    .select('*')
+                    .eq('customer_id', customerId)
+                    .order('date', { ascending: false });
+                
+                if (error) throw error;
+                
+                // Calculate stats
+                const totalPods = pods.length;
+                const servicesCompleted = pods.filter(p => p.tank_serviced === 'yes').length;
+                const rentalOnly = pods.filter(p => p.tank_serviced === 'no' && (p.service_notes || '').toLowerCase().includes('no service required')).length;
+                const totalProducts = pods.reduce((sum, p) => {
+                    const products = p.products || [];
+                    return sum + products.reduce((pSum, prod) => pSum + (prod.quantity || 0), 0);
+                }, 0);
+                
+                // Get unique notes
+                const allNotes = pods.filter(p => p.service_notes || p.notes).length;
+                
+                // Render stats
+                document.getElementById('customerHistoryStats').innerHTML = `
+                    <div class="customer-stat-card">
+                        <div class="customer-stat-value">${totalPods}</div>
+                        <div class="customer-stat-label">Total PODs</div>
+                    </div>
+                    <div class="customer-stat-card">
+                        <div class="customer-stat-value">${servicesCompleted}</div>
+                        <div class="customer-stat-label">Services Done</div>
+                    </div>
+                    <div class="customer-stat-card">
+                        <div class="customer-stat-value">${rentalOnly}</div>
+                        <div class="customer-stat-label">Rental Only</div>
+                    </div>
+                    <div class="customer-stat-card">
+                        <div class="customer-stat-value">${totalProducts}</div>
+                        <div class="customer-stat-label">Products Delivered</div>
+                    </div>
+                `;
+                
+                // Render history list
+                if (pods.length === 0) {
+                    document.getElementById('customerHistoryList').innerHTML = '<div style="text-align: center; padding: 20px; color: #6b7280;">No service history found</div>';
+                    return;
+                }
+                
+                const historyHtml = pods.map(pod => {
+                    const date = new Date(pod.date);
+                    const formattedDate = date.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+                    
+                    // Service status
+                    let statusBadge = '';
+                    if (pod.tank_serviced === 'yes') {
+                        statusBadge = '<span style="background: #dcfce7; color: #166534; padding: 2px 8px; border-radius: 12px; font-size: 11px;">✓ Serviced</span>';
+                    } else if (pod.tank_serviced === 'no' && (pod.service_notes || '').toLowerCase().includes('no service required')) {
+                        statusBadge = '<span style="background: #fef3c7; color: #92400e; padding: 2px 8px; border-radius: 12px; font-size: 11px;">📋 Rental Only</span>';
+                    } else if (pod.tank_serviced === 'no') {
+                        statusBadge = '<span style="background: #fee2e2; color: #991b1b; padding: 2px 8px; border-radius: 12px; font-size: 11px;">✗ Not Serviced</span>';
+                    } else if (pod.is_quick_complete) {
+                        statusBadge = '<span style="background: #dbeafe; color: #1e40af; padding: 2px 8px; border-radius: 12px; font-size: 11px;">⚡ Quick</span>';
+                    }
+                    
+                    // Products summary
+                    const products = pod.products || [];
+                    let productsHtml = '';
+                    if (products.length > 0) {
+                        productsHtml = products.map(p => `${p.quantity}x ${p.product}`).join(', ');
+                    }
+                    
+                    // Notes
+                    let notesHtml = '';
+                    if (pod.service_notes) notesHtml += `<div class="pod-history-notes">📝 ${pod.service_notes}</div>`;
+                    if (pod.notes) notesHtml += `<div class="pod-history-notes">💬 ${pod.notes}</div>`;
+                    
+                    return `
+                        <div class="pod-history-item" onclick="viewHistoryPod('${pod.id}', ${customerId})">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <span class="pod-history-date">${formattedDate}</span>
+                                ${statusBadge}
+                            </div>
+                            <div class="pod-history-details">
+                                ${pod.service_type || 'Service'} • ${pod.run_day || 'Ad-Hoc'}
+                                ${pod.carbsolve ? ` • ${pod.carbsolve}` : ''}
+                            </div>
+                            ${productsHtml ? `<div class="pod-history-details" style="color: #059669;">📦 ${productsHtml}</div>` : ''}
+                            ${notesHtml}
+                        </div>
+                    `;
+                }).join('');
+                
+                document.getElementById('customerHistoryList').innerHTML = historyHtml;
+                
+            } catch (error) {
+                console.error('Error loading customer history:', error);
+                document.getElementById('customerHistoryStats').innerHTML = '<div style="text-align: center; padding: 20px; color: #dc2626;">Error loading history</div>';
+            }
+        }
+        
+        function viewHistoryPod(podId, customerId) {
+            hideCustomerHistoryModal();
+            hideCustomerSearchModal();
+            
+            const customer = db.customers.find(c => c.id === customerId);
+            if (customer) {
+                currentCustomer = customer;
+                currentRunDay = customer.runDay || 'Ad-Hoc';
+                
+                // Find the POD in db.pods or load it
+                const pod = db.pods.find(p => p.id === podId);
+                if (pod) {
+                    showExistingPod(pod);
+                } else {
+                    // POD not in current month's cache, need to view it differently
+                    loadAndViewHistoricalPod(podId, customerId);
+                }
+            }
+        }
+        
+        async function loadAndViewHistoricalPod(podId, customerId) {
+            try {
+                const { data: pod, error } = await supabase
+                    .from('pods')
+                    .select('*')
+                    .eq('id', podId)
+                    .single();
+                
+                if (error) throw error;
+                
+                if (pod) {
+                    // Map to internal format
+                    const mappedPod = {
+                        id: pod.id,
+                        customerId: pod.customer_id,
+                        customerName: pod.customer_name,
+                        customerAddress: pod.customer_address,
+                        runDay: pod.run_day,
+                        date: pod.date,
+                        timestamp: pod.timestamp,
+                        serviceType: pod.service_type,
+                        carbsolve: pod.carbsolve,
+                        tankServiced: pod.tank_serviced,
+                        serviceNotes: pod.service_notes,
+                        products: pod.products,
+                        notes: pod.notes,
+                        photo: pod.photo,
+                        signature: pod.signature,
+                        signatureName: pod.signature_name,
+                        isRentalOnly: pod.is_rental_only || false,
+                        isQuickComplete: pod.is_quick_complete || false,
+                        isAdHoc: pod.is_ad_hoc || false,
+                        sourceRunDay: pod.source_run_day,
+                        archived: pod.archived
+                    };
+                    showExistingPod(mappedPod);
+                }
+            } catch (error) {
+                console.error('Error loading historical POD:', error);
+                showToast('Error loading POD details', 'error');
+            }
+        }
+        
         function handleCustomerSearch(query) {
             const resultsDiv = document.getElementById('searchResults');
             const hintDiv = document.getElementById('searchHint');
@@ -8655,14 +8947,21 @@
                 
                 return `
                 <div class="search-result-item" onclick="selectSearchCustomer(${c.id})">
-                    <div class="search-result-name">${c.name}</div>
-                    <div class="search-result-meta">
-                        ${c.address ? c.address : ''}
-                        ${c.runDay ? ` • Day: ${c.runDay}` : ' • No regular day'}
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                        <div style="flex: 1;">
+                            <div class="search-result-name">${c.name}</div>
+                            <div class="search-result-meta">
+                                ${c.address ? c.address : ''}
+                                ${c.runDay ? ` • Day: ${c.runDay}` : ' • No regular day'}
+                            </div>
+                        </div>
+                        <button onclick="event.stopPropagation(); showCustomerHistoryModal(${c.id});" style="background: #1e3a8a; color: white; border: none; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; white-space: nowrap;">📜 History</button>
                     </div>
-                    <span class="search-result-carbsolve" style="background: ${typeStyle.bg}; color: ${typeStyle.text};">${displayType}</span>
-                    ${c.carbsolve ? `<span class="search-result-carbsolve">${c.carbsolve}</span>` : ''}
-                    ${c.waste ? `<span class="search-result-carbsolve" style="background: #fef3c7; color: #92400e;">🛢️ ${c.waste}</span>` : ''}
+                    <div style="margin-top: 6px;">
+                        <span class="search-result-carbsolve" style="background: ${typeStyle.bg}; color: ${typeStyle.text};">${displayType}</span>
+                        ${c.carbsolve ? `<span class="search-result-carbsolve">${c.carbsolve}</span>` : ''}
+                        ${c.waste ? `<span class="search-result-carbsolve" style="background: #fef3c7; color: #92400e;">🛢️ ${c.waste}</span>` : ''}
+                    </div>
                 </div>
             `}).join('');
             
