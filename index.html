@@ -1400,17 +1400,14 @@
         }
 
         .calendar-event-item.event-completed {
-            background: #dcfce7;
-            border-left-color: #16a34a;
             text-decoration: line-through;
-            opacity: 0.8;
+            opacity: 0.6;
         }
 
         .calendar-event-item.event-cancelled {
-            background: #fee2e2;
-            border-left-color: #dc2626;
             text-decoration: line-through;
-            opacity: 0.6;
+            opacity: 0.5;
+            filter: grayscale(50%);
         }
 
         .calendar-event-title {
@@ -1441,32 +1438,32 @@
         }
 
         .event-tick-btn {
-            background: #dcfce7;
-            color: #166534;
+            background: #dbeafe;
+            color: #1e40af;
         }
 
         .event-tick-btn:hover {
-            background: #16a34a;
+            background: #3b82f6;
             color: white;
         }
 
         .event-tick-btn.active {
-            background: #16a34a;
+            background: #3b82f6;
             color: white;
         }
 
         .event-cross-btn {
-            background: #fee2e2;
-            color: #991b1b;
+            background: #e5e7eb;
+            color: #4b5563;
         }
 
         .event-cross-btn:hover {
-            background: #dc2626;
+            background: #6b7280;
             color: white;
         }
 
         .event-cross-btn.active {
-            background: #dc2626;
+            background: #6b7280;
             color: white;
         }
 
@@ -6117,15 +6114,18 @@
                                 </div>
                             `;
                         } else {
-                            // Non-service-day event: show with tick/cross
+                            // Non-service-day event: show with tick/cross and worker color
                             const eventStatus = db.getCalendarEventStatus(event.id);
                             const completedClass = eventStatus === 'completed' ? ' event-completed' : '';
                             const cancelledClass = eventStatus === 'cancelled' ? ' event-cancelled' : '';
+                            const eventBgColor = getWorkerColorLight(eventWorker);
+                            const eventBorderColor = getWorkerColor(eventWorker);
                             
                             gridHtml += `
-                                <div class="calendar-event-item${completedClass}${cancelledClass}" style="margin-bottom: 4px;">
+                                <div class="calendar-event-item${completedClass}${cancelledClass}" 
+                                     style="margin-bottom: 4px; background: ${eventBgColor}; border-left-color: ${eventBorderColor};">
                                     <span class="calendar-event-title" onclick="showCalendarEventModal('${event.id}', '${dateStr}')" style="font-size: 11px;">
-                                        ${showWorkerName ? `<span style="color: #9ca3af;">👤</span> ` : ''}${event.event_title}
+                                        ${showWorkerName ? `<span style="color: #6b7280;">👤</span> ` : ''}${event.event_title}
                                     </span>
                                     <div class="calendar-event-actions">
                                         <button class="event-tick-btn${eventStatus === 'completed' ? ' active' : ''}" onclick="toggleCalendarEventStatus('${event.id}', 'completed')" title="Done">✓</button>
@@ -6216,13 +6216,16 @@
                         </div>
                     `;
                 } else {
-                    // Non-service-day event with tick/cross
+                    // Non-service-day event with tick/cross and worker color
                     const eventStatus = db.getCalendarEventStatus(event.id);
                     const completedClass = eventStatus === 'completed' ? ' event-completed' : '';
                     const cancelledClass = eventStatus === 'cancelled' ? ' event-cancelled' : '';
+                    const eventBgColor = getWorkerColorLight(eventWorker);
+                    const eventBorderColor = getWorkerColor(eventWorker);
                     
                     html += `
-                        <div class="calendar-event-item${completedClass}${cancelledClass}" style="font-size: 10px; padding: 4px 6px;">
+                        <div class="calendar-event-item${completedClass}${cancelledClass}" 
+                             style="font-size: 10px; padding: 4px 6px; background: ${eventBgColor}; border-left-color: ${eventBorderColor};">
                             <span class="calendar-event-title" onclick="showCalendarEventModal('${event.id}', '${dateStr}')" style="font-size: 10px;">${event.event_title}</span>
                             <div class="calendar-event-actions">
                                 <button class="event-tick-btn${eventStatus === 'completed' ? ' active' : ''}" onclick="event.stopPropagation(); toggleCalendarEventStatus('${event.id}', 'completed')" style="width: 18px; height: 18px; font-size: 10px;" title="Done">✓</button>
@@ -6286,17 +6289,20 @@
                             </div>
                         `;
                     } else {
-                        // Non-service-day event: show with tick/cross
+                        // Non-service-day event: show with tick/cross and worker color
                         const eventStatus = db.getCalendarEventStatus(event.id);
                         const completedClass = eventStatus === 'completed' ? ' event-completed' : '';
                         const cancelledClass = eventStatus === 'cancelled' ? ' event-cancelled' : '';
+                        const eventBgColor = getWorkerColorLight(eventWorker);
+                        const eventBorderColor = getWorkerColor(eventWorker);
                         
                         html += `
-                            <div class="calendar-event-item${completedClass}${cancelledClass}" style="margin-bottom: 4px; margin-left: 12px;">
+                            <div class="calendar-event-item${completedClass}${cancelledClass}" 
+                                 style="margin-bottom: 4px; margin-left: 12px; background: ${eventBgColor}; border-left-color: ${eventBorderColor};">
                                 <span style="margin-right: 6px;">${icon}</span>
                                 <span class="calendar-event-title" onclick="showCalendarEventModal('${event.id}', '${dateStr}')">
                                     ${event.event_title}
-                                    ${showWorkerName ? `<span style="font-size: 10px; color: #9ca3af;"> (${event.calendar_owner})</span>` : ''}
+                                    ${showWorkerName ? `<span style="font-size: 10px; color: #6b7280;"> (${event.calendar_owner})</span>` : ''}
                                 </span>
                                 <div class="calendar-event-actions">
                                     <button class="event-tick-btn${eventStatus === 'completed' ? ' active' : ''}" onclick="toggleCalendarEventStatus('${event.id}', 'completed')" title="Done">✓</button>
