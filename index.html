@@ -2403,7 +2403,14 @@
             
             <!-- List View (hidden by default) -->
             <div id="adminListContainer" style="display: none;">
-                <div class="card">
+                <!-- Chronological Event List -->
+                <div id="adminChronologicalList">
+                    <!-- Will be populated by JS -->
+                </div>
+                
+                <!-- Service Day Filter (below the chronological list) -->
+                <div class="card" style="margin-top: 16px;">
+                    <h3 style="margin-bottom: 12px; color: #6b7280;">🔍 Filter by Service Day</h3>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
                         <div class="form-group" style="margin-bottom: 0;">
                             <label>Select Service Day</label>
@@ -2939,6 +2946,11 @@
                 await db.loadScheduledDaysForMonth();
             }
             renderAdminCalendar();
+            // Also refresh list view if visible
+            if (document.getElementById('adminListContainer') && 
+                document.getElementById('adminListContainer').style.display !== 'none') {
+                renderAdminChronologicalList();
+            }
         }
         
         function isCurrentMonth() {
@@ -4856,6 +4868,146 @@
             document.getElementById('calendarViewTab').classList.remove('active');
             document.getElementById('listViewTab').classList.add('active');
             document.getElementById('bimonthlyViewTab').classList.remove('active');
+            renderAdminChronologicalList();
+        }
+        
+        function renderAdminChronologicalList() {
+            const container = document.getElementById('adminChronologicalList');
+            if (!container) return;
+            
+            const todayStr = formatDateLocal(new Date());
+            let dates = [];
+            
+            // Get date range based on period
+            if (calendarPeriod === 'week') {
+                for (let i = 0; i < 5; i++) {
+                    const d = new Date(selectedWeekStart);
+                    d.setDate(d.getDate() + i);
+                    dates.push(formatDateLocal(d));
+                }
+            } else {
+                const firstDay = new Date(selectedYear, selectedMonth, 1);
+                const lastDay = new Date(selectedYear, selectedMonth + 1, 0);
+                for (let day = 1; day <= lastDay.getDate(); day++) {
+                    dates.push(formatDateLocal(new Date(selectedYear, selectedMonth, day)));
+                }
+            }
+            
+            const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            const scheduledDaysArr = db.scheduledDays || [];
+            const calendarEventsArr = db.calendarEvents || [];
+            
+            let html = '';
+            
+            dates.forEach(dateStr => {
+                const date = new Date(dateStr + 'T00:00:00');
+                const isToday = dateStr === todayStr;
+                const dayName = dayNames[date.getDay()];
+                const dayNum = date.getDate();
+                const monthName = monthNames[date.getMonth()];
+                
+                // Get service days scheduled for this date
+                const serviceDaysOnDate = scheduledDaysArr.filter(sd => sd.scheduledDate === dateStr);
+                
+                // Get calendar events for this date
+                const eventsOnDate = calendarEventsArr.filter(ev => ev.eventDate === dateStr);
+                
+                // Get PODs for this date
+                const podsOnDate = db.pods.filter(p => p.date === dateStr);
+                
+                // Get ad-hoc items
+                const adHocPods = podsOnDate.filter(p => p.runDay === 'Ad-Hoc' && !p.sourceRunDay);
+                const tankMovementsArr = db.tankMovements || [];
+                const adHocTankMoves = tankMovementsArr.filter(tm => tm.date === dateStr && tm.runDay === 'Ad-Hoc' && !tm.sourceRunDay);
+                
+                const hasContent = serviceDaysOnDate.length > 0 || eventsOnDate.length > 0 || adHocPods.length > 0 || adHocTankMoves.length > 0;
+                
+                html += `
+                    <div class="card" style="margin-bottom: 12px; ${isToday ? 'border-left: 4px solid #3b82f6; background: #f0f9ff;' : ''}">
+                        <div style="font-weight: 700; font-size: 16px; color: ${isToday ? '#1e40af' : '#374151'}; margin-bottom: 12px;">
+                            ${isToday ? '⭐ TODAY - ' : ''}${dayName} ${dayNum} ${monthName}
+                        </div>
+                `;
+                
+                if (!hasContent) {
+                    html += `<div style="color: #9ca3af; font-size: 13px;">No events scheduled</div>`;
+                } else {
+                    // Render service days
+                    serviceDaysOnDate.forEach(sd => {
+                        const pods = podsOnDate.filter(p => p.runDay === sd.serviceDayName);
+                        const totalCustomers = db.customers.filter(c => c.runDay === sd.serviceDayName).length;
+                        const isInvoiced = db.isServiceDayInvoiced(sd.serviceDayName, dateStr);
+                        const workerColor = getWorkerColor(sd.calendarOwner);
+                        
+                        html += `
+                            <div onclick="openRunsheetForDate('${sd.serviceDayName}', '${dateStr}')" 
+                                 style="display: flex; align-items: center; gap: 12px; padding: 12px; background: white; border-radius: 8px; margin-bottom: 8px; border-left: 4px solid ${workerColor}; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.1);"
+                                 onmouseover="this.style.background='#f9fafb'" onmouseout="this.style.background='white'">
+                                <div style="font-size: 24px;">🚛</div>
+                                <div style="flex: 1;">
+                                    <div style="font-weight: 600; color: #111827;">
+                                        ${isInvoiced ? '<span style="color: #16a34a; margin-right: 4px;">✓</span>' : ''}
+                                        ${sd.serviceDayName}
+                                    </div>
+                                    <div style="font-size: 12px; color: #6b7280;">
+                                        👤 ${sd.calendarOwner || 'Unassigned'} • ${pods.length}/${totalCustomers} completed
+                                    </div>
+                                </div>
+                                <div style="color: #6b7280;">→</div>
+                            </div>
+                        `;
+                    });
+                    
+                    // Render ad-hoc items
+                    if (adHocPods.length > 0 || adHocTankMoves.length > 0) {
+                        html += `
+                            <div onclick="openRunsheetForDate('Ad-Hoc', '${dateStr}')" 
+                                 style="display: flex; align-items: center; gap: 12px; padding: 12px; background: #fffbeb; border-radius: 8px; margin-bottom: 8px; border-left: 4px solid #f59e0b; cursor: pointer;"
+                                 onmouseover="this.style.background='#fef3c7'" onmouseout="this.style.background='#fffbeb'">
+                                <div style="font-size: 24px;">📋</div>
+                                <div style="flex: 1;">
+                                    <div style="font-weight: 600; color: #92400e;">Ad-Hoc Services & Deliveries</div>
+                                    <div style="font-size: 12px; color: #92400e;">${adHocPods.length} PODs, ${adHocTankMoves.length} tank movements</div>
+                                </div>
+                                <div style="color: #92400e;">→</div>
+                            </div>
+                        `;
+                    }
+                    
+                    // Render calendar events
+                    eventsOnDate.forEach(event => {
+                        const status = db.getCalendarEventStatus(event.id);
+                        const storedNotes = localStorage.getItem(`calEventNotes_${event.id}`) || '';
+                        const completedClass = status === 'completed' ? 'text-decoration: line-through; opacity: 0.7;' : '';
+                        const cancelledClass = status === 'cancelled' ? 'text-decoration: line-through; color: #dc2626; opacity: 0.7;' : '';
+                        const statusIcon = status === 'completed' ? '✅' : status === 'cancelled' ? '❌' : '📋';
+                        
+                        html += `
+                            <div style="display: flex; align-items: center; gap: 12px; padding: 10px 12px; background: #f9fafb; border-radius: 8px; margin-bottom: 6px; ${completedClass}${cancelledClass}">
+                                <div style="font-size: 18px;">${statusIcon}</div>
+                                <div style="flex: 1;">
+                                    <div style="font-weight: 500; color: #374151;">${event.eventTitle}</div>
+                                    ${event.calendarOwner ? `<div style="font-size: 11px; color: #6b7280;">👤 ${event.calendarOwner}</div>` : ''}
+                                    ${storedNotes ? `<div style="font-size: 11px; color: #6b7280; font-style: italic;">📝 ${storedNotes.substring(0, 50)}${storedNotes.length > 50 ? '...' : ''}</div>` : ''}
+                                </div>
+                                <div style="display: flex; gap: 4px;">
+                                    <button onclick="event.stopPropagation(); toggleCalendarEventStatus('${event.id}', 'completed')" 
+                                            class="event-tick-btn${status === 'completed' ? ' active' : ''}" 
+                                            style="width: 28px; height: 28px;" title="Done">✓</button>
+                                    <button onclick="event.stopPropagation(); toggleCalendarEventStatus('${event.id}', 'cancelled')" 
+                                            class="event-cross-btn${status === 'cancelled' ? ' active' : ''}" 
+                                            style="width: 28px; height: 28px;" title="Not done">✗</button>
+                                </div>
+                            </div>
+                        `;
+                    });
+                }
+                
+                html += '</div>';
+            });
+            
+            container.innerHTML = html;
         }
         
         let bimonthlyFilter = 'all';
@@ -4984,6 +5136,13 @@
             
             grid.innerHTML = '';
             
+            // Ensure grid styling is applied
+            if (calendarPeriod === 'week') {
+                grid.style.gridTemplateColumns = 'repeat(5, 1fr)';
+            } else {
+                grid.style.gridTemplateColumns = 'repeat(7, 1fr)';
+            }
+            
             // Get today for highlighting
             const today = new Date();
             const todayStr = formatDateLocal(today);
@@ -5000,10 +5159,14 @@
             if (calendarPeriod === 'week') {
                 // Render Monday through Friday of selected week
                 for (let i = 0; i < 5; i++) {
-                    const date = new Date(selectedWeekStart);
-                    date.setDate(date.getDate() + i);
-                    const cell = createCalendarDayCell(date, podsByDate, false, todayStr);
-                    grid.appendChild(cell);
+                    try {
+                        const date = new Date(selectedWeekStart);
+                        date.setDate(date.getDate() + i);
+                        const cell = createCalendarDayCell(date, podsByDate, false, todayStr);
+                        grid.appendChild(cell);
+                    } catch (e) {
+                        console.error('Error creating calendar cell for day ' + i, e);
+                    }
                 }
             } else {
                 // Render full month view
@@ -5076,7 +5239,8 @@
             });
             
             // Get scheduled service days for this date (from Google Calendar sync)
-            const scheduledOnDate = db.scheduledDays.filter(sd => sd.scheduledDate === dateStr);
+            const scheduledDaysArr = db.scheduledDays || [];
+            const scheduledOnDate = scheduledDaysArr.filter(sd => sd.scheduledDate === dateStr);
             
             // Only show SCHEDULED service days on calendar
             // Plus any "Ad-Hoc" items from main menu
@@ -5086,7 +5250,8 @@
             // Check for truly ad-hoc items (from main menu, not from a runsheet)
             // These have runDay = 'Ad-Hoc' and sourceRunDay = null
             const trulyAdHocPods = podsOnDate.filter(p => p.runDay === 'Ad-Hoc' && !p.sourceRunDay);
-            const trulyAdHocTankMoves = db.tankMovements.filter(tm => 
+            const tankMovementsArr = db.tankMovements || [];
+            const trulyAdHocTankMoves = tankMovementsArr.filter(tm => 
                 tm.date === dateStr && tm.runDay === 'Ad-Hoc' && !tm.sourceRunDay
             );
             
@@ -5139,7 +5304,8 @@
             });
             
             // Render non-service-day calendar events
-            const eventsOnDate = db.calendarEvents.filter(ev => ev.eventDate === dateStr);
+            const calendarEventsArr = db.calendarEvents || [];
+            const eventsOnDate = calendarEventsArr.filter(ev => ev.eventDate === dateStr);
             if (eventsOnDate.length > 0) {
                 const eventsSection = document.createElement('div');
                 eventsSection.className = 'calendar-events-section';
@@ -5186,6 +5352,10 @@
             // Re-render whichever calendar view is active
             renderAdminCalendar();
             loadWorkerCalendarEvents();
+            // Also refresh list view if visible
+            if (document.getElementById('adminListContainer').style.display !== 'none') {
+                renderAdminChronologicalList();
+            }
         }
         
         // Show modal for calendar event (to add notes or create ad-hoc)
