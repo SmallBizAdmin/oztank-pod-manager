@@ -1226,13 +1226,13 @@
             background: white;
             border-radius: 12px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            overflow: hidden;
+            overflow: visible;
             margin-bottom: 16px;
         }
 
         .calendar-grid {
-            display: grid;
-            grid-template-columns: repeat(5, 1fr);
+            display: grid !important;
+            grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
             gap: 2px;
             background: #e5e7eb;
         }
@@ -1242,6 +1242,8 @@
             min-height: 200px;
             padding: 12px;
             position: relative;
+            overflow: hidden;
+            min-width: 0; /* Critical for grid item text truncation */
         }
 
         .calendar-day.other-month {
@@ -1277,6 +1279,8 @@
             flex-direction: column;
             gap: 6px;
             margin-top: 4px;
+            overflow: hidden;
+            min-width: 0;
         }
 
         .calendar-service-day {
@@ -1287,6 +1291,9 @@
             cursor: pointer;
             transition: transform 0.1s, box-shadow 0.1s;
             border-left: 4px solid transparent;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
 
         .calendar-service-day:hover {
@@ -1381,6 +1388,8 @@
             justify-content: space-between;
             align-items: center;
             gap: 4px;
+            min-width: 0; /* Allow truncation in flex container */
+            overflow: hidden;
         }
 
         .calendar-event-item.event-completed {
@@ -1403,6 +1412,7 @@
             text-overflow: ellipsis;
             white-space: nowrap;
             cursor: pointer;
+            min-width: 0; /* Critical for text truncation in flex */
         }
 
         .calendar-event-actions {
@@ -1541,7 +1551,7 @@
 
         /* Calendar grid adjustments for month view */
         .calendar-grid.month-view {
-            grid-template-columns: repeat(7, 1fr);
+            grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
         }
 
         .calendar-grid.month-view .calendar-day {
@@ -5136,11 +5146,15 @@
             
             grid.innerHTML = '';
             
-            // Ensure grid styling is applied
+            // Force explicit grid styling
+            grid.style.display = 'grid';
+            grid.style.gap = '2px';
+            grid.style.background = '#e5e7eb';
+            
             if (calendarPeriod === 'week') {
-                grid.style.gridTemplateColumns = 'repeat(5, 1fr)';
+                grid.style.gridTemplateColumns = 'repeat(5, minmax(0, 1fr))';
             } else {
-                grid.style.gridTemplateColumns = 'repeat(7, 1fr)';
+                grid.style.gridTemplateColumns = 'repeat(7, minmax(0, 1fr))';
             }
             
             // Get today for highlighting
@@ -5159,14 +5173,19 @@
             if (calendarPeriod === 'week') {
                 // Render Monday through Friday of selected week
                 for (let i = 0; i < 5; i++) {
+                    const date = new Date(selectedWeekStart);
+                    date.setDate(date.getDate() + i);
+                    
+                    let cell;
                     try {
-                        const date = new Date(selectedWeekStart);
-                        date.setDate(date.getDate() + i);
-                        const cell = createCalendarDayCell(date, podsByDate, false, todayStr);
-                        grid.appendChild(cell);
+                        cell = createCalendarDayCell(date, podsByDate, false, todayStr);
                     } catch (e) {
-                        console.error('Error creating calendar cell for day ' + i, e);
+                        console.error('Error creating cell for day ' + i + ':', e);
+                        cell = document.createElement('div');
+                        cell.className = 'calendar-day';
+                        cell.innerHTML = `<div class="calendar-day-number">Error</div>`;
                     }
+                    grid.appendChild(cell);
                 }
             } else {
                 // Render full month view
