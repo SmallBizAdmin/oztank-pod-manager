@@ -3358,6 +3358,14 @@
                         .lte('event_date', endStr);
                     
                     if (!error && data) {
+                        // Override: events with "Pro " prefix are NOT service days (e.g. Red's "Pro Day 33")
+                        data.forEach(e => {
+                            if (e.is_service_day && e.event_title && /^Pro\s/i.test(e.event_title)) {
+                                e.is_service_day = false;
+                                e.service_day_name = null;
+                            }
+                        });
+                        
                         // Separate service days from other events
                         this.scheduledDays = data.filter(e => e.is_service_day).map(sd => ({
                             serviceDayName: sd.service_day_name,
@@ -3584,6 +3592,14 @@
                         .lte('event_date', endStr);
                     
                     if (!error && data) {
+                        // Override: events with "Pro " prefix are NOT service days (e.g. Red's "Pro Day 33")
+                        data.forEach(e => {
+                            if (e.is_service_day && e.event_title && /^Pro\s/i.test(e.event_title)) {
+                                e.is_service_day = false;
+                                e.service_day_name = null;
+                            }
+                        });
+                        
                         // Separate service days from other events
                         this.scheduledDays = data.filter(e => e.is_service_day).map(sd => ({
                             serviceDayName: sd.service_day_name,
@@ -5130,6 +5146,7 @@
                 
                 eventsOnDate.forEach(event => {
                     const status = db.getCalendarEventStatus(event.id);
+                    const storedNotes = localStorage.getItem(`calEventNotes_${event.id}`) || '';
                     const eventEl = document.createElement('div');
                     eventEl.className = `calendar-event-item${status === 'completed' ? ' event-completed' : ''}${status === 'cancelled' ? ' event-cancelled' : ''}`;
                     
@@ -5140,6 +5157,12 @@
                             <button class="event-cross-btn${status === 'cancelled' ? ' active' : ''}" onclick="event.stopPropagation(); toggleCalendarEventStatus('${event.id}', 'cancelled')" title="Mark cancelled">✗</button>
                         </div>
                     `;
+                    if (storedNotes) {
+                        const notesEl = document.createElement('div');
+                        notesEl.style.cssText = 'font-size: 10px; color: #6b7280; font-style: italic; padding: 2px 4px; margin-top: 2px; background: #fefce8; border-radius: 3px; word-break: break-word;';
+                        notesEl.textContent = '📝 ' + (storedNotes.length > 60 ? storedNotes.substring(0, 60) + '...' : storedNotes);
+                        eventEl.appendChild(notesEl);
+                    }
                     eventsSection.appendChild(eventEl);
                 });
                 
@@ -5264,7 +5287,7 @@
                 if (!adHocOption) {
                     adHocOption = document.createElement('option');
                     adHocOption.value = 'Ad-Hoc';
-                    adHocOption.textContent = '📋 Ad-Hoc Services';
+                    adHocOption.textContent = '📋 Ad-Hoc Services & Deliveries';
                     select.appendChild(adHocOption);
                 }
             }
@@ -5753,6 +5776,25 @@
                 const { data, error } = await query;
                 
                 if (error) throw error;
+                
+                // Override: events with "Pro " prefix are NOT service days (e.g. Red's "Pro Day 33")
+                if (data) {
+                    data.forEach(e => {
+                        if (e.is_service_day && e.event_title && /^Pro\s/i.test(e.event_title)) {
+                            e.is_service_day = false;
+                            e.service_day_name = null;
+                        }
+                    });
+                    
+                    // Store non-service-day events in db.calendarEvents for modal lookups
+                    db.calendarEvents = data.filter(e => !e.is_service_day).map(ev => ({
+                        id: ev.id,
+                        eventTitle: ev.event_title,
+                        eventDate: ev.event_date,
+                        calendarOwner: ev.calendar_owner,
+                        googleEventId: ev.google_event_id
+                    }));
+                }
                 
                 // Group by date
                 const byDate = {};
@@ -6751,7 +6793,7 @@
                 headerLi.className = 'adhoc-section-header';
                 headerLi.innerHTML = `
                     <div style="padding: 12px 16px; background: #fef3c7; border-left: 4px solid #f59e0b; margin-top: 16px; border-radius: 6px;">
-                        <strong style="color: #92400e;">📋 Ad-Hoc Services (${adHocPods.length})</strong>
+                        <strong style="color: #92400e;">📋 Ad-Hoc Services & Deliveries (${adHocPods.length})</strong>
                         <span style="color: #92400e; font-size: 12px; margin-left: 8px;">Added to this runsheet</span>
                     </div>
                 `;
@@ -7743,7 +7785,7 @@
             // Add back to calendar button row
             const backRow = document.createElement('tr');
             backRow.innerHTML = `
-                <td colspan="7" style="padding: 8px; background: #f3f4f6;">
+                <td colspan="8" style="padding: 8px; background: #f3f4f6;">
                     <button class="btn btn-secondary" style="padding: 6px 16px; font-size: 13px;" onclick="backToAdminCalendar()">
                         ← Back to Calendar
                     </button>
@@ -7901,8 +7943,8 @@
             );
             
             // Update header
-            document.getElementById('adminRunsheetTitle').textContent = `Ad-Hoc Services - ${formatDisplayDate(selectedDate)}`;
-            document.getElementById('adminRunsheetEmployee').textContent = 'Standalone ad-hoc services (not from a runsheet)';
+            document.getElementById('adminRunsheetTitle').textContent = `Ad-Hoc Services & Deliveries - ${formatDisplayDate(selectedDate)}`;
+            document.getElementById('adminRunsheetEmployee').textContent = 'Standalone ad-hoc services, deliveries & tank movements (not from a runsheet)';
             document.getElementById('adminRunsheetDate').textContent = '';
             
             // Hide day invoiced checkbox for ad-hoc
@@ -7918,7 +7960,7 @@
             // Add back to calendar button row
             const backRow = document.createElement('tr');
             backRow.innerHTML = `
-                <td colspan="7" style="padding: 8px; background: #f3f4f6;">
+                <td colspan="8" style="padding: 8px; background: #f3f4f6;">
                     <button class="btn" onclick="showCalendarView()" style="padding: 8px 16px;">
                         ← Back to Calendar
                     </button>
@@ -7950,6 +7992,7 @@
                     <td style="padding: 12px;">${carbsolve}</td>
                     <td style="padding: 12px;">${productsStr}</td>
                     <td style="padding: 12px; font-size: 12px; font-style: italic;">${pod.notes || '-'}</td>
+                    <td style="padding: 12px; text-align: center;"><span style="background: #fef3c7; color: #92400e; padding: 2px 6px; border-radius: 8px; font-size: 10px;">Ad-Hoc</span></td>
                 `;
                 tbody.appendChild(tr);
             });
@@ -7969,6 +8012,7 @@
                     <td style="padding: 12px;">${tm.carbsolve || '-'}</td>
                     <td style="padding: 12px;">Placed: ${tm.tankNoPlaced || '-'} / Pulled: ${tm.tankNoPulled || '-'}</td>
                     <td style="padding: 12px; font-size: 12px; font-style: italic;">${tm.reason || '-'}</td>
+                    <td style="padding: 12px; text-align: center;"><span style="background: #dbeafe; color: #1e40af; padding: 2px 6px; border-radius: 8px; font-size: 10px;">Tank</span></td>
                 `;
                 tbody.appendChild(tr);
             });
@@ -7976,8 +8020,8 @@
             if (adHocPods.length === 0 && adHocTankMoves.length === 0) {
                 const emptyRow = document.createElement('tr');
                 emptyRow.innerHTML = `
-                    <td colspan="7" style="padding: 24px; text-align: center; color: #6b7280;">
-                        No ad-hoc services for this date
+                    <td colspan="8" style="padding: 24px; text-align: center; color: #6b7280;">
+                        No ad-hoc services or deliveries for this date
                     </td>
                 `;
                 tbody.appendChild(emptyRow);
@@ -8015,7 +8059,7 @@
                 section = document.createElement('div');
                 section.id = 'adHocPodsSection';
                 section.innerHTML = `
-                    <h3 style="margin: 24px 0 12px; color: #92400e;">📋 Ad-Hoc Services</h3>
+                    <h3 style="margin: 24px 0 12px; color: #92400e;">📋 Ad-Hoc Services & Deliveries</h3>
                     <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
                         <thead>
                             <tr style="background: #fef3c7;">
