@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oz Tank - Service POD Manager v11.9</title>
+    <title>Oz Tank - Service POD Manager v11.10</title>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -28,6 +29,122 @@
             position: sticky;
             top: 0;
             z-index: 100;
+        }
+        
+        /* Offline indicator */
+        .offline-bar {
+            display: none;
+            background: #f59e0b;
+            color: #78350f;
+            padding: 8px 16px;
+            text-align: center;
+            font-weight: 500;
+            font-size: 14px;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 200;
+        }
+        
+        .offline-bar.visible {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        
+        body.has-offline-bar {
+            padding-top: 40px;
+        }
+        
+        .offline-bar.syncing {
+            background: #3b82f6;
+            color: white;
+        }
+        
+        .offline-queue-badge {
+            background: rgba(0,0,0,0.2);
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+        }
+        
+        /* Floating Action Button */
+        .fab-container {
+            position: fixed;
+            bottom: 90px;
+            right: 20px;
+            z-index: 90;
+        }
+        
+        .fab-main {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            color: white;
+            border: none;
+            font-size: 28px;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .fab-main:hover {
+            transform: scale(1.1);
+            box-shadow: 0 6px 16px rgba(0,0,0,0.4);
+        }
+        
+        .fab-main:active {
+            transform: scale(0.95);
+        }
+        
+        .fab-menu {
+            position: absolute;
+            bottom: 70px;
+            right: 0;
+            display: none;
+            flex-direction: column;
+            gap: 10px;
+            align-items: flex-end;
+        }
+        
+        .fab-menu.open {
+            display: flex;
+        }
+        
+        .fab-option {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: white;
+            border: none;
+            padding: 12px 16px;
+            border-radius: 25px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            white-space: nowrap;
+            transition: transform 0.2s;
+        }
+        
+        .fab-option:hover {
+            transform: translateX(-5px);
+        }
+        
+        .fab-option.adhoc {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            color: white;
+        }
+        
+        .fab-option.tank {
+            background: linear-gradient(135deg, #0891b2 0%, #0e7490 100%);
+            color: white;
         }
 
         .header-logo {
@@ -283,6 +400,15 @@
             font-size: 14px;
             color: #6b7280;
             margin-top: 4px;
+        }
+        
+        .customer-address a {
+            color: #2563eb;
+            text-decoration: none;
+        }
+        
+        .customer-address a:hover {
+            text-decoration: underline;
         }
 
         .customer-phone {
@@ -1400,14 +1526,12 @@
         }
 
         .calendar-event-item.event-completed {
-            text-decoration: line-through;
-            opacity: 0.6;
+            opacity: 0.5;
         }
 
         .calendar-event-item.event-cancelled {
-            text-decoration: line-through;
-            opacity: 0.5;
-            filter: grayscale(50%);
+            opacity: 0.4;
+            filter: grayscale(60%);
         }
 
         .calendar-event-title {
@@ -1828,12 +1952,151 @@
             border-radius: 6px;
             font-size: 16px;
         }
+        
+        /* Login Screen Styles */
+        .login-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, #374151 0%, #1f2937 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+        
+        .login-screen.hidden {
+            display: none;
+        }
+        
+        .login-container {
+            background: white;
+            padding: 40px;
+            border-radius: 16px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+        }
+        
+        .login-logo {
+            height: 80px;
+            margin-bottom: 20px;
+        }
+        
+        .login-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: #1f2937;
+            margin-bottom: 8px;
+        }
+        
+        .login-subtitle {
+            color: #6b7280;
+            margin-bottom: 30px;
+        }
+        
+        .google-signin-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            background: white;
+            border: 2px solid #e5e7eb;
+            padding: 14px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            color: #374151;
+            cursor: pointer;
+            width: 100%;
+            transition: all 0.2s;
+        }
+        
+        .google-signin-btn:hover {
+            border-color: #3b82f6;
+            background: #f8fafc;
+        }
+        
+        .google-signin-btn img {
+            width: 24px;
+            height: 24px;
+        }
+        
+        .login-error {
+            color: #dc2626;
+            font-size: 14px;
+            margin-top: 16px;
+            display: none;
+        }
+        
+        .login-error.show {
+            display: block;
+        }
+        
+        .user-info-display {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: rgba(255,255,255,0.9);
+        }
+        
+        .user-info-display img {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+        }
+        
+        .logout-btn {
+            background: rgba(255,255,255,0.2);
+            border: none;
+            color: white;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 11px;
+            cursor: pointer;
+            margin-left: 8px;
+        }
+        
+        .logout-btn:hover {
+            background: rgba(255,255,255,0.3);
+        }
     </style>
 </head>
 <body>
+    <!-- Login Screen -->
+    <div id="loginScreen" class="login-screen">
+        <div class="login-container">
+            <img src="https://www.oztank.com.au/wp-content/uploads/2017/09/australia-soaking-tanks.png" alt="Oz Tank" class="login-logo">
+            <h1 class="login-title">POD Manager</h1>
+            <p class="login-subtitle">Sign in with your Oz Tank account</p>
+            
+            <div id="googleSignInContainer"></div>
+            
+            <button id="googleSignInBtn" class="google-signin-btn" onclick="initiateGoogleSignIn()">
+                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google">
+                Sign in with Google
+            </button>
+            
+            <p id="loginError" class="login-error"></p>
+        </div>
+    </div>
+    
+    <!-- Offline Status Bar -->
+    <div id="offlineBar" class="offline-bar">
+        <span id="offlineIcon">📴</span>
+        <span id="offlineText">Offline - changes will sync when connected</span>
+        <span id="offlineQueueBadge" class="offline-queue-badge" style="display: none;">0 pending</span>
+    </div>
+    
     <!-- Home View -->
     <div id="homeView" class="view active">
-        <div class="header" style="text-align: center;">
+        <div class="header" style="text-align: center; position: relative;">
+            <div id="userInfoDisplay" class="user-info-display" style="position: absolute; top: 8px; right: 12px;"></div>
             <img src="https://www.oztank.com.au/wp-content/uploads/2017/09/australia-soaking-tanks.png" alt="Oz Tank" class="header-logo" style="height: 60px; margin-bottom: 8px;">
             <p class="subtitle" style="font-size: 18px; font-weight: 600; margin-top: 4px;">Service POD Manager</p>
         </div>
@@ -1924,12 +2187,21 @@
                     No service days configured. Add service days in Import panel.
                 </p>
             </div>
-            
-            <!-- Action Buttons -->
-            <div style="display: flex; gap: 12px; flex-wrap: wrap;">
-                <button class="btn btn-adhoc" onclick="showMainMenuAdHocWarning()" style="flex: 1; min-width: 150px;">➕ Ad-Hoc Service/Delivery</button>
-                <button class="btn" onclick="showMainMenuTankWarning()" style="flex: 1; min-width: 150px; background: #0891b2;">🔄 Tank Movement</button>
+        </div>
+        
+        <!-- Floating Action Button for Ad-Hoc -->
+        <div class="fab-container" id="homeFab">
+            <div class="fab-menu" id="fabMenu">
+                <button class="fab-option adhoc" onclick="closeFabMenu(); showMainMenuAdHocWarning();">
+                    ➕ Ad-Hoc Service/Delivery
+                </button>
+                <button class="fab-option tank" onclick="closeFabMenu(); showMainMenuTankWarning();">
+                    🔄 Tank Movement
+                </button>
             </div>
+            <button class="fab-main" onclick="toggleFabMenu()" title="Add Ad-Hoc">
+                ➕
+            </button>
         </div>
     </div>
 
@@ -2387,7 +2659,7 @@
             <div class="admin-view-tabs">
                 <button class="admin-view-tab active" id="calendarViewTab" onclick="showAdminCalendarView()">📅 Calendar View</button>
                 <button class="admin-view-tab" id="listViewTab" onclick="showAdminListView()">📋 List View</button>
-                <button class="admin-view-tab" id="bimonthlyViewTab" onclick="showBimonthlyView()">📅 Bi-Monthly Schedules</button>
+                <button class="admin-view-tab" id="bimonthlyViewTab" onclick="showBimonthlyView()">📅 Bi-Monthly</button>
             </div>
             
             <!-- Calendar View -->
@@ -2456,6 +2728,27 @@
                     </div>
                     <div id="bimonthlyList" style="overflow-x: auto;">
                         <!-- List will be populated by JS -->
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Monthly Invoices Runsheet View (hidden by default) -->
+            <div id="monthlyInvoicesContainer" style="display: none;">
+                <div class="card">
+                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
+                        <div>
+                            <h2 id="invoiceRunsheetTitle" style="margin-bottom: 4px;">📄 Monthly Invoices</h2>
+                            <p id="invoiceRunsheetDate" style="color: #6b7280; font-size: 14px;"></p>
+                        </div>
+                        <button class="btn btn-secondary" onclick="showAdminListView()">← Back to List</button>
+                    </div>
+                    
+                    <!-- Stats Summary -->
+                    <div id="invoiceRunsheetStats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 12px; margin-bottom: 16px;"></div>
+                    
+                    <!-- Invoices List -->
+                    <div id="invoiceRunsheetList">
+                        <div style="text-align: center; padding: 40px; color: #6b7280;">Loading...</div>
                     </div>
                 </div>
             </div>
@@ -2758,6 +3051,196 @@
     </div>
 
     <script>
+        // ==================== GOOGLE AUTHENTICATION ====================
+        const GOOGLE_CLIENT_ID = '776401812901-dvloaf4ajtdf5uplbaqohbdh08q79oqq.apps.googleusercontent.com';
+        
+        // Allowed email addresses (whitelist)
+        const ALLOWED_EMAILS = [
+            'allan.oztank@gmail.com',
+            'drew.oztank@gmail.com',
+            'mattoztank@gmail.com',
+            'michael.oztank85@gmail.com',
+            'officegroup.oztank@gmail.com',
+            'red.oztank@gmail.com',
+            'stephenp.oztank@gmail.com',
+            'steve.oztank@gmail.com'
+        ];
+        
+        let currentUser = null;
+        
+        // Check for existing session on load (unlimited duration)
+        function checkExistingSession() {
+            const savedUser = localStorage.getItem('oztank_user');
+            if (savedUser) {
+                try {
+                    currentUser = JSON.parse(savedUser);
+                    // Session valid as long as it exists - no expiry
+                    onAuthSuccess(currentUser);
+                    return true;
+                } catch (e) {
+                    console.log('Invalid saved session');
+                }
+            }
+            return false;
+        }
+        
+        // Initialize Google Sign-In
+        function initGoogleAuth() {
+            if (typeof google !== 'undefined' && google.accounts) {
+                google.accounts.id.initialize({
+                    client_id: GOOGLE_CLIENT_ID,
+                    callback: handleCredentialResponse,
+                    auto_select: true,
+                    cancel_on_tap_outside: false
+                });
+                
+                // Render the official Google button
+                const container = document.getElementById('googleSignInContainer');
+                if (container) {
+                    google.accounts.id.renderButton(container, {
+                        theme: 'outline',
+                        size: 'large',
+                        text: 'signin_with',
+                        shape: 'rectangular',
+                        width: 280
+                    });
+                    // Hide custom button since official one is showing
+                    const customBtn = document.getElementById('googleSignInBtn');
+                    if (customBtn) customBtn.style.display = 'none';
+                }
+                
+                // Try One Tap prompt
+                google.accounts.id.prompt();
+            } else {
+                setTimeout(initGoogleAuth, 500);
+            }
+        }
+        
+        // Handle credential response from Google
+        function handleCredentialResponse(response) {
+            try {
+                const payload = decodeJwtPayload(response.credential);
+                
+                const user = {
+                    email: payload.email,
+                    name: payload.name,
+                    picture: payload.picture,
+                    token: response.credential
+                };
+                
+                // Check if email is in whitelist
+                if (ALLOWED_EMAILS.includes(user.email.toLowerCase())) {
+                    localStorage.setItem('oztank_user', JSON.stringify(user));
+                    localStorage.setItem('oztank_login_time', Date.now().toString());
+                    currentUser = user;
+                    onAuthSuccess(user);
+                } else {
+                    showLoginError('Access denied. Your account (' + user.email + ') is not authorized.');
+                }
+            } catch (error) {
+                console.error('Auth error:', error);
+                showLoginError('Authentication failed. Please try again.');
+            }
+        }
+        
+        // Decode JWT payload
+        function decodeJwtPayload(token) {
+            const base64Url = token.split('.')[1];
+            const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+            const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+                return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+            }).join(''));
+            return JSON.parse(jsonPayload);
+        }
+        
+        // Manual sign-in button click
+        function initiateGoogleSignIn() {
+            if (typeof google !== 'undefined' && google.accounts) {
+                google.accounts.id.prompt();
+            } else {
+                showLoginError('Google Sign-In is still loading. Please wait a moment.');
+            }
+        }
+        
+        // Show login error
+        function showLoginError(message) {
+            const errorEl = document.getElementById('loginError');
+            if (errorEl) {
+                errorEl.textContent = message;
+                errorEl.classList.add('show');
+            }
+        }
+        
+        // On successful authentication
+        function onAuthSuccess(user) {
+            currentUser = user;
+            
+            // Hide login screen
+            const loginScreen = document.getElementById('loginScreen');
+            if (loginScreen) loginScreen.classList.add('hidden');
+            
+            // Update user display in header
+            updateUserDisplay();
+            
+            // Initialize the app
+            startApp();
+        }
+        
+        // Update user display in header
+        function updateUserDisplay() {
+            const displayEl = document.getElementById('userInfoDisplay');
+            if (displayEl && currentUser) {
+                const firstName = currentUser.name ? currentUser.name.split(' ')[0] : currentUser.email.split('@')[0];
+                displayEl.innerHTML = `
+                    <img src="${currentUser.picture || ''}" alt="" onerror="this.style.display='none'">
+                    <span>${firstName}</span>
+                    <button class="logout-btn" onclick="logout()">Logout</button>
+                `;
+            }
+        }
+        
+        // Logout function
+        function logout() {
+            localStorage.removeItem('oztank_user');
+            localStorage.removeItem('oztank_login_time');
+            currentUser = null;
+            
+            if (typeof google !== 'undefined' && google.accounts) {
+                google.accounts.id.disableAutoSelect();
+            }
+            
+            location.reload();
+        }
+        
+        // Start app after auth
+        function startApp() {
+            loadSupabase().then(() => {
+                const SUPABASE_URL = 'https://mslgedwzgbyccevnbdsk.supabase.co';
+                const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1zbGdlZHd6Z2J5Y2Nldm5iZHNrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgyNDAyNDksImV4cCI6MjA4MzgxNjI0OX0.vnwOHjDKTg0kCtXW9zrln9beoVbTxoHX7_tozYSu8Ko';
+                
+                if (typeof window.supabase === 'undefined') {
+                    console.error('Supabase not found');
+                    showToast('Failed to initialize database', 'error');
+                    return;
+                }
+                
+                supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+                console.log('Supabase initialized');
+                initializeApp();
+            }).catch(error => {
+                console.error('Error loading Supabase:', error);
+                showToast('Failed to load database library', 'error');
+            });
+        }
+        
+        // Check auth on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            if (!checkExistingSession()) {
+                initGoogleAuth();
+            }
+        });
+        // ==================== END AUTHENTICATION ====================
+
         // Load Supabase dynamically
         function loadSupabase() {
             return new Promise((resolve, reject) => {
@@ -2777,6 +3260,213 @@
 
         // Initialize Supabase
         let supabase;
+        
+        // ===== OFFLINE QUEUE SYSTEM =====
+        let isOnline = navigator.onLine;
+        const CACHE_KEY = 'ozTankOfflineCache';
+        const QUEUE_KEY = 'ozTankOfflineQueue';
+        
+        // Update offline indicator
+        function updateOfflineUI() {
+            const bar = document.getElementById('offlineBar');
+            const icon = document.getElementById('offlineIcon');
+            const text = document.getElementById('offlineText');
+            const badge = document.getElementById('offlineQueueBadge');
+            const queue = getOfflineQueue();
+            
+            if (!isOnline) {
+                bar.classList.add('visible');
+                bar.classList.remove('syncing');
+                document.body.classList.add('has-offline-bar');
+                icon.textContent = '📴';
+                text.textContent = 'Offline - changes will sync when connected';
+                if (queue.length > 0) {
+                    badge.style.display = 'inline';
+                    badge.textContent = `${queue.length} pending`;
+                } else {
+                    badge.style.display = 'none';
+                }
+            } else if (queue.length > 0) {
+                bar.classList.add('visible', 'syncing');
+                document.body.classList.add('has-offline-bar');
+                icon.textContent = '🔄';
+                text.textContent = 'Syncing...';
+                badge.style.display = 'inline';
+                badge.textContent = `${queue.length} pending`;
+            } else {
+                bar.classList.remove('visible', 'syncing');
+                document.body.classList.remove('has-offline-bar');
+            }
+        }
+        
+        // Get offline queue
+        function getOfflineQueue() {
+            try {
+                return JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]');
+            } catch (e) {
+                return [];
+            }
+        }
+        
+        // Add item to offline queue
+        function addToOfflineQueue(item) {
+            const queue = getOfflineQueue();
+            queue.push({ ...item, queuedAt: new Date().toISOString() });
+            localStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
+            updateOfflineUI();
+            console.log('📥 Added to offline queue:', item.type);
+        }
+        
+        // Remove item from queue by index
+        function removeFromQueue(index) {
+            const queue = getOfflineQueue();
+            queue.splice(index, 1);
+            localStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
+            updateOfflineUI();
+        }
+        
+        // Cache data for offline use
+        function cacheForOffline(key, data) {
+            try {
+                const cache = JSON.parse(localStorage.getItem(CACHE_KEY) || '{}');
+                cache[key] = { data, cachedAt: new Date().toISOString() };
+                localStorage.setItem(CACHE_KEY, JSON.stringify(cache));
+                console.log('💾 Cached for offline:', key);
+            } catch (e) {
+                console.error('Failed to cache:', e);
+            }
+        }
+        
+        // Get cached data
+        function getOfflineCache(key) {
+            try {
+                const cache = JSON.parse(localStorage.getItem(CACHE_KEY) || '{}');
+                return cache[key]?.data || null;
+            } catch (e) {
+                return null;
+            }
+        }
+        
+        // Process offline queue when back online
+        async function processOfflineQueue() {
+            if (!isOnline || !supabase) return;
+            
+            const queue = getOfflineQueue();
+            if (queue.length === 0) return;
+            
+            console.log(`🔄 Processing ${queue.length} queued items...`);
+            updateOfflineUI();
+            
+            let processed = 0;
+            let failed = 0;
+            
+            for (let i = 0; i < queue.length; i++) {
+                const item = queue[i];
+                try {
+                    if (item.type === 'pod') {
+                        await syncQueuedPod(item.data);
+                        processed++;
+                    } else if (item.type === 'tankMovement') {
+                        await syncQueuedTankMovement(item.data);
+                        processed++;
+                    } else if (item.type === 'deletePod') {
+                        await syncQueuedDeletePod(item.data);
+                        processed++;
+                    }
+                    removeFromQueue(0); // Always remove first item since we process in order
+                } catch (e) {
+                    console.error('Failed to sync queued item:', e);
+                    failed++;
+                    // Move to end of queue to retry later
+                    const failedItem = queue.shift();
+                    failedItem.retryCount = (failedItem.retryCount || 0) + 1;
+                    if (failedItem.retryCount < 3) {
+                        queue.push(failedItem);
+                    }
+                    localStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
+                }
+            }
+            
+            updateOfflineUI();
+            
+            if (processed > 0) {
+                showToast(`✅ Synced ${processed} item${processed > 1 ? 's' : ''}`, 'success');
+                // Reload data to reflect synced changes
+                if (db && db.load) {
+                    await db.load();
+                }
+            }
+            if (failed > 0) {
+                showToast(`⚠️ ${failed} item${failed > 1 ? 's' : ''} failed to sync`, 'error');
+            }
+        }
+        
+        // Sync a queued POD
+        async function syncQueuedPod(podData) {
+            // Check if POD already exists (in case of duplicate queue)
+            const { data: existing } = await supabase
+                .from('pods')
+                .select('id')
+                .eq('customer_id', podData.customer_id)
+                .eq('date', podData.date)
+                .maybeSingle();
+            
+            if (existing) {
+                // Update existing
+                const { error } = await supabase
+                    .from('pods')
+                    .update(podData)
+                    .eq('id', existing.id);
+                if (error) throw error;
+            } else {
+                // Insert new
+                const { error } = await supabase
+                    .from('pods')
+                    .insert([podData]);
+                if (error) throw error;
+            }
+        }
+        
+        // Sync a queued tank movement
+        async function syncQueuedTankMovement(tmData) {
+            const { error } = await supabase
+                .from('tank_movements')
+                .insert([tmData]);
+            if (error) throw error;
+        }
+        
+        // Sync a queued POD delete
+        async function syncQueuedDeletePod(deleteData) {
+            const { error } = await supabase
+                .from('pods')
+                .delete()
+                .eq('id', deleteData.id);
+            // Don't throw on delete - POD might already be gone
+            if (error) {
+                console.log('Delete may have already been processed:', error.message);
+            }
+        }
+        
+        // Listen for online/offline events
+        window.addEventListener('online', () => {
+            console.log('🌐 Back online');
+            isOnline = true;
+            updateOfflineUI();
+            // Wait a moment for connection to stabilize, then sync
+            setTimeout(() => processOfflineQueue(), 1000);
+        });
+        
+        window.addEventListener('offline', () => {
+            console.log('📴 Gone offline');
+            isOnline = false;
+            updateOfflineUI();
+        });
+        
+        // Initial UI update
+        document.addEventListener('DOMContentLoaded', () => {
+            updateOfflineUI();
+        });
+        // ===== END OFFLINE QUEUE SYSTEM =====
         
         // Month Management - defaults to current month
         const now = new Date();
@@ -2964,6 +3654,11 @@
             if (document.getElementById('adminListContainer') && 
                 document.getElementById('adminListContainer').style.display !== 'none') {
                 renderAdminChronologicalList();
+            }
+            // Also refresh monthly invoices if visible
+            if (document.getElementById('monthlyInvoicesContainer') && 
+                document.getElementById('monthlyInvoicesContainer').style.display !== 'none') {
+                loadMonthlyInvoices();
             }
         }
         
@@ -3194,26 +3889,7 @@
             }
         }
         
-        loadSupabase().then(() => {
-            const SUPABASE_URL = 'https://mslgedwzgbyccevnbdsk.supabase.co';
-            const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1zbGdlZHd6Z2J5Y2Nldm5iZHNrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgyNDAyNDksImV4cCI6MjA4MzgxNjI0OX0.vnwOHjDKTg0kCtXW9zrln9beoVbTxoHX7_tozYSu8Ko';
-            
-            // Check if supabase is available
-            if (typeof window.supabase === 'undefined') {
-                console.error('Supabase not found on window object');
-                showToast('Failed to initialize database connection', 'error');
-                return;
-            }
-            
-            supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-            console.log('Supabase initialized successfully');
-            
-            // Now start the app
-            initializeApp();
-        }).catch(error => {
-            console.error('Error loading Supabase:', error);
-            showToast('Failed to load database library. Please check your internet connection.', 'error');
-        });
+        // Note: Supabase initialization moved to startApp() function after authentication
 
         // Database (now using Supabase)
         const db = {
@@ -3229,6 +3905,12 @@
             
             async load() {
                 try {
+                    // Check if offline - try to load from cache first
+                    if (!isOnline) {
+                        console.log('📴 Offline - loading from cache');
+                        return await this.loadFromCache();
+                    }
+                    
                     showToast('Loading data...', 'success');
                     
                     // Load customers (paginate to get all - Supabase has 1000 row default limit)
@@ -3343,16 +4025,68 @@
                         pods: this.pods.length
                     });
                     
+                    // Cache essential data for offline use
+                    cacheForOffline('customers', this.customers);
+                    cacheForOffline('serviceDays', this.serviceDays);
+                    cacheForOffline('products', this.products);
+                    cacheForOffline('pods', this.pods);
+                    cacheForOffline('invoiceStatus', this.invoiceStatus);
+                    
                 } catch (error) {
                     console.error('Error loading data:', error);
-                    showToast('Error loading data: ' + error.message, 'error');
+                    
+                    // Try to load from cache on failure
+                    const cachedCustomers = getOfflineCache('customers');
+                    if (cachedCustomers && cachedCustomers.length > 0) {
+                        console.log('📦 Loading from offline cache');
+                        await this.loadFromCache();
+                        showToast('⚠️ Using cached data (offline)', 'error');
+                    } else {
+                        showToast('Error loading data: ' + error.message, 'error');
+                    }
                 }
+            },
+            
+            async loadFromCache() {
+                const cachedCustomers = getOfflineCache('customers');
+                const cachedServiceDays = getOfflineCache('serviceDays');
+                const cachedProducts = getOfflineCache('products');
+                const cachedPods = getOfflineCache('pods');
+                const cachedInvoiceStatus = getOfflineCache('invoiceStatus');
+                
+                if (cachedCustomers) {
+                    this.customers = cachedCustomers;
+                    console.log(`📦 Loaded ${this.customers.length} customers from cache`);
+                }
+                if (cachedServiceDays) {
+                    this.serviceDays = cachedServiceDays;
+                }
+                if (cachedProducts) {
+                    this.products = cachedProducts;
+                    this.productNames = this.products.map(p => p.display_name || p.name);
+                }
+                if (cachedPods) {
+                    this.pods = cachedPods;
+                }
+                if (cachedInvoiceStatus) {
+                    this.invoiceStatus = cachedInvoiceStatus;
+                }
+                
+                // Load any pending items from offline queue and merge with cached pods
+                const queue = getOfflineQueue();
+                const queuedPods = queue.filter(q => q.type === 'pod');
+                if (queuedPods.length > 0) {
+                    console.log(`📦 Found ${queuedPods.length} queued PODs`);
+                }
+                
+                showToast(`📦 Loaded from cache (${this.customers.length} customers)`, 'success');
             },
             
             scheduledDays: [],
             calendarEvents: [],
             calendarEventStatus: {},
             calendarSyncSettings: null,
+            invoiceEntries: [],
             
             async loadCalendarSyncSettings() {
                 try {
@@ -3414,9 +4148,33 @@
                         // Load event status from localStorage (temp solution until DB table exists)
                         this.loadCalendarEventStatus();
                     }
+                    
+                    // Also load invoice entries for the month
+                    await this.loadInvoiceEntriesForPeriod(startStr, endStr);
+                    
                 } catch (e) {
                     console.log('Error loading scheduled days:', e);
                     this.scheduledDays = [];
+                }
+            },
+            
+            async loadInvoiceEntriesForPeriod(startStr, endStr) {
+                try {
+                    const { data, error } = await supabase
+                        .from('monthly_invoice_entries')
+                        .select('*')
+                        .gte('event_date', startStr)
+                        .lte('event_date', endStr)
+                        .order('event_date', { ascending: true })
+                        .order('event_title', { ascending: true });
+                    
+                    if (!error && data) {
+                        this.invoiceEntries = data;
+                        console.log(`Loaded ${this.invoiceEntries.length} invoice entries`);
+                    }
+                } catch (e) {
+                    console.log('Error loading invoice entries:', e);
+                    this.invoiceEntries = [];
                 }
             },
             
@@ -3648,6 +4406,10 @@
                         // Load event status from localStorage
                         this.loadCalendarEventStatus();
                     }
+                    
+                    // Also load invoice entries for the week
+                    await this.loadInvoiceEntriesForPeriod(startStr, endStr);
+                    
                 } catch (e) {
                     console.log('Error loading scheduled days:', e);
                     this.scheduledDays = [];
@@ -3789,53 +4551,116 @@
             },
             
             async savePOD(pod) {
+                // Prepare the data object for Supabase
+                const podData = {
+                    id: pod.id,
+                    customer_id: pod.customerId,
+                    customer_name: pod.customerName,
+                    customer_address: pod.customerAddress,
+                    run_day: pod.runDay,
+                    date: pod.date,
+                    timestamp: pod.timestamp,
+                    service_type: pod.serviceType,
+                    carbsolve: pod.carbsolve,
+                    tank_serviced: pod.tankServiced,
+                    service_notes: pod.serviceNotes,
+                    products: pod.products,
+                    notes: pod.notes,
+                    photo: pod.photo,
+                    signature: pod.signature,
+                    signature_name: pod.signatureName || null,
+                    is_rental_only: pod.isRentalOnly || false,
+                    is_quick_complete: pod.isQuickComplete || false,
+                    is_ad_hoc: pod.isAdHoc || false,
+                    source_run_day: pod.sourceRunDay || null,
+                    archived: pod.archived || false
+                };
+                
+                // If offline, queue the POD for later sync
+                if (!isOnline) {
+                    addToOfflineQueue({ type: 'pod', data: podData });
+                    
+                    // Also add to local db.pods array so it shows in the UI
+                    const existingIndex = this.pods.findIndex(p => p.id === pod.id);
+                    if (existingIndex >= 0) {
+                        this.pods[existingIndex] = pod;
+                    } else {
+                        this.pods.push(pod);
+                    }
+                    
+                    // Update cache with new pod
+                    cacheForOffline('pods', this.pods);
+                    
+                    showToast('📴 POD saved offline - will sync when connected', 'success');
+                    return true;
+                }
+                
                 try {
                     const { data, error } = await supabase
                         .from('pods')
-                        .upsert({
-                            id: pod.id,
-                            customer_id: pod.customerId,
-                            customer_name: pod.customerName,
-                            customer_address: pod.customerAddress,
-                            run_day: pod.runDay,
-                            date: pod.date,
-                            timestamp: pod.timestamp,
-                            service_type: pod.serviceType,
-                            carbsolve: pod.carbsolve,
-                            tank_serviced: pod.tankServiced,
-                            service_notes: pod.serviceNotes,
-                            products: pod.products,
-                            notes: pod.notes,
-                            photo: pod.photo,
-                            signature: pod.signature,
-                            signature_name: pod.signatureName || null,
-                            is_rental_only: pod.isRentalOnly || false,
-                            is_quick_complete: pod.isQuickComplete || false,
-                            is_ad_hoc: pod.isAdHoc || false,
-                            source_run_day: pod.sourceRunDay || null,
-                            archived: pod.archived || false
-                        });
+                        .upsert(podData);
                     if (error) throw error;
+                    
+                    // Update cache after successful save
+                    const existingIndex = this.pods.findIndex(p => p.id === pod.id);
+                    if (existingIndex >= 0) {
+                        this.pods[existingIndex] = pod;
+                    } else {
+                        this.pods.push(pod);
+                    }
+                    cacheForOffline('pods', this.pods);
+                    
                     return true;
                 } catch (error) {
                     console.error('Error saving POD:', error);
-                    showToast('Error saving POD: ' + error.message, 'error');
-                    return false;
+                    
+                    // If save fails, queue for later
+                    addToOfflineQueue({ type: 'pod', data: podData });
+                    showToast('⚠️ POD queued for sync (connection issue)', 'error');
+                    return true; // Return true since it's queued
                 }
             },
             
             async deletePOD(podId) {
+                // If offline, queue the delete and remove from local array
+                if (!isOnline) {
+                    addToOfflineQueue({ type: 'deletePod', data: { id: podId } });
+                    
+                    // Remove from local array
+                    const index = this.pods.findIndex(p => p.id === podId);
+                    if (index >= 0) {
+                        this.pods.splice(index, 1);
+                    }
+                    
+                    // Update cache
+                    cacheForOffline('pods', this.pods);
+                    
+                    showToast('📴 Delete queued - will sync when connected', 'success');
+                    return true;
+                }
+                
                 try {
                     const { error } = await supabase
                         .from('pods')
                         .delete()
                         .eq('id', podId);
                     if (error) throw error;
+                    
+                    // Remove from local array and update cache
+                    const index = this.pods.findIndex(p => p.id === podId);
+                    if (index >= 0) {
+                        this.pods.splice(index, 1);
+                    }
+                    cacheForOffline('pods', this.pods);
+                    
                     return true;
                 } catch (error) {
                     console.error('Error deleting POD:', error);
-                    showToast('Error deleting POD: ' + error.message, 'error');
-                    return false;
+                    
+                    // Queue for later if it fails
+                    addToOfflineQueue({ type: 'deletePod', data: { id: podId } });
+                    showToast('⚠️ Delete queued for sync', 'error');
+                    return true;
                 }
             },
             
@@ -3957,29 +4782,46 @@
             },
             
             async saveTankMovement(movement) {
+                // Prepare the data object for Supabase
+                const tmData = {
+                    id: movement.id,
+                    customer_id: movement.customerId,
+                    customer_name: movement.customerName,
+                    run_day: movement.runDay,
+                    date: movement.date,
+                    timestamp: movement.timestamp,
+                    movement_type: movement.movementType,
+                    tank_no_placed: movement.tankNoPlaced,
+                    tank_no_pulled: movement.tankNoPulled,
+                    carbsolve: movement.carbsolve,
+                    reason: movement.reason,
+                    source_run_day: movement.sourceRunDay || null
+                };
+                
+                // If offline, queue for later sync
+                if (!isOnline) {
+                    addToOfflineQueue({ type: 'tankMovement', data: tmData });
+                    
+                    // Also add to local array so it shows in UI
+                    this.tankMovements.push(movement);
+                    
+                    showToast('📴 Tank movement saved offline - will sync when connected', 'success');
+                    return true;
+                }
+                
                 try {
                     const { data, error } = await supabase
                         .from('tank_movements')
-                        .upsert({
-                            id: movement.id,
-                            customer_id: movement.customerId,
-                            customer_name: movement.customerName,
-                            run_day: movement.runDay,
-                            date: movement.date,
-                            timestamp: movement.timestamp,
-                            movement_type: movement.movementType,
-                            tank_no_placed: movement.tankNoPlaced,
-                            tank_no_pulled: movement.tankNoPulled,
-                            carbsolve: movement.carbsolve,
-                            reason: movement.reason,
-                            source_run_day: movement.sourceRunDay || null
-                        });
+                        .upsert(tmData);
                     if (error) throw error;
                     return true;
                 } catch (error) {
                     console.error('Error saving tank movement:', error);
-                    showToast('Error saving tank movement: ' + error.message, 'error');
-                    return false;
+                    
+                    // If save fails, queue for later
+                    addToOfflineQueue({ type: 'tankMovement', data: tmData });
+                    showToast('⚠️ Tank movement queued for sync', 'error');
+                    return true;
                 }
             },
             
@@ -4469,6 +5311,13 @@
         function showView(viewId) {
             document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
             document.getElementById(viewId).classList.add('active');
+            
+            // Show/hide FAB based on view
+            const fab = document.getElementById('homeFab');
+            if (fab) {
+                fab.style.display = viewId === 'homeView' ? 'block' : 'none';
+                closeFabMenu(); // Always close menu when switching views
+            }
         }
 
         function showHomeView() {
@@ -4869,9 +5718,11 @@
             document.getElementById('adminListContainer').style.display = 'none';
             document.getElementById('adminRunsheetContainer').style.display = 'none';
             document.getElementById('bimonthlyContainer').style.display = 'none';
+            document.getElementById('monthlyInvoicesContainer').style.display = 'none';
             document.getElementById('calendarViewTab').classList.add('active');
             document.getElementById('listViewTab').classList.remove('active');
             document.getElementById('bimonthlyViewTab').classList.remove('active');
+            
             renderAdminCalendar();
         }
         
@@ -4879,9 +5730,11 @@
             document.getElementById('adminCalendarContainer').style.display = 'none';
             document.getElementById('adminListContainer').style.display = 'block';
             document.getElementById('bimonthlyContainer').style.display = 'none';
+            document.getElementById('monthlyInvoicesContainer').style.display = 'none';
             document.getElementById('calendarViewTab').classList.remove('active');
             document.getElementById('listViewTab').classList.add('active');
             document.getElementById('bimonthlyViewTab').classList.remove('active');
+            
             renderAdminChronologicalList();
         }
         
@@ -4935,7 +5788,11 @@
                 const tankMovementsArr = db.tankMovements || [];
                 const adHocTankMoves = tankMovementsArr.filter(tm => tm.date === dateStr && tm.runDay === 'Ad-Hoc' && !tm.sourceRunDay);
                 
-                const hasContent = serviceDaysOnDate.length > 0 || eventsOnDate.length > 0 || adHocPods.length > 0 || adHocTankMoves.length > 0;
+                // Get invoice entries for this date
+                const invoiceEntriesArr = db.invoiceEntries || [];
+                const invoicesOnDate = invoiceEntriesArr.filter(inv => inv.event_date === dateStr);
+                
+                const hasContent = serviceDaysOnDate.length > 0 || eventsOnDate.length > 0 || adHocPods.length > 0 || adHocTankMoves.length > 0 || invoicesOnDate.length > 0;
                 
                 html += `
                     <div class="card" style="margin-bottom: 12px; ${isToday ? 'border-left: 4px solid #3b82f6; background: #f0f9ff;' : ''}">
@@ -4989,18 +5846,41 @@
                         `;
                     }
                     
+                    // Render Monthly Invoices entry
+                    if (invoicesOnDate.length > 0) {
+                        const completedCount = invoicesOnDate.filter(i => i.invoiced && i.freight_added).length;
+                        const invoicedCount = invoicesOnDate.filter(i => i.invoiced).length;
+                        const allComplete = completedCount === invoicesOnDate.length;
+                        
+                        html += `
+                            <div onclick="openInvoiceRunsheet('${dateStr}')" 
+                                 style="display: flex; align-items: center; gap: 12px; padding: 12px; background: #e0f2fe; border-radius: 8px; margin-bottom: 8px; border-left: 4px solid #0ea5e9; cursor: pointer;"
+                                 onmouseover="this.style.background='#bae6fd'" onmouseout="this.style.background='#e0f2fe'">
+                                <div style="font-size: 24px;">📄</div>
+                                <div style="flex: 1;">
+                                    <div style="font-weight: 600; color: #0c4a6e;">
+                                        ${allComplete ? '<span style="color: #16a34a; margin-right: 4px;">✓</span>' : ''}
+                                        Monthly Invoices
+                                    </div>
+                                    <div style="font-size: 12px; color: #0c4a6e;">${invoicedCount}/${invoicesOnDate.length} invoiced, ${completedCount} complete</div>
+                                </div>
+                                <div style="color: #0c4a6e;">→</div>
+                            </div>
+                        `;
+                    }
+                    
                     // Render calendar events
                     eventsOnDate.forEach(event => {
                         const status = db.getCalendarEventStatus(event.id);
                         const storedNotes = localStorage.getItem(`calEventNotes_${event.id}`) || '';
-                        const completedClass = status === 'completed' ? 'text-decoration: line-through; opacity: 0.7;' : '';
-                        const cancelledClass = status === 'cancelled' ? 'text-decoration: line-through; color: #dc2626; opacity: 0.7;' : '';
+                        const completedStyle = status === 'completed' ? 'opacity: 0.5;' : '';
+                        const cancelledStyle = status === 'cancelled' ? 'opacity: 0.4; filter: grayscale(60%);' : '';
                         const statusIcon = status === 'completed' ? '✅' : status === 'cancelled' ? '❌' : '📋';
                         const workerBgColor = getWorkerColorLight(event.calendarOwner);
                         const workerBorderColor = getWorkerColor(event.calendarOwner);
                         
                         html += `
-                            <div style="display: flex; align-items: center; gap: 12px; padding: 10px 12px; background: ${workerBgColor}; border-left: 3px solid ${workerBorderColor}; border-radius: 8px; margin-bottom: 6px; ${completedClass}${cancelledClass}">
+                            <div style="display: flex; align-items: center; gap: 12px; padding: 10px 12px; background: ${workerBgColor}; border-left: 3px solid ${workerBorderColor}; border-radius: 8px; margin-bottom: 6px; ${completedStyle}${cancelledStyle}">
                                 <div style="font-size: 18px;">${statusIcon}</div>
                                 <div style="flex: 1;">
                                     <div style="font-weight: 500; color: #374151;">${event.eventTitle}</div>
@@ -5033,9 +5913,11 @@
             document.getElementById('adminListContainer').style.display = 'none';
             document.getElementById('adminRunsheetContainer').style.display = 'none';
             document.getElementById('bimonthlyContainer').style.display = 'block';
+            document.getElementById('monthlyInvoicesContainer').style.display = 'none';
             document.getElementById('calendarViewTab').classList.remove('active');
             document.getElementById('listViewTab').classList.remove('active');
             document.getElementById('bimonthlyViewTab').classList.add('active');
+            
             renderBimonthlyList();
         }
         
@@ -5145,6 +6027,198 @@
             
             container.innerHTML = html;
         }
+        
+        // ==================== MONTHLY INVOICES ====================
+        let currentInvoiceDate = null;
+        
+        function openInvoiceRunsheet(dateStr) {
+            currentInvoiceDate = dateStr;
+            
+            // Hide other containers, show invoice runsheet
+            document.getElementById('adminCalendarContainer').style.display = 'none';
+            document.getElementById('adminListContainer').style.display = 'none';
+            document.getElementById('adminRunsheetContainer').style.display = 'none';
+            document.getElementById('bimonthlyContainer').style.display = 'none';
+            document.getElementById('monthlyInvoicesContainer').style.display = 'block';
+            
+            // Update tab states
+            document.getElementById('calendarViewTab').classList.remove('active');
+            document.getElementById('listViewTab').classList.add('active');
+            document.getElementById('bimonthlyViewTab').classList.remove('active');
+            
+            // Format date for display
+            const date = new Date(dateStr + 'T00:00:00');
+            const displayDate = date.toLocaleDateString('en-AU', { 
+                weekday: 'long', 
+                day: 'numeric', 
+                month: 'long',
+                year: 'numeric'
+            });
+            
+            document.getElementById('invoiceRunsheetTitle').textContent = '📄 Monthly Invoices';
+            document.getElementById('invoiceRunsheetDate').textContent = displayDate;
+            
+            renderInvoiceRunsheet(dateStr);
+        }
+        
+        function renderInvoiceRunsheet(dateStr) {
+            const container = document.getElementById('invoiceRunsheetList');
+            const statsContainer = document.getElementById('invoiceRunsheetStats');
+            
+            // Get invoices for this date from already-loaded data
+            const invoicesOnDate = (db.invoiceEntries || []).filter(inv => inv.event_date === dateStr);
+            
+            if (invoicesOnDate.length === 0) {
+                container.innerHTML = '<div style="text-align: center; padding: 40px; color: #6b7280;">No invoice entries for this date.</div>';
+                statsContainer.innerHTML = '';
+                return;
+            }
+            
+            // Calculate stats
+            const total = invoicesOnDate.length;
+            const pending = invoicesOnDate.filter(i => !i.invoiced).length;
+            const invoiced = invoicesOnDate.filter(i => i.invoiced && !i.freight_added).length;
+            const complete = invoicesOnDate.filter(i => i.invoiced && i.freight_added).length;
+            
+            statsContainer.innerHTML = `
+                <div style="background: #f3f4f6; padding: 10px; border-radius: 8px; text-align: center;">
+                    <div style="font-size: 20px; font-weight: 700; color: #374151;">${total}</div>
+                    <div style="font-size: 11px; color: #6b7280;">Total</div>
+                </div>
+                <div style="background: #fef3c7; padding: 10px; border-radius: 8px; text-align: center;">
+                    <div style="font-size: 20px; font-weight: 700; color: #d97706;">${pending}</div>
+                    <div style="font-size: 11px; color: #92400e;">Pending</div>
+                </div>
+                <div style="background: #dbeafe; padding: 10px; border-radius: 8px; text-align: center;">
+                    <div style="font-size: 20px; font-weight: 700; color: #2563eb;">${invoiced}</div>
+                    <div style="font-size: 11px; color: #1e40af;">Invoiced</div>
+                </div>
+                <div style="background: #dcfce7; padding: 10px; border-radius: 8px; text-align: center;">
+                    <div style="font-size: 20px; font-weight: 700; color: #16a34a;">${complete}</div>
+                    <div style="font-size: 11px; color: #166534;">Complete</div>
+                </div>
+            `;
+            
+            // Render invoice entries
+            let html = '';
+            
+            invoicesOnDate.forEach(inv => {
+                const statusBg = inv.invoiced && inv.freight_added ? '#dcfce7' : 
+                                 inv.invoiced ? '#dbeafe' : '#fef9c3';
+                const statusBorder = inv.invoiced && inv.freight_added ? '#16a34a' : 
+                                     inv.invoiced ? '#3b82f6' : '#f59e0b';
+                
+                html += `
+                    <div style="background: ${statusBg}; border-left: 4px solid ${statusBorder}; padding: 16px; border-radius: 8px; margin-bottom: 12px;">
+                        <div style="font-weight: 600; color: #111827; margin-bottom: 12px; font-size: 15px;">
+                            ${inv.event_title}
+                        </div>
+                        
+                        <div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: center; margin-bottom: 12px;">
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" 
+                                       ${inv.invoiced ? 'checked' : ''} 
+                                       onchange="toggleInvoiceField(${inv.id}, 'invoiced', this.checked)"
+                                       style="width: 18px; height: 18px; cursor: pointer;">
+                                <span style="font-weight: 500;">Invoiced</span>
+                            </label>
+                            
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" 
+                                       ${inv.freight_added ? 'checked' : ''} 
+                                       onchange="toggleInvoiceField(${inv.id}, 'freight_added', this.checked)"
+                                       style="width: 18px; height: 18px; cursor: pointer;">
+                                <span style="font-weight: 500;">Freight Added</span>
+                            </label>
+                        </div>
+                        
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <input type="text" 
+                                   id="invNotes_${inv.id}"
+                                   value="${(inv.notes || '').replace(/"/g, '&quot;')}"
+                                   placeholder="Add notes..."
+                                   style="flex: 1; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
+                            <button onclick="saveInvoiceNotes(${inv.id})" 
+                                    style="background: #374151; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 14px;">
+                                Save
+                            </button>
+                        </div>
+                        
+                        ${inv.invoiced_at ? `<div style="font-size: 11px; color: #6b7280; margin-top: 8px;">
+                            Invoiced: ${new Date(inv.invoiced_at).toLocaleString('en-AU', { dateStyle: 'short', timeStyle: 'short' })}
+                            ${inv.invoiced_by ? ' by ' + inv.invoiced_by : ''}
+                        </div>` : ''}
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+        }
+        
+        async function toggleInvoiceField(id, field, value) {
+            try {
+                const updateData = { [field]: value, updated_at: new Date().toISOString() };
+                
+                // Track who/when for invoiced field
+                if (field === 'invoiced' && value) {
+                    updateData.invoiced_at = new Date().toISOString();
+                    updateData.invoiced_by = currentUser ? currentUser.email : 'Unknown';
+                }
+                
+                const { error } = await supabase
+                    .from('monthly_invoice_entries')
+                    .update(updateData)
+                    .eq('id', id);
+                
+                if (error) throw error;
+                
+                // Update local data
+                const item = db.invoiceEntries.find(i => i.id === id);
+                if (item) {
+                    item[field] = value;
+                    if (field === 'invoiced' && value) {
+                        item.invoiced_at = updateData.invoiced_at;
+                        item.invoiced_by = updateData.invoiced_by;
+                    }
+                }
+                
+                renderInvoiceRunsheet(currentInvoiceDate);
+                showToast(`✓ Updated`, 'success');
+                
+            } catch (e) {
+                console.error('Error updating invoice:', e);
+                showToast('Error updating: ' + e.message, 'error');
+            }
+        }
+        
+        async function saveInvoiceNotes(id) {
+            const input = document.getElementById(`invNotes_${id}`);
+            if (!input) return;
+            
+            const notes = input.value.trim();
+            
+            try {
+                const { error } = await supabase
+                    .from('monthly_invoice_entries')
+                    .update({ notes: notes, updated_at: new Date().toISOString() })
+                    .eq('id', id);
+                
+                if (error) throw error;
+                
+                // Update local data
+                const item = db.invoiceEntries.find(i => i.id === id);
+                if (item) {
+                    item.notes = notes;
+                }
+                
+                showToast('✓ Notes saved', 'success');
+                
+            } catch (e) {
+                console.error('Error saving notes:', e);
+                showToast('Error saving notes: ' + e.message, 'error');
+            }
+        }
+        // ==================== END MONTHLY INVOICES ====================
         
         function renderAdminCalendar() {
             const grid = document.getElementById('adminCalendarGrid');
@@ -5331,6 +6405,35 @@
             // Render non-service-day calendar events
             const calendarEventsArr = db.calendarEvents || [];
             const eventsOnDate = calendarEventsArr.filter(ev => ev.eventDate === dateStr);
+            
+            // Check for invoice entries on this date
+            const invoiceEntriesArr = db.invoiceEntries || [];
+            const invoicesOnDate = invoiceEntriesArr.filter(inv => inv.event_date === dateStr);
+            
+            // Show "Monthly Invoices" entry if there are invoices for this date
+            if (invoicesOnDate.length > 0) {
+                const completedCount = invoicesOnDate.filter(i => i.invoiced && i.freight_added).length;
+                const invoicedCount = invoicesOnDate.filter(i => i.invoiced).length;
+                const totalCount = invoicesOnDate.length;
+                
+                const invoiceEl = document.createElement('div');
+                invoiceEl.className = 'calendar-service-day';
+                invoiceEl.style.background = '#e0f2fe';
+                invoiceEl.style.borderLeftColor = '#0ea5e9';
+                invoiceEl.style.color = '#0c4a6e';
+                
+                // Show tick if all are complete
+                const allComplete = completedCount === totalCount;
+                const tickMark = allComplete ? '<span style="color: #16a34a; margin-right: 4px;">✓</span>' : '';
+                
+                invoiceEl.innerHTML = `${tickMark}<span class="pod-count">📄 Invoices</span> (${invoicedCount}/${totalCount})`;
+                invoiceEl.onclick = (e) => {
+                    e.stopPropagation();
+                    openInvoiceRunsheet(dateStr);
+                };
+                serviceDaysContainer.appendChild(invoiceEl);
+            }
+            
             if (eventsOnDate.length > 0) {
                 const eventsSection = document.createElement('div');
                 eventsSection.className = 'calendar-events-section';
@@ -5479,40 +6582,51 @@
         }
         
         async function openRunsheetForDate(runDay, dateStr) {
+            // Hide the chronological list and show runsheet
+            document.getElementById('adminCalendarContainer').style.display = 'none';
+            document.getElementById('adminListContainer').style.display = 'none';
+            document.getElementById('bimonthlyContainer').style.display = 'none';
+            document.getElementById('monthlyInvoicesContainer').style.display = 'none';
+            document.getElementById('adminRunsheetContainer').style.display = 'block';
+            document.getElementById('calendarViewTab').classList.remove('active');
+            document.getElementById('listViewTab').classList.add('active');
+            document.getElementById('bimonthlyViewTab').classList.remove('active');
+            
+            
             // Set the service day select
             const select = document.getElementById('adminServiceDaySelect');
             
-            // For Ad-Hoc, add it as a temporary option if not present
-            if (runDay === 'Ad-Hoc') {
-                let adHocOption = select.querySelector('option[value="Ad-Hoc"]');
-                if (!adHocOption) {
-                    adHocOption = document.createElement('option');
-                    adHocOption.value = 'Ad-Hoc';
-                    adHocOption.textContent = '📋 Ad-Hoc Services & Deliveries';
-                    select.appendChild(adHocOption);
-                }
+            // Add service day as option if not present (for Ad-Hoc or calendar-synced service days)
+            let option = select.querySelector(`option[value="${runDay}"]`);
+            if (!option) {
+                option = document.createElement('option');
+                option.value = runDay;
+                option.textContent = runDay === 'Ad-Hoc' ? '📋 Ad-Hoc Services & Deliveries' : runDay;
+                select.appendChild(option);
             }
             
             select.value = runDay;
             
-            // Show list view with runsheet
-            document.getElementById('adminCalendarContainer').style.display = 'none';
-            document.getElementById('adminListContainer').style.display = 'block';
-            document.getElementById('calendarViewTab').classList.remove('active');
-            document.getElementById('listViewTab').classList.add('active');
+            // Set the date
+            const dateSelect = document.getElementById('adminDateSelect');
             
             // For Ad-Hoc, we skip the normal date population and just show the date
             if (runDay === 'Ad-Hoc') {
-                const dateSelect = document.getElementById('adminDateSelect');
                 dateSelect.innerHTML = `<option value="${dateStr}">${formatDisplayDate(dateStr)}</option>`;
                 dateSelect.value = dateStr;
                 currentAdminDateFilter = dateStr;
                 loadAdminAdHocRunsheet(dateStr);
             } else {
-                // Populate the date dropdown and set the date
+                // Populate the date dropdown
                 await onServiceDaySelectChange();
                 
-                const dateSelect = document.getElementById('adminDateSelect');
+                // Set the date (add it if not in list)
+                if (!dateSelect.querySelector(`option[value="${dateStr}"]`)) {
+                    const opt = document.createElement('option');
+                    opt.value = dateStr;
+                    opt.textContent = formatDisplayDate(dateStr);
+                    dateSelect.appendChild(opt);
+                }
                 dateSelect.value = dateStr;
                 
                 // Store the date filter for the runsheet
@@ -6478,7 +7592,7 @@
                     </td>
                     <td>
                         <div style="font-weight: 500;">${customer.name}</div>
-                        ${customer.address ? `<div style="font-size: 12px; color: #6b7280;">${customer.address}</div>` : ''}
+                        ${customer.address ? `<div style="font-size: 12px; color: #2563eb;"><a href="#" onclick="openInMaps('${customer.address.replace(/'/g, "\\'")}', event); return false;" style="color: #2563eb; text-decoration: underline;">📍 ${customer.address}</a></div>` : ''}
                     </td>
                     <td>
                         <span style="padding: 2px 8px; border-radius: 10px; font-size: 11px; background: #e5e7eb;">${serviceType}</span>
@@ -6882,7 +7996,7 @@
                 // Build customer info HTML
                 let customerInfoHtml = `
                     <div class="customer-name">${customer.name}${skipDisplay}${scheduleBadgeHtml}</div>
-                    ${customer.address ? `<div class="customer-address">${customer.address}</div>` : ''}
+                    ${customer.address ? `<div class="customer-address">${formatAddressLink(customer.address)}</div>` : ''}
                     ${customer.phone ? `<div class="customer-phone">📞 ${customer.phone}</div>` : ''}
                 `;
                 
@@ -8880,7 +9994,7 @@
                         <div class="pod-section">
                             <h3>Customer Information</h3>
                             <div class="pod-field"><strong>Name:</strong> <span>${pod.customerName}</span></div>
-                            <div class="pod-field"><strong>Address:</strong> <span>${pod.customerAddress}</span></div>
+                            <div class="pod-field"><strong>Address:</strong> <span>${pod.customerAddress ? `<a href="#" onclick="openInMaps('${pod.customerAddress.replace(/'/g, "\\'")}', event); return false;" style="color: #2563eb; text-decoration: underline;">📍 ${pod.customerAddress}</a>` : ''}</span></div>
                             <div class="pod-field"><strong>Run Day:</strong> <span>${pod.runDay}</span></div>
                             <div class="pod-field"><strong>Date:</strong> <span>${pod.date}</span></div>
                             <div class="pod-field"><strong>Time:</strong> <span>${formatTimestamp(pod.timestamp)}</span></div>
@@ -9768,6 +10882,47 @@
         function hideActionChooser() {
             document.getElementById('actionChooserModal').classList.remove('active');
         }
+        
+        // Floating Action Button functions
+        function toggleFabMenu() {
+            const menu = document.getElementById('fabMenu');
+            menu.classList.toggle('open');
+        }
+        
+        function closeFabMenu() {
+            const menu = document.getElementById('fabMenu');
+            if (menu) menu.classList.remove('open');
+        }
+        
+        // Open address in Google Maps with confirmation
+        function openInMaps(address, event) {
+            if (event) event.stopPropagation();
+            if (!address) return;
+            
+            if (confirm('Open this address in Google Maps?\n\n' + address)) {
+                const encodedAddress = encodeURIComponent(address);
+                const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`;
+                window.open(mapsUrl, '_blank');
+            }
+        }
+        
+        // Format address as clickable link
+        function formatAddressLink(address, className = '') {
+            if (!address) return '';
+            const escapedAddress = address.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+            return `<a href="#" onclick="openInMaps('${escapedAddress}', event); return false;" 
+                       class="${className}" 
+                       style="color: #2563eb; text-decoration: underline; cursor: pointer;"
+                       title="Open in Google Maps">📍 ${address}</a>`;
+        }
+        
+        // Close FAB menu when clicking outside
+        document.addEventListener('click', function(e) {
+            const fab = document.getElementById('homeFab');
+            if (fab && !fab.contains(e.target)) {
+                closeFabMenu();
+            }
+        });
         
         function showTankMovementModal(sourceRunDay = null) {
             // Prevent in historical months
