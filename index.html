@@ -4165,12 +4165,14 @@
             
             async triggerCalendarSync() {
                 try {
+                    const { data: { session } } = await supabase.auth.getSession();
+                    const token = session?.access_token || SUPABASE_ANON_KEY;
                     const response = await fetch(
                         'https://mslgedwzgbyccevnbdsk.supabase.co/functions/v1/sync-google-calendar',
                         {
                             method: 'POST',
                             headers: {
-                                'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1zbGdlZHd6Z2J5Y2Nldm5iZHNrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgyNDAyNDksImV4cCI6MjA4MzgxNjI0OX0.vnwOHjDKTg0kCtXW9zrln9beoVbTxoHX7_tozYSu8Ko`,
+                                'Authorization': `Bearer ${token}`,
                                 'Content-Type': 'application/json'
                             }
                         }
