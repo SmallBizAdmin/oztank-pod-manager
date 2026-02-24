@@ -3200,7 +3200,7 @@
         }
         
         // Logout function
-        function logout() {
+        async function logout() {
             localStorage.removeItem('oztank_user');
             localStorage.removeItem('oztank_login_time');
             currentUser = null;
@@ -3208,13 +3208,18 @@
             if (typeof google !== 'undefined' && google.accounts) {
                 google.accounts.id.disableAutoSelect();
             }
+
+            // Also sign out of Supabase so the session is cleared
+            if (supabase) {
+                await supabase.auth.signOut();
+            }
             
             location.reload();
         }
         
         // Start app after auth
         function startApp() {
-            loadSupabase().then(() => {
+            loadSupabase().then(async () => {
                 const SUPABASE_URL = 'https://mslgedwzgbyccevnbdsk.supabase.co';
                 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1zbGdlZHd6Z2J5Y2Nldm5iZHNrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgyNDAyNDksImV4cCI6MjA4MzgxNjI0OX0.vnwOHjDKTg0kCtXW9zrln9beoVbTxoHX7_tozYSu8Ko';
                 
@@ -3226,7 +3231,36 @@
                 
                 supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
                 console.log('Supabase initialized');
-                initializeApp();
+
+                // Exchange Google token for a Supabase session so RLS policies pass
+                // First check if Supabase already has a valid session (returning visitor)
+                const { data: sessionData } = await supabase.auth.getSession();
+                if (sessionData?.session) {
+                    console.log('Existing Supabase session restored');
+                    initializeApp();
+                } else if (currentUser?.token) {
+                    // Sign into Supabase using the Google ID token
+                    console.log('Signing into Supabase with Google token...');
+                    const { error: signInError } = await supabase.auth.signInWithIdToken({
+                        provider: 'google',
+                        token: currentUser.token
+                    });
+                    if (signInError) {
+                        console.error('Supabase signInWithIdToken failed:', signInError.message);
+                        // Token may be expired (>1hr old) — force re-login
+                        localStorage.removeItem('oztank_user');
+                        localStorage.removeItem('oztank_login_time');
+                        showToast('Session expired. Please sign in again.', 'error');
+                        setTimeout(() => location.reload(), 2000);
+                    } else {
+                        console.log('Supabase session established');
+                        initializeApp();
+                    }
+                } else {
+                    console.error('No Google token available');
+                    showToast('Authentication error. Please sign in again.', 'error');
+                    setTimeout(() => location.reload(), 2000);
+                }
             }).catch(error => {
                 console.error('Error loading Supabase:', error);
                 showToast('Failed to load database library', 'error');
