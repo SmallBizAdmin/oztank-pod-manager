@@ -1741,6 +1741,68 @@
         }
 
         /* Quick Complete Summary Table Styles */
+
+        .runsheet-summary {
+            background: white;
+            border-radius: 8px;
+            padding: 14px 16px;
+            margin-bottom: 14px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+        .runsheet-summary-section {
+            flex: 1;
+            min-width: 140px;
+        }
+        .runsheet-summary-title {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: #9ca3af;
+            letter-spacing: 0.05em;
+            margin-bottom: 8px;
+        }
+        .runsheet-summary-stat {
+            font-size: 24px;
+            font-weight: 700;
+            color: #111827;
+            line-height: 1;
+            margin-bottom: 4px;
+        }
+        .runsheet-summary-sub {
+            font-size: 12px;
+            color: #6b7280;
+            margin-top: 3px;
+        }
+        .runsheet-summary-divider {
+            width: 1px;
+            background: #e5e7eb;
+            align-self: stretch;
+            flex-shrink: 0;
+        }
+        .carbsolve-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+        .carbsolve-pill {
+            background: #eff6ff;
+            border: 1px solid #bfdbfe;
+            border-radius: 20px;
+            padding: 3px 10px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #1e40af;
+            white-space: nowrap;
+        }
+        .carbsolve-pill-spcl {
+            background: #fef3c7;
+            border: 1px solid #fcd34d;
+            color: #92400e;
+        }
+
         .done-checkbox {
             width: 26px;
             height: 26px;
@@ -2168,6 +2230,7 @@
             </div>
         </div>
         <div class="container">
+            <div id="runsheetSummary"></div>
             <ul class="customer-list" id="customerList">
                 <!-- Customers will be inserted here -->
             </ul>
@@ -7741,6 +7804,96 @@
         }
 
         // Render customer list with drag-and-drop reordering
+        function renderRunsheetSummary(customers, isHistorical) {
+            const el = document.getElementById('runsheetSummary');
+            if (!el) return;
+
+            // Hide in historical view
+            if (isHistorical) {
+                el.innerHTML = '';
+                return;
+            }
+
+            // Only count active customers (not skipped, not off-month)
+            const active = customers.filter(c => {
+                if (db.isCustomerSkipped(c.id, selectedMonth, selectedYear)) return false;
+                if (isOffMonth(c, selectedMonth, selectedYear)) return false;
+                return true;
+            });
+
+            const total = active.length;
+
+            // Completed count
+            const podDate = currentServiceDate || formatDateLocal(new Date());
+            const completedCount = active.filter(c =>
+                db.pods.find(p => p.customerId === c.id && p.date === podDate)
+            ).length;
+
+            // Type breakdown
+            const typeCounts = {};
+            active.forEach(c => {
+                const t = c.serviceType || 'Service';
+                typeCounts[t] = (typeCounts[t] || 0) + 1;
+            });
+            const typeOrder = ['Service', 'Delivery', 'Check', 'Repairs'];
+            const typeLabels = { Service: '🔧', Delivery: '📦', Check: '👁️', Repairs: '🔨' };
+            const typeBreakdown = typeOrder
+                .filter(t => typeCounts[t])
+                .map(t => `${typeLabels[t] || ''} ${typeCounts[t]} ${t}`)
+                .join(' &nbsp;·&nbsp; ');
+
+            // Carbsolve bag counts
+            // Physical bag sizes (spcl variants are different bags)
+            const bagSizes = ['4kg', '4kg spcl', '7kg', '7kg spcl', '10kg', '11kg spcl', '17kg'];
+            const bagCounts = {};
+            bagSizes.forEach(s => bagCounts[s] = 0);
+
+            active.forEach(c => {
+                const carb = (c.carbsolve || '').trim().toLowerCase();
+                if (!carb) return;
+                if (carb === '14kg') {
+                    bagCounts['7kg'] += 2; // 2 × 7kg bags
+                } else if (carb === '17kg') {
+                    bagCounts['7kg'] += 1; // 1 × 7kg + 1 × 10kg
+                    bagCounts['10kg'] += 1;
+                } else if (carb === '21kg') {
+                    bagCounts['7kg'] += 3; // 3 × 7kg bags
+                } else {
+                    // Match to a known bag size (case-insensitive)
+                    const match = bagSizes.find(s => s.toLowerCase() === carb);
+                    if (match) bagCounts[match]++;
+                }
+            });
+
+            // Build carbsolve pills HTML
+            const pillsHtml = bagSizes
+                .filter(s => bagCounts[s] > 0)
+                .map(s => {
+                    const isSpcl = s.includes('spcl');
+                    return `<span class="carbsolve-pill${isSpcl ? ' carbsolve-pill-spcl' : ''}">${bagCounts[s]} × ${s}</span>`;
+                })
+                .join('');
+
+            const noCarbsolve = bagSizes.every(s => bagCounts[s] === 0);
+
+            el.innerHTML = `
+                <div class="runsheet-summary">
+                    <div class="runsheet-summary-section">
+                        <div class="runsheet-summary-title">Services</div>
+                        <div class="runsheet-summary-stat">${completedCount}/${total}</div>
+                        <div class="runsheet-summary-sub">${typeBreakdown || `${total} customers`}</div>
+                    </div>
+                    <div class="runsheet-summary-divider"></div>
+                    <div class="runsheet-summary-section">
+                        <div class="runsheet-summary-title">Carbsolve Required</div>
+                        ${noCarbsolve
+                            ? '<div class="runsheet-summary-sub">None required</div>'
+                            : `<div class="carbsolve-grid">${pillsHtml}</div>`}
+                    </div>
+                </div>
+            `;
+        }
+
         function renderCustomerList() {
             const customers = db.customers
                 .filter(c => c.runDay === currentRunDay)
@@ -7777,7 +7930,10 @@
                 countText = `${activeCount} active (${excludedLabel})`;
             }
             document.getElementById('customerCount').textContent = countText;
-            
+
+            // Render summary card
+            renderRunsheetSummary(customers, isHistorical);
+
             list.innerHTML = '';
             
             // For historical months, show notice
