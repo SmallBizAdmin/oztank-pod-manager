@@ -146,6 +146,16 @@
             background: linear-gradient(135deg, #0891b2 0%, #0e7490 100%);
             color: white;
         }
+        
+        .fab-option.delivery {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+        }
+        
+        .fab-option.repairs {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            color: white;
+        }
 
         .header-logo {
             height: 40px;
@@ -2192,8 +2202,14 @@
         <!-- Floating Action Button for Ad-Hoc -->
         <div class="fab-container" id="homeFab">
             <div class="fab-menu" id="fabMenu">
-                <button class="fab-option adhoc" onclick="closeFabMenu(); showMainMenuAdHocWarning();">
-                    ➕ Ad-Hoc Service/Delivery
+                <button class="fab-option adhoc" onclick="closeFabMenu(); showMainMenuAdHocWarning('Service');">
+                    🔧 Service
+                </button>
+                <button class="fab-option delivery" onclick="closeFabMenu(); showMainMenuAdHocWarning('Delivery');">
+                    📦 Delivery
+                </button>
+                <button class="fab-option repairs" onclick="closeFabMenu(); showMainMenuAdHocWarning('Repairs');">
+                    🔨 Repairs
                 </button>
                 <button class="fab-option tank" onclick="closeFabMenu(); showMainMenuTankWarning();">
                     🔄 Tank Movement
@@ -2310,7 +2326,7 @@
                 </div>
 
                 <!-- Products Delivered (Sale Items) -->
-                <div class="card">
+                <div class="card" id="productsDeliveredCard">
                     <h3 style="margin-bottom: 12px;">Products Delivered</h3>
                     <div id="productLines">
                         <!-- Product lines will be inserted here -->
@@ -2319,7 +2335,7 @@
                 </div>
 
                 <!-- Repair Items -->
-                <div class="card">
+                <div class="card" id="repairItemsCard">
                     <h3 style="margin-bottom: 12px;">Repair Items</h3>
                     <div id="repairLines">
                         <!-- Repair lines will be inserted here -->
@@ -2834,25 +2850,10 @@
     <div id="customerSearchModal" class="search-modal-overlay">
         <div class="search-modal">
             <div class="search-modal-header">
-                <h2>Ad-Hoc Service/Delivery</h2>
+                <h2 id="customerSearchModalTitle">Ad-Hoc Service</h2>
                 <button class="search-modal-close" onclick="hideCustomerSearchModal()">×</button>
             </div>
             <div class="search-modal-body">
-                <!-- Service Type Selection -->
-                <div style="margin-bottom: 16px;">
-                    <label style="font-weight: 600; display: block; margin-bottom: 8px;">What type?</label>
-                    <div style="display: flex; gap: 12px;">
-                        <label style="flex: 1; display: flex; align-items: center; padding: 12px 16px; background: #f3f4f6; border-radius: 8px; cursor: pointer; border: 2px solid transparent;" id="adHocServiceLabel">
-                            <input type="radio" name="adHocType" value="Service" checked onchange="updateAdHocTypeSelection()" style="margin-right: 8px;">
-                            <span>🔧 Service</span>
-                        </label>
-                        <label style="flex: 1; display: flex; align-items: center; padding: 12px 16px; background: #f3f4f6; border-radius: 8px; cursor: pointer; border: 2px solid transparent;" id="adHocDeliveryLabel">
-                            <input type="radio" name="adHocType" value="Delivery" onchange="updateAdHocTypeSelection()" style="margin-right: 8px;">
-                            <span>📦 Delivery</span>
-                        </label>
-                    </div>
-                </div>
-                
                 <div class="search-input-container">
                     <span class="search-icon">🔍</span>
                     <input type="text" id="customerSearchInput" class="search-input" placeholder="Search customers (2+ characters)..." oninput="handleCustomerSearch(this.value)">
@@ -3022,8 +3023,14 @@
                 <button class="search-modal-close" onclick="hideActionChooser()">×</button>
             </div>
             <div class="search-modal-body" style="display: flex; flex-direction: column; gap: 12px;">
-                <button class="btn btn-adhoc" onclick="hideActionChooser(); showCustomerSearchModal(currentRunDay);" style="padding: 20px; font-size: 18px;">
-                    ➕ Ad-Hoc Service/Delivery
+                <button class="btn btn-adhoc" onclick="hideActionChooser(); showCustomerSearchModal(currentRunDay, 'Service');" style="padding: 20px; font-size: 18px;">
+                    🔧 Service
+                </button>
+                <button class="btn" onclick="hideActionChooser(); showCustomerSearchModal(currentRunDay, 'Delivery');" style="padding: 20px; font-size: 18px; background: #10b981;">
+                    📦 Delivery
+                </button>
+                <button class="btn" onclick="hideActionChooser(); showCustomerSearchModal(currentRunDay, 'Repairs');" style="padding: 20px; font-size: 18px; background: #ef4444;">
+                    🔨 Repairs
                 </button>
                 <button class="btn" onclick="hideActionChooser(); showTankMovementModal(currentRunDay);" style="padding: 20px; font-size: 18px; background: #0891b2;">
                     🔄 Tank Movement
@@ -6559,8 +6566,14 @@
                         </div>
                         
                         <div style="display: flex; flex-direction: column; gap: 10px;">
-                            <button class="btn btn-adhoc" onclick="document.getElementById('calendarEventChooserModal').remove(); showCustomerSearchModal(null);" style="padding: 16px; font-size: 16px;">
-                                ➕ Ad-Hoc Service / Delivery
+                            <button class="btn btn-adhoc" onclick="document.getElementById('calendarEventChooserModal').remove(); showCustomerSearchModal(null, 'Service');" style="padding: 16px; font-size: 16px;">
+                                🔧 Service
+                            </button>
+                            <button class="btn" onclick="document.getElementById('calendarEventChooserModal').remove(); showCustomerSearchModal(null, 'Delivery');" style="padding: 16px; font-size: 16px; background: #10b981;">
+                                📦 Delivery
+                            </button>
+                            <button class="btn" onclick="document.getElementById('calendarEventChooserModal').remove(); showCustomerSearchModal(null, 'Repairs');" style="padding: 16px; font-size: 16px; background: #ef4444;">
+                                🔨 Repairs
                             </button>
                             <button class="btn" onclick="document.getElementById('calendarEventChooserModal').remove(); showTankMovementModal(null);" style="padding: 16px; font-size: 16px; background: #0891b2;">
                                 🔄 Tank Movement
@@ -10407,22 +10420,35 @@
         let adHocServiceType = 'Service'; // 'Service' or 'Delivery'
         let adHocSourceRunDay = null; // Track which runsheet the ad-hoc was created from
         
-        function updateAdHocTypeSelection() {
-            const serviceLabel = document.getElementById('adHocServiceLabel');
-            const deliveryLabel = document.getElementById('adHocDeliveryLabel');
-            const selectedType = document.querySelector('input[name="adHocType"]:checked').value;
-            adHocServiceType = selectedType;
+        function applyAdHocTypeSections() {
+            // Show/hide POD form sections based on adHocServiceType
+            const productsCard = document.getElementById('productsDeliveredCard');
+            const repairCard = document.getElementById('repairItemsCard');
+            const tankSection = document.getElementById('tankServicedSection');
             
-            // Update visual selection
-            serviceLabel.style.border = selectedType === 'Service' ? '2px solid #3b82f6' : '2px solid transparent';
-            serviceLabel.style.background = selectedType === 'Service' ? '#dbeafe' : '#f3f4f6';
-            deliveryLabel.style.border = selectedType === 'Delivery' ? '2px solid #3b82f6' : '2px solid transparent';
-            deliveryLabel.style.background = selectedType === 'Delivery' ? '#dbeafe' : '#f3f4f6';
+            if (adHocServiceType === 'Delivery') {
+                if (productsCard) productsCard.style.display = 'block';
+                if (repairCard) repairCard.style.display = 'none';
+                if (tankSection) tankSection.style.display = 'none';
+            } else if (adHocServiceType === 'Repairs') {
+                if (productsCard) productsCard.style.display = 'none';
+                if (repairCard) repairCard.style.display = 'block';
+                if (tankSection) tankSection.style.display = 'none';
+            } else {
+                // Service — show everything
+                if (productsCard) productsCard.style.display = 'block';
+                if (repairCard) repairCard.style.display = 'block';
+                if (tankSection) tankSection.style.display = 'block';
+            }
         }
         
-        function showMainMenuAdHocWarning() {
-            if (confirm('⚠️ Creating an ad-hoc service from the main menu.\n\nIf you are completing a service day, please add the ad-hoc service/delivery from the runsheet via the ➕ button instead.\n\nContinue from main menu?')) {
-                showCustomerSearchModal(null); // null = main menu origin
+        function updateAdHocTypeSelection() {
+            // Legacy stub — no longer used (radio buttons removed)
+        }
+        
+        function showMainMenuAdHocWarning(type) {
+            if (confirm('⚠️ Creating an ad-hoc entry from the main menu.\n\nIf you are completing a service day, please add this from the runsheet via the ➕ button instead.\n\nContinue from main menu?')) {
+                showCustomerSearchModal(null, type); // null = main menu origin
             }
         }
         
@@ -10432,7 +10458,7 @@
             }
         }
         
-        function showCustomerSearchModal(sourceRunDay = null) {
+        function showCustomerSearchModal(sourceRunDay = null, type = 'Service') {
             // Prevent ad-hoc services in historical months
             if (isPastMonth()) {
                 showToast('Cannot create new PODs for past months. Switch to the current month.', 'error');
@@ -10442,16 +10468,21 @@
             // Track where this ad-hoc is being created from
             adHocSourceRunDay = sourceRunDay;
             
+            // Set the service type directly from the button that was clicked
+            adHocServiceType = type;
+            
+            // Update modal title to reflect chosen type
+            const titleEl = document.getElementById('customerSearchModalTitle');
+            if (titleEl) {
+                const icons = { Service: '🔧', Delivery: '📦', Repairs: '🔨' };
+                titleEl.textContent = (icons[type] || '➕') + ' ' + type;
+            }
+            
             document.getElementById('customerSearchModal').classList.add('active');
             document.getElementById('customerSearchInput').value = '';
             document.getElementById('freetextCustomerName').value = '';
             document.getElementById('searchResults').style.display = 'none';
             document.getElementById('searchHint').style.display = 'block';
-            
-            // Reset service type selection to Service
-            adHocServiceType = 'Service';
-            document.querySelector('input[name="adHocType"][value="Service"]').checked = true;
-            updateAdHocTypeSelection();
             
             setTimeout(() => document.getElementById('customerSearchInput').focus(), 100);
         }
@@ -10741,14 +10772,12 @@
             showNewPodForm();
             
             // Update header to show it's an ad-hoc service/delivery
-            const typeLabel = adHocServiceType === 'Delivery' ? '📦 Delivery' : '🔧 Service';
+            const icons = { Delivery: '📦', Repairs: '🔨', Service: '🔧' };
+            const typeLabel = (icons[adHocServiceType] || '🔧') + ' ' + adHocServiceType;
             document.getElementById('podCustomerName').textContent = customer.name + ` (${typeLabel})`;
             
-            // Show/hide tank serviced section based on type
-            const tankSection = document.getElementById('tankServicedSection');
-            if (tankSection) {
-                tankSection.style.display = adHocServiceType === 'Delivery' ? 'none' : 'block';
-            }
+            // Show/hide form sections based on type
+            applyAdHocTypeSections();
         }
         
         function startAdHocService() {
@@ -10783,14 +10812,12 @@
             showNewPodForm();
             
             // Update header to show it's an ad-hoc service/delivery
-            const typeLabel = adHocServiceType === 'Delivery' ? '📦 Delivery' : '🔧 Service';
-            document.getElementById('podCustomerName').textContent = customerName + ` (New - ${typeLabel})`;
+            const icons2 = { Delivery: '📦', Repairs: '🔨', Service: '🔧' };
+            const typeLabel2 = (icons2[adHocServiceType] || '🔧') + ' ' + adHocServiceType;
+            document.getElementById('podCustomerName').textContent = customerName + ` (New - ${typeLabel2})`;
             
-            // Show/hide tank serviced section based on type
-            const tankSection = document.getElementById('tankServicedSection');
-            if (tankSection) {
-                tankSection.style.display = adHocServiceType === 'Delivery' ? 'none' : 'block';
-            }
+            // Show/hide form sections based on type
+            applyAdHocTypeSections();
         }
 
         // Customer Edit Modal Functions
