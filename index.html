@@ -1741,77 +1741,12 @@
         }
 
         /* Quick Complete Summary Table Styles */
-        .quick-complete-summary {
-            background: white;
-            border-radius: 8px;
-            padding: 16px;
-            margin-bottom: 16px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        }
-
-        .quick-complete-summary h3 {
-            margin-bottom: 12px;
-            color: #374151;
-            font-size: 16px;
-        }
-
-        .quick-complete-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 14px;
-        }
-
-        .quick-complete-table th {
-            background: #f3f4f6;
-            padding: 10px 12px;
-            text-align: left;
-            border-bottom: 2px solid #e5e7eb;
-            font-weight: 600;
-            color: #374151;
-        }
-
-        .quick-complete-table td {
-            padding: 10px 12px;
-            border-bottom: 1px solid #f3f4f6;
-        }
-
-        .quick-complete-table tr:hover {
-            background: #f9fafb;
-        }
-
-        .quick-complete-table tr.completed {
-            background: #f0fdf4;
-        }
-
-        .quick-complete-table tr.rental-only {
-            background: #fef3c7;
-        }
-
-        .quick-complete-checkbox {
-            width: 24px;
-            height: 24px;
+        .done-checkbox {
+            width: 26px;
+            height: 26px;
             cursor: pointer;
             accent-color: #16a34a;
-        }
-
-        .quick-complete-btn {
-            padding: 6px 12px;
-            border-radius: 6px;
-            border: 1px solid #d1d5db;
-            background: white;
-            cursor: pointer;
-            font-size: 12px;
-            transition: all 0.2s;
-        }
-
-        .quick-complete-btn:hover {
-            background: #f3f4f6;
-        }
-
-        .quick-complete-btn.completed {
-            background: #16a34a;
-            color: white;
-            border-color: #16a34a;
+            flex-shrink: 0;
         }
 
         .quick-complete-timestamp {
@@ -2233,26 +2168,6 @@
             </div>
         </div>
         <div class="container">
-            <!-- Quick Complete Summary Table -->
-            <div class="quick-complete-summary" id="quickCompleteSummary">
-                <h3>📋 Quick Complete</h3>
-                <p style="font-size: 13px; color: #6b7280; margin-bottom: 12px;">Tick to mark service done. Click customer row for full POD (notes, photos, signature).</p>
-                <table class="quick-complete-table">
-                    <thead>
-                        <tr>
-                            <th style="width: 50px;">Done</th>
-                            <th>Customer</th>
-                            <th style="width: 80px;">Type</th>
-                            <th style="width: 120px;">Status</th>
-                        </tr>
-                    </thead>
-                    <tbody id="quickCompleteTableBody">
-                        <!-- Quick complete rows will be inserted here -->
-                    </tbody>
-                </table>
-            </div>
-            
-            <h3 style="margin-bottom: 12px; color: #374151;">📍 Full Runsheet</h3>
             <ul class="customer-list" id="customerList">
                 <!-- Customers will be inserted here -->
             </ul>
@@ -2300,31 +2215,6 @@
                     </div>
                 </div>
                 
-                <!-- Tank Serviced -->
-                <div class="card" id="tankServicedSection">
-                    <div class="form-group">
-                        <label>Tank Serviced?</label>
-                        <div class="radio-group">
-                            <label>
-                                <input type="radio" name="tankServiced" value="yes">
-                                Yes
-                            </label>
-                            <label>
-                                <input type="radio" name="tankServiced" value="no">
-                                No
-                            </label>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label>Service Notes</label>
-                        <textarea id="serviceNotes" placeholder="Enter service notes..."></textarea>
-                        <div class="quick-comment-container" id="quickCommentContainer">
-                            <button type="button" class="quick-comment-btn" onclick="toggleQuickComment('No service required')">No service required</button>
-                            <button type="button" class="quick-comment-btn gyg-only" id="gotHookBtn" style="display: none;" onclick="toggleQuickComment('Got Hook')">Got Hook</button>
-                        </div>
-                    </div>
-                </div>
-
                 <!-- Products Delivered (Sale Items) -->
                 <div class="card" id="productsDeliveredCard">
                     <h3 style="margin-bottom: 12px;">Products Delivered</h3>
@@ -2348,6 +2238,10 @@
                     <div class="form-group">
                         <label>Notes</label>
                         <textarea id="notes" placeholder="Additional notes..."></textarea>
+                        <div class="quick-comment-container" id="quickCommentContainer">
+                            <button type="button" class="quick-comment-btn" onclick="toggleQuickComment('No service required - tank still clean')">No service required - tank still clean</button>
+                            <button type="button" class="quick-comment-btn gyg-only" id="gotHookBtn" style="display: none;" onclick="toggleQuickComment('Got Hook')">Got Hook</button>
+                        </div>
                     </div>
                 </div>
 
@@ -5074,8 +4968,8 @@
 
         // Quick comment functions
         function toggleQuickComment(comment) {
-            const serviceNotesField = document.getElementById('serviceNotes');
-            const currentNotes = serviceNotesField.value.trim();
+            const notesField = document.getElementById('notes');
+            const currentNotes = notesField.value.trim();
             
             // Check if the comment is already in the notes
             const commentLower = comment.toLowerCase();
@@ -5084,7 +4978,6 @@
             if (notesLower.includes(commentLower)) {
                 // Remove the comment from notes
                 let newNotes = currentNotes;
-                // Try to remove with various separators
                 const patterns = [
                     new RegExp(`\\s*[,;]\\s*${comment}`, 'gi'),
                     new RegExp(`${comment}\\s*[,;]\\s*`, 'gi'),
@@ -5093,13 +4986,13 @@
                 for (const pattern of patterns) {
                     newNotes = newNotes.replace(pattern, '');
                 }
-                serviceNotesField.value = newNotes.trim();
+                notesField.value = newNotes.trim();
             } else {
                 // Add the comment to notes
                 if (currentNotes) {
-                    serviceNotesField.value = currentNotes + ', ' + comment;
+                    notesField.value = currentNotes + ', ' + comment;
                 } else {
-                    serviceNotesField.value = comment;
+                    notesField.value = comment;
                 }
             }
             
@@ -5108,12 +5001,12 @@
         }
         
         function updateQuickCommentButtonStates() {
-            const serviceNotes = (document.getElementById('serviceNotes').value || '').toLowerCase();
+            const notes = (document.getElementById('notes').value || '').toLowerCase();
             
             // Update "No service required" button
             const noServiceBtn = document.querySelector('.quick-comment-btn:not(.gyg-only)');
             if (noServiceBtn) {
-                if (serviceNotes.includes('no service required')) {
+                if (notes.includes('no service required')) {
                     noServiceBtn.classList.add('selected');
                 } else {
                     noServiceBtn.classList.remove('selected');
@@ -5123,7 +5016,7 @@
             // Update "Got Hook" button
             const gotHookBtn = document.getElementById('gotHookBtn');
             if (gotHookBtn) {
-                if (serviceNotes.includes('got hook')) {
+                if (notes.includes('got hook')) {
                     gotHookBtn.classList.add('selected');
                 } else {
                     gotHookBtn.classList.remove('selected');
@@ -5453,16 +5346,7 @@
             }
             
             // Reset tank serviced
-            document.querySelectorAll('input[name="tankServiced"]').forEach(r => r.checked = false);
-            document.getElementById('serviceNotes').value = '';
             document.getElementById('notes').value = '';
-            
-            // Show/hide tank serviced section - hide for Delivery type
-            const tankSection = document.getElementById('tankServicedSection');
-            if (tankSection) {
-                const isDelivery = displayServiceType === 'Delivery';
-                tankSection.style.display = isDelivery ? 'none' : 'block';
-            }
             
             // Show/hide GYG-specific "Got Hook" button
             const gotHookBtn = document.getElementById('gotHookBtn');
@@ -5499,8 +5383,8 @@
             
             // Build service details section - different for deliveries vs services
             let serviceDetailsHtml = '';
-            const isRentalOnly = pod.isRentalOnly || (pod.tankServiced === 'no' && 
-                (pod.serviceNotes || '').toLowerCase().includes('no service required'));
+            const isRentalOnly = pod.isRentalOnly || (pod.notes || '').toLowerCase().includes('no service required')
+                || (pod.serviceNotes || '').toLowerCase().includes('no service required'); // legacy support
                 
             if (isDelivery) {
                 serviceDetailsHtml = `
@@ -5513,10 +5397,9 @@
                     <div style="display: flex; gap: 24px; flex-wrap: wrap;">
                         <div><span style="color: #6b7280; font-size: 12px;">Type</span><br><strong>${pod.serviceType || 'Service'}</strong></div>
                         <div><span style="color: #6b7280; font-size: 12px;">Carbsolve</span><br><strong>${carbsolveDisplay}</strong></div>
-                        <div><span style="color: #6b7280; font-size: 12px;">Tank Serviced</span><br><strong>${pod.tankServiced === 'yes' ? 'Yes' : (pod.tankServiced === 'n/a' ? 'N/A' : 'No')}</strong></div>
                         ${isRentalOnly ? '<div><span style="color: #6b7280; font-size: 12px;">Status</span><br><span class="rental-only-badge">Rental Only</span></div>' : ''}
                     </div>
-                    ${pod.serviceNotes ? `<div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e5e7eb;"><strong>Service Notes:</strong> ${pod.serviceNotes}</div>` : ''}
+                    ${pod.serviceNotes ? `<div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e5e7eb;"><strong>Service Notes (legacy):</strong> ${pod.serviceNotes}</div>` : ''}
                 `;
             }
             
@@ -5613,17 +5496,8 @@
             }
             
             // Show/hide tank serviced section based on type
-            const tankSection = document.getElementById('tankServicedSection');
-            if (tankSection) {
-                tankSection.style.display = isDelivery ? 'none' : 'block';
-            }
+            // (section removed — handled by applyAdHocTypeSections for ad-hoc, not needed for runsheet PODs)
             
-            // Tank serviced - only set if not delivery
-            if (!isDelivery && pod.tankServiced && pod.tankServiced !== 'n/a') {
-                const tankRadio = document.querySelector(`input[name="tankServiced"][value="${pod.tankServiced}"]`);
-                if (tankRadio) tankRadio.checked = true;
-            }
-            document.getElementById('serviceNotes').value = pod.serviceNotes || '';
             document.getElementById('notes').value = pod.notes || '';
             
             // Load products into separate sections (sale vs repair)
@@ -6762,11 +6636,14 @@
                 
                 // Stats
                 const totalPods = pods.length;
-                const servicesCompleted = pods.filter(p => p.tank_serviced === 'yes').length;
-                const rentalOnly = pods.filter(p => p.tank_serviced === 'no' && (p.service_notes || '').toLowerCase().includes('no service required')).length;
+                const servicesCompleted = pods.filter(p => p.tank_serviced === 'yes' || (p.is_quick_complete && p.tank_serviced !== 'no')).length;
+                const rentalOnly = pods.filter(p => (p.service_notes || '').toLowerCase().includes('no service required') || (p.notes || '').toLowerCase().includes('no service required')).length;
                 const totalProducts = pods.reduce((sum, p) => {
                     const products = p.products || [];
                     return sum + products.reduce((pSum, prod) => pSum + (prod.quantity || 0), 0);
+                }, 0);
+                
+                document.getElementById('searchPodsStats').innerHTML = `
                 }, 0);
                 
                 document.getElementById('searchPodsStats').innerHTML = `
@@ -6808,7 +6685,9 @@
                 pods.forEach((pod, idx) => {
                     const date = new Date(pod.date);
                     const formattedDate = date.toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' });
-                    const isRentalOnly = pod.tank_serviced === 'no' && (pod.service_notes || '').toLowerCase().includes('no service required');
+                    const isRentalOnly = pod.isRentalOnly || 
+                        (pod.notes || '').toLowerCase().includes('no service required') ||
+                        (pod.service_notes || '').toLowerCase().includes('no service required'); // legacy
                     const isQuick = pod.is_quick_complete;
                     
                     // Products
@@ -7575,89 +7454,6 @@
         }
         
         // Quick Complete Table Functions
-        function renderQuickCompleteTable(customers, isHistorical) {
-            const tbody = document.getElementById('quickCompleteTableBody');
-            if (!tbody) return;
-            
-            tbody.innerHTML = '';
-            
-            // Hide quick complete in historical view
-            const summaryContainer = document.getElementById('quickCompleteSummary');
-            if (isHistorical) {
-                summaryContainer.style.display = 'none';
-                return;
-            }
-            summaryContainer.style.display = 'block';
-            
-            customers.forEach(customer => {
-                // Check if customer is skipped or off-month
-                const isSkipped = db.isCustomerSkipped(customer.id, selectedMonth, selectedYear);
-                const customerIsOffMonth = isOffMonth(customer, selectedMonth, selectedYear);
-                const effectivelySkipped = isSkipped || customerIsOffMonth;
-                
-                if (effectivelySkipped) return; // Don't show skipped/off-month in quick complete
-                
-                // Find completed POD for this month
-                const completedPod = db.pods.find(pod => {
-                    if (pod.customerId !== customer.id) return false;
-                    const podDate = new Date(pod.date + 'T00:00:00');
-                    return podDate.getMonth() === selectedMonth && podDate.getFullYear() === selectedYear;
-                });
-                
-                // Check if this is a rental-only (no service required) POD
-                const isRentalOnly = completedPod && completedPod.tankServiced === 'no' && 
-                    (completedPod.serviceNotes || '').toLowerCase().includes('no service required');
-                
-                const tr = document.createElement('tr');
-                tr.className = completedPod ? (isRentalOnly ? 'rental-only' : 'completed') : '';
-                tr.dataset.customerId = customer.id;
-                
-                // Service type display
-                const serviceType = customer.serviceType || 'Service';
-                
-                // Status display
-                let statusHtml = '';
-                if (completedPod) {
-                    if (isRentalOnly) {
-                        statusHtml = `<span class="rental-only-badge">Rental Only</span>`;
-                    } else {
-                        statusHtml = `<span style="color: #16a34a; font-weight: 600;">✓ Done</span>`;
-                    }
-                    if (completedPod.timestamp) {
-                        statusHtml += `<div class="quick-complete-timestamp">${formatTimestamp(completedPod.timestamp)}</div>`;
-                    }
-                } else {
-                    statusHtml = '<span style="color: #9ca3af;">Pending</span>';
-                }
-                
-                tr.innerHTML = `
-                    <td style="text-align: center;">
-                        <input type="checkbox" class="quick-complete-checkbox" 
-                               data-customer-id="${customer.id}"
-                               ${completedPod ? 'checked' : ''}
-                               onchange="handleQuickComplete(${customer.id}, this.checked)">
-                    </td>
-                    <td>
-                        <div style="font-weight: 500;">${customer.name}</div>
-                        ${customer.address ? `<div style="font-size: 12px; color: #2563eb;"><a href="#" onclick="openInMaps('${customer.address.replace(/'/g, "\\'")}', event); return false;" style="color: #2563eb; text-decoration: underline;">📍 ${customer.address}</a></div>` : ''}
-                    </td>
-                    <td>
-                        <span style="padding: 2px 8px; border-radius: 10px; font-size: 11px; background: #e5e7eb;">${serviceType}</span>
-                    </td>
-                    <td>${statusHtml}</td>
-                `;
-                
-                // Click anywhere (except checkbox) to open full POD
-                tr.addEventListener('click', (e) => {
-                    if (e.target.type !== 'checkbox') {
-                        showPodView(customer);
-                    }
-                });
-                
-                tbody.appendChild(tr);
-            });
-        }
-        
         async function handleQuickComplete(customerId, isCompleted) {
             const customer = db.customers.find(c => c.id === customerId);
             if (!customer) return;
@@ -7691,14 +7487,14 @@
                     timestamp: nowUTC.toISOString(),
                     serviceType: serviceType,
                     carbsolve: customer.carbsolve || '',
-                    tankServiced: isDelivery ? 'n/a' : 'yes', // Default to yes for quick complete
+                    tankServiced: null,
                     serviceNotes: '',
                     products: [],
                     notes: '',
                     photo: null,
                     signature: null,
                     signatureName: '',
-                    isQuickComplete: true, // Flag to indicate this was a quick complete
+                    isQuickComplete: true,
                     isAdHoc: false
                 };
                 
@@ -7985,9 +7781,6 @@
             }
             document.getElementById('customerCount').textContent = countText;
             
-            // Render quick complete table
-            renderQuickCompleteTable(customers, isHistorical);
-            
             list.innerHTML = '';
             
             // For historical months, show notice
@@ -8085,12 +7878,25 @@
                 // For historical months, hide drag handle and show different status
                 const showDragHandle = !isHistorical;
                 
+                // Timestamp display for completed pods
+                const timestampHtml = completedPod && completedPod.timestamp 
+                    ? `<div class="quick-complete-timestamp">${formatTimestamp(completedPod.timestamp)}</div>` : '';
+                
                 li.innerHTML = `
                     ${showDragHandle ? '<span class="drag-handle" draggable="true">☰</span>' : ''}
                     <div class="customer-info" style="flex: 1;">
                         ${customerInfoHtml}
+                        ${timestampHtml}
                     </div>
                     <div style="display: flex; align-items: center; gap: 8px;">
+                        ${!isHistorical && !effectivelySkipped ? `
+                            <input type="checkbox" class="done-checkbox"
+                                   data-customer-id="${customer.id}"
+                                   ${completedPod ? 'checked' : ''}
+                                   onclick="event.stopPropagation();"
+                                   onchange="handleQuickComplete(${customer.id}, this.checked)"
+                                   title="Mark as done">
+                        ` : ''}
                         ${!isHistorical && !customerIsOffMonth ? `
                             <button class="skip-btn ${isSkipped ? 'active' : ''}" 
                                     onclick="event.stopPropagation(); toggleCustomerSkip(${customer.id}, ${isSkipped})" 
@@ -8108,7 +7914,7 @@
                             ) :
                             (isHistorical ? 
                                 (completedPod ? '<span class="status-badge completed">✓ Completed</span>' : '<span class="status-badge" style="background: #e5e7eb; color: #6b7280;">Not Serviced</span>') :
-                                `<span class="status-badge ${completedPod ? 'completed' : 'pending'}">${completedPod ? '✓ Completed' : 'Pending'}</span>`
+                                ''
                             )
                         }
                     </div>
@@ -8137,8 +7943,12 @@
                 
                 // Click to view (entire card except drag handle and edit button)
                 li.addEventListener('click', (e) => {
-                    if (!e.target.classList.contains('drag-handle') && !e.target.classList.contains('edit-customer-btn')) {
+                    if (!e.target.classList.contains('drag-handle') && 
+                        !e.target.classList.contains('edit-customer-btn') &&
+                        !e.target.classList.contains('done-checkbox') &&
+                        e.target.type !== 'checkbox') {
                         showPodView(customer);
+                    }
                     }
                 });
                 
@@ -8365,8 +8175,9 @@
                         <p style="color: #6b7280; margin-bottom: 16px;">This customer will be marked as skipped for ${MONTH_NAMES[selectedMonth]} ${selectedYear}.</p>
                         
                         <div class="form-group">
-                            <label>Reason (optional)</label>
+                            <label>Reason</label>
                             <select id="skipReasonSelect" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 16px;">
+                                <option value="No service required - tank still clean">No service required - tank still clean</option>
                                 <option value="">No reason specified</option>
                                 <option value="Bi-monthly (off month)">Bi-monthly (off month)</option>
                                 <option value="Already serviced">Already serviced by another worker</option>
@@ -8375,6 +8186,11 @@
                                 <option value="Access issue">Access issue</option>
                                 <option value="Other">Other</option>
                             </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Comments (optional)</label>
+                            <textarea id="skipComments" placeholder="Add any additional comments..." style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; min-height: 80px; resize: vertical;"></textarea>
                         </div>
                         
                         <button class="btn" onclick="confirmSkipCustomer(${customerId}, '${yearMonth}')" style="margin-top: 8px;">
@@ -8393,8 +8209,11 @@
         
         async function confirmSkipCustomer(customerId, yearMonth) {
             const reason = document.getElementById('skipReasonSelect').value;
+            const comments = document.getElementById('skipComments').value.trim();
+            // Combine reason and comments into the reason field
+            const fullReason = comments ? `${reason ? reason + ': ' : ''}${comments}` : reason;
             
-            const success = await db.saveMonthlySkip(customerId, yearMonth, reason);
+            const success = await db.saveMonthlySkip(customerId, yearMonth, fullReason);
             if (success) {
                 closeSkipReasonModal();
                 showToast('Customer skipped for ' + MONTH_NAMES[selectedMonth], 'success');
@@ -8557,22 +8376,7 @@
             } else {
                 serviceType = currentCustomer.serviceType || 'Service';
             }
-            const isDelivery = serviceType === 'Delivery';
-
-            // Check tank serviced is selected (skip for deliveries) - but no longer required
-            const tankServiced = document.querySelector('input[name="tankServiced"]:checked');
-            
-            // No validation required anymore - signature and notes are all optional
-
-            // Validation based on tank serviced status (skip for deliveries)
-            if (!isDelivery && tankServiced && tankServiced.value === 'no') {
-                // If tank NOT serviced, service notes are required
-                const serviceNotes = document.getElementById('serviceNotes').value.trim();
-                if (!serviceNotes) {
-                    showToast('Service notes are required when tank is not serviced', 'error');
-                    return;
-                }
-            }
+            const isDelivery = serviceType === 'Delivery' || serviceType === 'Repairs';
 
             // Gather and validate products - only include confirmed ones from both sections
             const products = [];
@@ -8624,12 +8428,9 @@
             // Get carbsolve from customer data
             const carbsolve = currentCustomer.carbsolve || '';
             
-            // For deliveries, tank serviced is N/A
-            const tankServicedValue = isDelivery ? 'n/a' : (tankServiced ? tankServiced.value : 'yes');
-            
-            // Check if this is a "no service required" (rental only) situation
-            const serviceNotes = document.getElementById('serviceNotes').value.trim();
-            const isRentalOnly = tankServicedValue === 'no' && serviceNotes.toLowerCase().includes('no service required');
+            // Check if this is a "no service required" (rental only) situation — based on notes
+            const notesValue = document.getElementById('notes').value.trim();
+            const isRentalOnly = notesValue.toLowerCase().includes('no service required');
             
             const podId = currentEditingPodId || Date.now();
             const pod = {
@@ -8642,8 +8443,8 @@
                 timestamp: nowUTC.toISOString(), // Store as UTC, display as AEST
                 serviceType: serviceType,
                 carbsolve: carbsolve,
-                tankServiced: tankServicedValue,
-                serviceNotes: serviceNotes,
+                tankServiced: null,
+                serviceNotes: '',
                 products: products,
                 notes: document.getElementById('notes').value,
                 photo: photoData,
@@ -9252,8 +9053,9 @@
                 // Build status badge column (rental-only, quick complete, etc.)
                 let statusBadgeHtml = '';
                 if (pod) {
-                    const isRentalOnly = pod.isRentalOnly || (pod.tankServiced === 'no' && 
-                        (pod.serviceNotes || '').toLowerCase().includes('no service required'));
+                    const isRentalOnly = pod.isRentalOnly || 
+                        (pod.notes || '').toLowerCase().includes('no service required') ||
+                        (pod.serviceNotes || '').toLowerCase().includes('no service required'); // legacy
                     if (isRentalOnly) {
                         statusBadgeHtml = '<span class="rental-only-badge">Rental Only</span>';
                     } else if (pod.isQuickComplete) {
@@ -10424,21 +10226,17 @@
             // Show/hide POD form sections based on adHocServiceType
             const productsCard = document.getElementById('productsDeliveredCard');
             const repairCard = document.getElementById('repairItemsCard');
-            const tankSection = document.getElementById('tankServicedSection');
             
             if (adHocServiceType === 'Delivery') {
                 if (productsCard) productsCard.style.display = 'block';
                 if (repairCard) repairCard.style.display = 'none';
-                if (tankSection) tankSection.style.display = 'none';
             } else if (adHocServiceType === 'Repairs') {
                 if (productsCard) productsCard.style.display = 'none';
                 if (repairCard) repairCard.style.display = 'block';
-                if (tankSection) tankSection.style.display = 'none';
             } else {
                 // Service — show everything
                 if (productsCard) productsCard.style.display = 'block';
                 if (repairCard) repairCard.style.display = 'block';
-                if (tankSection) tankSection.style.display = 'block';
             }
         }
         
@@ -10525,8 +10323,8 @@
                 
                 // Calculate stats
                 const totalPods = pods.length;
-                const servicesCompleted = pods.filter(p => p.tank_serviced === 'yes').length;
-                const rentalOnly = pods.filter(p => p.tank_serviced === 'no' && (p.service_notes || '').toLowerCase().includes('no service required')).length;
+                const servicesCompleted = pods.filter(p => p.tank_serviced === 'yes' || (p.is_quick_complete && p.tank_serviced !== 'no')).length;
+                const rentalOnly = pods.filter(p => (p.service_notes || '').toLowerCase().includes('no service required') || (p.notes || '').toLowerCase().includes('no service required')).length;
                 const totalProducts = pods.reduce((sum, p) => {
                     const products = p.products || [];
                     return sum + products.reduce((pSum, prod) => pSum + (prod.quantity || 0), 0);
