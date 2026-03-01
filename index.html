@@ -7849,18 +7849,25 @@
             bagSizes.forEach(s => bagCounts[s] = 0);
 
             active.forEach(c => {
-                const carb = (c.carbsolve || '').trim().toLowerCase();
-                if (!carb) return;
-                if (carb === '14kg') {
+                // Normalise: strip any "carbsolve" prefix, collapse spaces, lowercase
+                const raw = (c.carbsolve || '').trim().toLowerCase()
+                    .replace(/^carbsolve[\s\-:]+/i, '')
+                    .replace(/\s+/g, ' ')
+                    .trim();
+                if (!raw) return;
+
+                // Also normalise the bag size keys the same way for comparison
+                const normalise = s => s.toLowerCase().replace(/\s+/g, ' ').trim();
+
+                if (raw === '14kg') {
                     bagCounts['7kg'] += 2; // 2 × 7kg bags
-                } else if (carb === '17kg') {
+                } else if (raw === '17kg') {
                     bagCounts['7kg'] += 1; // 1 × 7kg + 1 × 10kg
                     bagCounts['10kg'] += 1;
-                } else if (carb === '21kg') {
+                } else if (raw === '21kg') {
                     bagCounts['7kg'] += 3; // 3 × 7kg bags
                 } else {
-                    // Match to a known bag size (case-insensitive)
-                    const match = bagSizes.find(s => s.toLowerCase() === carb);
+                    const match = bagSizes.find(s => normalise(s) === raw);
                     if (match) bagCounts[match]++;
                 }
             });
