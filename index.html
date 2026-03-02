@@ -2799,6 +2799,7 @@
                                         Invoice
                                     </label>
                                 </th>
+                                <th style="padding: 12px; border-bottom: 2px solid #e5e7eb;">Checked & Sent</th>
                                 <th style="padding: 12px; border-bottom: 2px solid #e5e7eb;">Company</th>
                                 <th style="padding: 12px; border-bottom: 2px solid #e5e7eb;">Type</th>
                                 <th style="padding: 12px; border-bottom: 2px solid #e5e7eb;">Carbsolve</th>
@@ -3937,7 +3938,8 @@
             pods: [],
             serviceDays: [],
             calendarUrl: '',
-            invoiceStatus: {},
+            invoiceStatus: {},        // pod_id → { invoiced, checkedSent }
+            skippedInvoiceStatus: {}, // "customerId|date" → { invoiced, checkedSent }
             serviceDayInvoiceStatus: {},
             tankMovements: [],
             monthlySkips: {}, // Tracks customers skipped for specific months (key: "customerId-YYYY-MM")
@@ -4037,9 +4039,15 @@
                     this.invoiceStatus = {};
                     if (invoices) {
                         invoices.forEach(inv => {
-                            this.invoiceStatus[inv.pod_id] = inv.invoiced;
+                            this.invoiceStatus[inv.pod_id] = {
+                                invoiced: inv.invoiced,
+                                checkedSent: inv.checked_sent || false
+                            };
                         });
                     }
+                    
+                    // Load skipped customer invoice status
+                    await this.loadSkippedInvoiceStatus();
                     
                     // Load service day invoice status
                     await this.loadServiceDayInvoiceStatus();
@@ -4704,18 +4712,60 @@
                 }
             },
             
-            async saveInvoiceStatus(podId, invoiced) {
+            async saveInvoiceStatus(podId, invoiced, checkedSent) {
                 try {
                     const { data, error } = await supabase
                         .from('invoice_status')
                         .upsert({
                             pod_id: podId,
-                            invoiced: invoiced
+                            invoiced: invoiced,
+                            checked_sent: checkedSent || false
                         });
                     if (error) throw error;
                     return true;
                 } catch (error) {
                     console.error('Error saving invoice status:', error);
+                    return false;
+                }
+            },
+            
+            async loadSkippedInvoiceStatus() {
+                try {
+                    const { data, error } = await supabase
+                        .from('skipped_invoice_status')
+                        .select('*');
+                    this.skippedInvoiceStatus = {};
+                    if (!error && data) {
+                        data.forEach(row => {
+                            const key = `${row.customer_id}|${row.service_date}`;
+                            this.skippedInvoiceStatus[key] = {
+                                invoiced: row.invoiced,
+                                checkedSent: row.checked_sent || false
+                            };
+                        });
+                    }
+                } catch (e) {
+                    console.log('skipped_invoice_status not available:', e);
+                    this.skippedInvoiceStatus = {};
+                }
+            },
+            
+            async saveSkippedInvoiceStatus(customerId, serviceDate, invoiced, checkedSent) {
+                try {
+                    const { error } = await supabase
+                        .from('skipped_invoice_status')
+                        .upsert({
+                            customer_id: customerId,
+                            service_date: serviceDate,
+                            invoiced: invoiced,
+                            checked_sent: checkedSent || false
+                        });
+                    if (error) throw error;
+                    const key = `${customerId}|${serviceDate}`;
+                    this.skippedInvoiceStatus[key] = { invoiced, checkedSent: checkedSent || false };
+                    return true;
+                } catch (error) {
+                    console.error('Error saving skipped invoice status:', error);
                     return false;
                 }
             },
@@ -9297,7 +9347,7 @@
             // Add back to calendar button row
             const backRow = document.createElement('tr');
             backRow.innerHTML = `
-                <td colspan="8" style="padding: 8px; background: #f3f4f6;">
+                <td colspan="9" style="padding: 8px; background: #f3f4f6;">
                     <button class="btn btn-secondary" style="padding: 6px 16px; font-size: 13px;" onclick="backToAdminCalendar()">
                         ← Back to Calendar
                     </button>
@@ -9394,31 +9444,71 @@
                 }
                 const notesHtml = allNotesDisplay.length > 0 ? allNotesDisplay.join('<br>') : '-';
                 
-                // Build status badge column (rental-only, quick complete, etc.)
+                // Invoice & checked-sent state
+                const isNoInvoice = customer.invoiceType === 'No Invoice';
+                const isInvoiceable = !isNoInvoice && !customerIsOffMonth;
+                let invoiced = false;
+                let checkedSent = false;
+                let invoiceCheckboxHtml = '';
+                let checkedSentHtml = '';
+
+                if (!isInvoiceable) {
+                    invoiceCheckboxHtml = `<span style="color: #888; font-size: 12px;">${isNoInvoice ? 'No inv' : '—'}</span>`;
+                    checkedSentHtml = `<span style="color: #9ca3af;">—</span>`;
+                } else if (pod) {
+                    // POD-based
+                    const status = db.invoiceStatus[pod.id] || { invoiced: false, checkedSent: false };
+                    invoiced = status.invoiced;
+                    checkedSent = status.checkedSent;
+                    invoiceCheckboxHtml = `<input type="checkbox" class="invoice-checkbox" data-pod-id="${pod.id}"
+                        ${invoiced ? 'checked' : ''}
+                        onchange="toggleInvoice(${pod.id}, null, null)">`;
+                    checkedSentHtml = `<input type="checkbox" class="checked-sent-checkbox" data-pod-id="${pod.id}"
+                        ${checkedSent ? 'checked' : ''} ${!invoiced ? 'disabled' : ''}
+                        onchange="toggleCheckedSent(${pod.id}, null, null)" title="Checked & Sent">`;
+                } else {
+                    // Skipped or no POD — still invoiceable (rental)
+                    const key = `${customer.id}|${selectedDate}`;
+                    const status = db.skippedInvoiceStatus[key] || { invoiced: false, checkedSent: false };
+                    invoiced = status.invoiced;
+                    checkedSent = status.checkedSent;
+                    invoiceCheckboxHtml = `<input type="checkbox" class="invoice-checkbox" data-customer-id="${customer.id}" data-date="${selectedDate}"
+                        ${invoiced ? 'checked' : ''}
+                        onchange="toggleInvoice(null, ${customer.id}, '${selectedDate}')">`;
+                    checkedSentHtml = `<input type="checkbox" class="checked-sent-checkbox" data-customer-id="${customer.id}" data-date="${selectedDate}"
+                        ${checkedSent ? 'checked' : ''} ${!invoiced ? 'disabled' : ''}
+                        onchange="toggleCheckedSent(null, ${customer.id}, '${selectedDate}')" title="Checked & Sent">`;
+                }
+
+                // Status badge
                 let statusBadgeHtml = '';
                 if (pod) {
-                    const isRentalOnly = pod.isRentalOnly || 
+                    const isRentalOnly = pod.isRentalOnly ||
                         (pod.notes || '').toLowerCase().includes('no service required') ||
-                        (pod.serviceNotes || '').toLowerCase().includes('no service required'); // legacy
+                        (pod.serviceNotes || '').toLowerCase().includes('no service required');
                     if (isRentalOnly) {
                         statusBadgeHtml = '<span class="rental-only-badge">Rental Only</span>';
-                    } else if (pod.isQuickComplete) {
-                        statusBadgeHtml = '<span style="background: #dbeafe; color: #1e40af; padding: 2px 6px; border-radius: 8px; font-size: 10px;">Quick</span>';
+                    } else {
+                        statusBadgeHtml = '<span style="background: #dcfce7; color: #166534; padding: 2px 8px; border-radius: 8px; font-size: 10px; font-weight: 600;">Serviced</span>';
+                    }
+                } else if (isSkipped) {
+                    const isRentalSkip = skipReason && skipReason.toLowerCase().includes('no service required');
+                    if (isRentalSkip) {
+                        statusBadgeHtml = '<span class="rental-only-badge">Rental Only</span>';
+                    } else {
+                        statusBadgeHtml = '<span style="background: #e5e7eb; color: #6b7280; padding: 2px 8px; border-radius: 8px; font-size: 10px;">Skipped</span>';
                     }
                 }
-                
+
                 tr.innerHTML = `
                     <td style="padding: 12px; text-align: center;">
                         ${statusDisplay}
                     </td>
                     <td style="padding: 12px; text-align: center;" onclick="event.stopPropagation();">
-                        ${customer.invoiceType === 'No Invoice' 
-                            ? '<span style="color: #888; font-size: 12px;">No inv</span>'
-                            : (isSkipped 
-                                ? '<span style="color: #9ca3af;">—</span>'
-                                : `<input type="checkbox" class="invoice-checkbox" data-pod-id="${pod ? pod.id : 0}" ${pod && db.invoiceStatus[pod.id] ? 'checked' : ''} 
-                                   onchange="toggleInvoice(${pod ? pod.id : 0})" ${!pod ? 'disabled' : ''}>`)
-                        }
+                        ${invoiceCheckboxHtml}
+                    </td>
+                    <td style="padding: 12px; text-align: center;" onclick="event.stopPropagation();">
+                        ${checkedSentHtml}
                     </td>
                     <td style="padding: 12px;">${customerNameDisplay}</td>
                     <td style="padding: 12px;">${serviceType}</td>
@@ -9479,7 +9569,7 @@
             // Add back to calendar button row
             const backRow = document.createElement('tr');
             backRow.innerHTML = `
-                <td colspan="8" style="padding: 8px; background: #f3f4f6;">
+                <td colspan="9" style="padding: 8px; background: #f3f4f6;">
                     <button class="btn" onclick="showCalendarView()" style="padding: 8px 16px;">
                         ← Back to Calendar
                     </button>
@@ -9539,7 +9629,7 @@
             if (adHocPods.length === 0 && adHocTankMoves.length === 0) {
                 const emptyRow = document.createElement('tr');
                 emptyRow.innerHTML = `
-                    <td colspan="8" style="padding: 24px; text-align: center; color: #6b7280;">
+                    <td colspan="9" style="padding: 24px; text-align: center; color: #6b7280;">
                         No ad-hoc services or deliveries for this date
                     </td>
                 `;
@@ -9584,6 +9674,7 @@
                             <tr style="background: #fef3c7;">
                                 <th style="padding: 10px; text-align: center; border-bottom: 2px solid #f59e0b; width: 40px;">✓</th>
                                 <th style="padding: 10px; text-align: center; border-bottom: 2px solid #f59e0b; width: 40px;">Inv</th>
+                                <th style="padding: 10px; text-align: center; border-bottom: 2px solid #f59e0b; width: 50px;">Chk'd</th>
                                 <th style="padding: 10px; text-align: left; border-bottom: 2px solid #f59e0b;">Customer</th>
                                 <th style="padding: 10px; text-align: left; border-bottom: 2px solid #f59e0b;">Type</th>
                                 <th style="padding: 10px; text-align: left; border-bottom: 2px solid #f59e0b;">Carbsolve</th>
@@ -9633,13 +9724,18 @@
                 tr.onmouseover = () => tr.style.background = '#fef3c7';
                 tr.onmouseout = () => tr.style.background = '#fffbeb';
                 
+                const adHocInvStatus = db.invoiceStatus[pod.id] || { invoiced: false, checkedSent: false };
                 tr.innerHTML = `
                     <td style="padding: 12px; text-align: center;">
                         <span style="color: #16a34a; font-size: 18px;">✓</span>
                     </td>
                     <td style="padding: 12px; text-align: center;" onclick="event.stopPropagation();">
-                        <input type="checkbox" class="invoice-checkbox" data-pod-id="${pod.id}" ${db.invoiceStatus[pod.id] ? 'checked' : ''} 
-                           onchange="toggleInvoice(${pod.id})">
+                        <input type="checkbox" class="invoice-checkbox" data-pod-id="${pod.id}" ${adHocInvStatus.invoiced ? 'checked' : ''} 
+                           onchange="toggleInvoice(${pod.id}, null, null)">
+                    </td>
+                    <td style="padding: 12px; text-align: center;" onclick="event.stopPropagation();">
+                        <input type="checkbox" class="checked-sent-checkbox" data-pod-id="${pod.id}" ${adHocInvStatus.checkedSent ? 'checked' : ''} ${!adHocInvStatus.invoiced ? 'disabled' : ''}
+                           onchange="toggleCheckedSent(${pod.id}, null, null)" title="Checked & Sent">
                     </td>
                     <td style="padding: 12px;">
                         ${customerName}
@@ -9745,11 +9841,44 @@
             showExistingPod(pod);
         }
 
-        async function toggleInvoice(podId) {
+        async function toggleInvoice(podId, customerId, serviceDate) {
             if (podId) {
-                db.invoiceStatus[podId] = !db.invoiceStatus[podId];
-                await db.saveInvoiceStatus(podId, db.invoiceStatus[podId]);
-                updateInvoiceSelectAllState();
+                // POD-based record
+                const current = db.invoiceStatus[podId] || { invoiced: false, checkedSent: false };
+                const newInvoiced = !current.invoiced;
+                // If uninvoicing, also clear checked_sent
+                const newCheckedSent = newInvoiced ? current.checkedSent : false;
+                db.invoiceStatus[podId] = { invoiced: newInvoiced, checkedSent: newCheckedSent };
+                await db.saveInvoiceStatus(podId, newInvoiced, newCheckedSent);
+                // Update checked_sent checkbox if present
+                const csBox = document.querySelector(`.checked-sent-checkbox[data-pod-id="${podId}"]`);
+                if (csBox) { csBox.checked = newCheckedSent; csBox.disabled = !newInvoiced; }
+            } else if (customerId && serviceDate) {
+                // Skipped customer record
+                const key = `${customerId}|${serviceDate}`;
+                const current = db.skippedInvoiceStatus[key] || { invoiced: false, checkedSent: false };
+                const newInvoiced = !current.invoiced;
+                const newCheckedSent = newInvoiced ? current.checkedSent : false;
+                db.skippedInvoiceStatus[key] = { invoiced: newInvoiced, checkedSent: newCheckedSent };
+                await db.saveSkippedInvoiceStatus(customerId, serviceDate, newInvoiced, newCheckedSent);
+                const csBox = document.querySelector(`.checked-sent-checkbox[data-customer-id="${customerId}"][data-date="${serviceDate}"]`);
+                if (csBox) { csBox.checked = newCheckedSent; csBox.disabled = !newInvoiced; }
+            }
+            updateInvoiceSelectAllState();
+        }
+        
+        async function toggleCheckedSent(podId, customerId, serviceDate) {
+            if (podId) {
+                const current = db.invoiceStatus[podId] || { invoiced: false, checkedSent: false };
+                const newCheckedSent = !current.checkedSent;
+                db.invoiceStatus[podId] = { ...current, checkedSent: newCheckedSent };
+                await db.saveInvoiceStatus(podId, current.invoiced, newCheckedSent);
+            } else if (customerId && serviceDate) {
+                const key = `${customerId}|${serviceDate}`;
+                const current = db.skippedInvoiceStatus[key] || { invoiced: false, checkedSent: false };
+                const newCheckedSent = !current.checkedSent;
+                db.skippedInvoiceStatus[key] = { ...current, checkedSent: newCheckedSent };
+                await db.saveSkippedInvoiceStatus(customerId, serviceDate, current.invoiced, newCheckedSent);
             }
         }
         
@@ -9768,11 +9897,22 @@
         async function toggleAllInvoices(checked) {
             const checkboxes = document.querySelectorAll('.invoice-checkbox:not([disabled])');
             for (const cb of checkboxes) {
+                if (cb.checked === checked) continue;
+                cb.checked = checked;
                 const podId = parseInt(cb.dataset.podId);
-                if (podId && cb.checked !== checked) {
-                    cb.checked = checked;
-                    db.invoiceStatus[podId] = checked;
-                    await db.saveInvoiceStatus(podId, checked);
+                const customerId = parseInt(cb.dataset.customerId);
+                const serviceDate = cb.dataset.date;
+                if (podId) {
+                    const current = db.invoiceStatus[podId] || { invoiced: false, checkedSent: false };
+                    const newCheckedSent = checked ? current.checkedSent : false;
+                    db.invoiceStatus[podId] = { invoiced: checked, checkedSent: newCheckedSent };
+                    await db.saveInvoiceStatus(podId, checked, newCheckedSent);
+                } else if (customerId && serviceDate) {
+                    const key = `${customerId}|${serviceDate}`;
+                    const current = db.skippedInvoiceStatus[key] || { invoiced: false, checkedSent: false };
+                    const newCheckedSent = checked ? current.checkedSent : false;
+                    db.skippedInvoiceStatus[key] = { invoiced: checked, checkedSent: newCheckedSent };
+                    await db.saveSkippedInvoiceStatus(customerId, serviceDate, checked, newCheckedSent);
                 }
             }
         }
@@ -9782,23 +9922,32 @@
             const uncheckedCount = Array.from(checkboxes).filter(cb => !cb.checked).length;
             
             if (uncheckedCount === 0) {
-                showToast('All completed PODs are already marked as invoiced', 'warning');
+                showToast('All rows are already marked as invoiced', 'warning');
                 return;
             }
             
-            if (!confirm(`Mark ${uncheckedCount} POD(s) as invoiced?`)) return;
+            if (!confirm(`Mark ${uncheckedCount} row(s) as invoiced?`)) return;
             
             for (const cb of checkboxes) {
+                if (cb.checked) continue;
+                cb.checked = true;
                 const podId = parseInt(cb.dataset.podId);
-                if (podId && !cb.checked) {
-                    cb.checked = true;
-                    db.invoiceStatus[podId] = true;
-                    await db.saveInvoiceStatus(podId, true);
+                const customerId = parseInt(cb.dataset.customerId);
+                const serviceDate = cb.dataset.date;
+                if (podId) {
+                    const cs = (db.invoiceStatus[podId] || {}).checkedSent || false;
+                    db.invoiceStatus[podId] = { invoiced: true, checkedSent: cs };
+                    await db.saveInvoiceStatus(podId, true, cs);
+                } else if (customerId && serviceDate) {
+                    const key = `${customerId}|${serviceDate}`;
+                    const cs = (db.skippedInvoiceStatus[key] || {}).checkedSent || false;
+                    db.skippedInvoiceStatus[key] = { invoiced: true, checkedSent: cs };
+                    await db.saveSkippedInvoiceStatus(customerId, serviceDate, true, cs);
                 }
             }
             
             updateInvoiceSelectAllState();
-            showToast(`Marked ${uncheckedCount} POD(s) as invoiced`, 'success');
+            showToast(`Marked ${uncheckedCount} row(s) as invoiced`, 'success');
         }
 
         function populateExportServiceDayFilter() {
@@ -9859,7 +10008,7 @@
                 
                 data.push([
                     pod ? 'Yes' : 'No',
-                    pod && db.invoiceStatus[pod.id] ? 'Yes' : 'No',
+                    pod && (db.invoiceStatus[pod.id] || {}).invoiced ? 'Yes' : 'No',
                     customer.name,
                     customer.phone || '',
                     customer.address || '',
