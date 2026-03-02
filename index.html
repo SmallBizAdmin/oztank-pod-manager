@@ -3523,7 +3523,7 @@
                             'July', 'August', 'September', 'October', 'November', 'December'];
         
         // Waste field values that are billing instructions, not physical collection types
-        const BILLING_WASTE_FLAGS = ['blanket invoice', 'use po', 'blanket po', 'po number'];
+        const BILLING_WASTE_FLAGS = ['blanket invoice', 'use po', 'blanket po', 'po number', 'forward invoice'];
         function isBillingWaste(waste) {
             if (!waste) return false;
             return BILLING_WASTE_FLAGS.some(f => waste.toLowerCase().includes(f));
@@ -4498,6 +4498,7 @@
                             waste: customer.waste,
                             code: customer.code,
                             notes: customer.notes,
+                            invoice_type: customer.invoiceType,
                             special_instructions: customer.specialInstructions,
                             business_group: customer.businessGroup,
                             order: customer.order,
@@ -8992,6 +8993,14 @@
                             <option value="Drum" ${customer.waste === 'Drum' ? 'selected' : ''}>Drum</option>
                         </select>
                         
+                        <select id="edit-invoicetype-${id}" style="width: 100%; padding: 8px; margin-bottom: 4px;">
+                            <option value="">Billing Note...</option>
+                            <option value="Blanket Invoice" ${customer.invoiceType === 'Blanket Invoice' ? 'selected' : ''}>📋 Blanket Invoice</option>
+                            <option value="USE PO" ${customer.invoiceType === 'USE PO' ? 'selected' : ''}>📋 USE PO</option>
+                            <option value="No Invoice" ${customer.invoiceType === 'No Invoice' ? 'selected' : ''}>No Invoice</option>
+                            <option value="Forward Invoices" ${customer.invoiceType === 'Forward Invoices' ? 'selected' : ''}>📋 Forward Invoices</option>
+                        </select>
+                        
                         <input type="text" id="edit-code-${id}" value="${customer.code || ''}" placeholder="Code" style="width: 100%; padding: 8px; margin-bottom: 4px;">
                         <textarea id="edit-notes-${id}" placeholder="Notes" style="width: 100%; padding: 8px; min-height: 60px;">${customer.notes || ''}</textarea>
                     </div>
@@ -9014,6 +9023,7 @@
             customer.serviceType = document.getElementById(`edit-servicetype-${id}`).value;
             customer.carbsolve = document.getElementById(`edit-carbsolve-${id}`).value;
             customer.waste = document.getElementById(`edit-waste-${id}`).value;
+            customer.invoiceType = document.getElementById(`edit-invoicetype-${id}`).value;
             customer.code = document.getElementById(`edit-code-${id}`).value;
             customer.notes = document.getElementById(`edit-notes-${id}`).value;
             
@@ -9353,8 +9363,11 @@
                 }
                 
                 // Customer name with skip indicator
-                const billingBadge = isBillingWaste(customer.waste)
-                    ? `<span style="background: #fff7ed; color: #c2410c; border: 1px solid #fdba74; padding: 2px 7px; border-radius: 8px; font-size: 10px; font-weight: 600; margin-left: 6px;">📋 ${customer.waste}</span>`
+                const billingValue = (customer.invoiceType && isBillingWaste(customer.invoiceType))
+                    ? customer.invoiceType
+                    : (isBillingWaste(customer.waste) ? customer.waste : null);
+                const billingBadge = billingValue
+                    ? `<span style="background: #fff7ed; color: #c2410c; border: 1px solid #fdba74; padding: 2px 7px; border-radius: 8px; font-size: 10px; font-weight: 600; margin-left: 6px;">📋 ${billingValue}</span>`
                     : '';
                 const customerNameDisplay = isSkipped 
                     ? `<span style="text-decoration: line-through; color: #9ca3af;">${customer.name}</span> <span style="background: #fee2e2; color: #991b1b; padding: 2px 6px; border-radius: 8px; font-size: 10px;">${skipReason || 'Skipped'}</span>`
