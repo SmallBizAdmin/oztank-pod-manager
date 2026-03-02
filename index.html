@@ -7215,7 +7215,12 @@
                 const dateStr = formatDateLocal(date);
                 const isToday = dateStr === todayStr;
                 const isPast = dateStr < todayStr;
-                const events = byDate[dateStr] || [];
+                const workerOrder = ['Matt', 'Drew', 'Michael', 'Allan', 'Stephen', 'Red'];
+                const events = (byDate[dateStr] || []).slice().sort((a, b) => {
+                    const ai = workerOrder.indexOf(a.calendar_owner);
+                    const bi = workerOrder.indexOf(b.calendar_owner);
+                    return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+                });
                 
                 gridHtml += `
                     <div style="background: ${isToday ? '#eff6ff' : 'white'}; min-height: 150px; padding: 8px; ${isToday ? 'box-shadow: inset 0 0 0 2px #3b82f6;' : ''} overflow: hidden;">
