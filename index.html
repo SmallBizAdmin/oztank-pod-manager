@@ -3522,6 +3522,13 @@
         const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 
                             'July', 'August', 'September', 'October', 'November', 'December'];
         
+        // Waste field values that are billing instructions, not physical collection types
+        const BILLING_WASTE_FLAGS = ['blanket invoice', 'use po', 'blanket po', 'po number'];
+        function isBillingWaste(waste) {
+            if (!waste) return false;
+            return BILLING_WASTE_FLAGS.some(f => waste.toLowerCase().includes(f));
+        }
+        
         // Format date as YYYY-MM-DD without UTC conversion (fixes timezone issues)
         function formatDateLocal(date) {
             const year = date.getFullYear();
@@ -8178,7 +8185,7 @@
                 if (customer.carbsolve) {
                     customerInfoHtml += `<span class="customer-carbsolve">${customer.carbsolve}</span>`;
                 }
-                if (customer.waste) {
+                if (customer.waste && !isBillingWaste(customer.waste)) {
                     customerInfoHtml += `<span class="customer-waste">🛢️ ${customer.waste}</span>`;
                 }
                 if (customer.code) {
@@ -9346,9 +9353,12 @@
                 }
                 
                 // Customer name with skip indicator
+                const billingBadge = isBillingWaste(customer.waste)
+                    ? `<span style="background: #fff7ed; color: #c2410c; border: 1px solid #fdba74; padding: 2px 7px; border-radius: 8px; font-size: 10px; font-weight: 600; margin-left: 6px;">📋 ${customer.waste}</span>`
+                    : '';
                 const customerNameDisplay = isSkipped 
                     ? `<span style="text-decoration: line-through; color: #9ca3af;">${customer.name}</span> <span style="background: #fee2e2; color: #991b1b; padding: 2px 6px; border-radius: 8px; font-size: 10px;">${skipReason || 'Skipped'}</span>`
-                    : customer.name + scheduleBadgeHtml;
+                    : customer.name + scheduleBadgeHtml + billingBadge;
                 
                 // Status column
                 let statusDisplay;
