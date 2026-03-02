@@ -2792,14 +2792,14 @@
                     <table id="adminRunsheetTable" style="width: 100%; border-collapse: collapse; font-size: 14px;">
                         <thead>
                             <tr style="background: #f3f4f6; text-align: left;">
-                                <th style="padding: 12px; border-bottom: 2px solid #e5e7eb;">Done</th>
-                                <th style="padding: 12px; border-bottom: 2px solid #e5e7eb;">
-                                    <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                <th style="padding: 12px; border-bottom: 2px solid #e5e7eb; text-align: center;">Done</th>
+                                <th style="padding: 12px; border-bottom: 2px solid #e5e7eb; text-align: center;">
+                                    <label style="display: flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer;">
                                         <input type="checkbox" id="invoiceSelectAll" onchange="toggleAllInvoices(this.checked)">
                                         Invoice
                                     </label>
                                 </th>
-                                <th style="padding: 12px; border-bottom: 2px solid #e5e7eb;">Checked & Sent</th>
+                                <th style="padding: 12px; border-bottom: 2px solid #e5e7eb; text-align: center;">Checked & Sent</th>
                                 <th style="padding: 12px; border-bottom: 2px solid #e5e7eb;">Company</th>
                                 <th style="padding: 12px; border-bottom: 2px solid #e5e7eb;">Type</th>
                                 <th style="padding: 12px; border-bottom: 2px solid #e5e7eb;">Carbsolve</th>
@@ -9457,7 +9457,7 @@
                     checkedSentHtml = `<span style="color: #9ca3af;">—</span>`;
                 } else if (pod) {
                     // POD-based
-                    const status = db.invoiceStatus[pod.id] || { invoiced: false, checkedSent: false };
+                    const status = getInvoiceStatus(pod.id);
                     invoiced = status.invoiced;
                     checkedSent = status.checkedSent;
                     invoiceCheckboxHtml = `<input type="checkbox" class="invoice-checkbox" data-pod-id="${pod.id}"
@@ -9724,7 +9724,7 @@
                 tr.onmouseover = () => tr.style.background = '#fef3c7';
                 tr.onmouseout = () => tr.style.background = '#fffbeb';
                 
-                const adHocInvStatus = db.invoiceStatus[pod.id] || { invoiced: false, checkedSent: false };
+                const adHocInvStatus = getInvoiceStatus(pod.id);
                 tr.innerHTML = `
                     <td style="padding: 12px; text-align: center;">
                         <span style="color: #16a34a; font-size: 18px;">✓</span>
@@ -9841,10 +9841,17 @@
             showExistingPod(pod);
         }
 
+        // Normalise invoiceStatus entry — handles legacy boolean format from old cache
+        function getInvoiceStatus(podId) {
+            const raw = db.invoiceStatus[podId];
+            if (!raw) return { invoiced: false, checkedSent: false };
+            if (typeof raw === 'boolean') return { invoiced: raw, checkedSent: false };
+            return raw;
+        }
+        
         async function toggleInvoice(podId, customerId, serviceDate) {
             if (podId) {
-                // POD-based record
-                const current = db.invoiceStatus[podId] || { invoiced: false, checkedSent: false };
+                const current = getInvoiceStatus(podId);
                 const newInvoiced = !current.invoiced;
                 // If uninvoicing, also clear checked_sent
                 const newCheckedSent = newInvoiced ? current.checkedSent : false;
@@ -9869,7 +9876,7 @@
         
         async function toggleCheckedSent(podId, customerId, serviceDate) {
             if (podId) {
-                const current = db.invoiceStatus[podId] || { invoiced: false, checkedSent: false };
+                const current = getInvoiceStatus(podId);
                 const newCheckedSent = !current.checkedSent;
                 db.invoiceStatus[podId] = { ...current, checkedSent: newCheckedSent };
                 await db.saveInvoiceStatus(podId, current.invoiced, newCheckedSent);
@@ -9903,7 +9910,7 @@
                 const customerId = parseInt(cb.dataset.customerId);
                 const serviceDate = cb.dataset.date;
                 if (podId) {
-                    const current = db.invoiceStatus[podId] || { invoiced: false, checkedSent: false };
+                    const current = getInvoiceStatus(podId);
                     const newCheckedSent = checked ? current.checkedSent : false;
                     db.invoiceStatus[podId] = { invoiced: checked, checkedSent: newCheckedSent };
                     await db.saveInvoiceStatus(podId, checked, newCheckedSent);
@@ -9935,7 +9942,7 @@
                 const customerId = parseInt(cb.dataset.customerId);
                 const serviceDate = cb.dataset.date;
                 if (podId) {
-                    const cs = (db.invoiceStatus[podId] || {}).checkedSent || false;
+                    const cs = getInvoiceStatus(podId).checkedSent;
                     db.invoiceStatus[podId] = { invoiced: true, checkedSent: cs };
                     await db.saveInvoiceStatus(podId, true, cs);
                 } else if (customerId && serviceDate) {
@@ -10008,7 +10015,7 @@
                 
                 data.push([
                     pod ? 'Yes' : 'No',
-                    pod && (db.invoiceStatus[pod.id] || {}).invoiced ? 'Yes' : 'No',
+                    pod && getInvoiceStatus(pod.id).invoiced ? 'Yes' : 'No',
                     customer.name,
                     customer.phone || '',
                     customer.address || '',
