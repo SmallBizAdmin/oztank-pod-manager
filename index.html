@@ -9909,18 +9909,22 @@
                 const podId = parseInt(cb.dataset.podId);
                 const customerId = parseInt(cb.dataset.customerId);
                 const serviceDate = cb.dataset.date;
+                let csBox = null;
                 if (podId) {
                     const current = getInvoiceStatus(podId);
                     const newCheckedSent = checked ? current.checkedSent : false;
                     db.invoiceStatus[podId] = { invoiced: checked, checkedSent: newCheckedSent };
                     await db.saveInvoiceStatus(podId, checked, newCheckedSent);
+                    csBox = document.querySelector(`.checked-sent-checkbox[data-pod-id="${podId}"]`);
                 } else if (customerId && serviceDate) {
                     const key = `${customerId}|${serviceDate}`;
                     const current = db.skippedInvoiceStatus[key] || { invoiced: false, checkedSent: false };
                     const newCheckedSent = checked ? current.checkedSent : false;
                     db.skippedInvoiceStatus[key] = { invoiced: checked, checkedSent: newCheckedSent };
                     await db.saveSkippedInvoiceStatus(customerId, serviceDate, checked, newCheckedSent);
+                    csBox = document.querySelector(`.checked-sent-checkbox[data-customer-id="${customerId}"][data-date="${serviceDate}"]`);
                 }
+                if (csBox) csBox.disabled = !checked;
             }
         }
         
