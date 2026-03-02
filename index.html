@@ -1817,6 +1817,24 @@
             margin-top: 4px;
         }
 
+        /* ── Responsive Layout ── */
+
+        /* Desktop: full-width layout */
+        @media (min-width: 768px) {
+            .container {
+                max-width: 100%;
+                padding: 16px 32px;
+            }
+        }
+
+        /* Mobile: hide week/calendar view, show list only */
+        @media (max-width: 767px) {
+            #workerWeekView,
+            #workerCalendarViewToggle {
+                display: none !important;
+            }
+        }
+
         /* Calendar Event Status Styles */
         .calendar-event-status {
             display: flex;
@@ -2156,7 +2174,7 @@
                 <!-- Worker's Calendar Events (hidden by default) -->
                 <div id="workerCalendarEvents" style="display: none; margin-top: 16px;">
                     <!-- Week/List View Toggle -->
-                    <div style="display: flex; align-items: center; justify-content: flex-start; margin-bottom: 12px;">
+                    <div id="workerCalendarViewToggle" style="display: flex; align-items: center; justify-content: flex-start; margin-bottom: 12px;">
                         <div style="display: flex; gap: 4px; background: #e5e7eb; padding: 4px; border-radius: 8px; width: fit-content;">
                             <button class="period-toggle-btn active" id="workerWeekViewBtn" onclick="setWorkerCalendarView('week')">Week View</button>
                             <button class="period-toggle-btn" id="workerListViewBtn" onclick="setWorkerCalendarView('list')">List View</button>
@@ -2174,7 +2192,7 @@
                     </div>
                     
                     <!-- List View (hidden by default) -->
-                    <div id="workerListView" style="display: none; padding: 12px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
+                    <div id="workerListView" style="display: none; padding: 12px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0; max-height: 60vh; overflow-y: auto;">
                         <div id="workerEventsList"></div>
                     </div>
                 </div>
@@ -6916,7 +6934,7 @@
             await loadWorkerCalendarEvents();
         }
         
-        let workerCalendarView = 'week'; // 'week' or 'list'
+        let workerCalendarView = window.innerWidth < 768 ? 'list' : 'week'; // 'week' or 'list'
         let workerWeekStart = getMondayOfWeek(new Date()); // Track which week we're viewing
         let workerPeriod = 'week'; // 'week' or 'month' - for the top selector
         let workerMonthYear = { month: new Date().getMonth(), year: new Date().getFullYear() };
@@ -7138,6 +7156,8 @@
                 // Render list view
                 renderWorkerListView(byDate, todayStr);
                 
+                // Apply correct view (list on mobile, week on desktop)
+                setWorkerCalendarView(workerCalendarView);
                 eventsContainer.style.display = 'block';
                 
             } catch (e) {
@@ -7353,72 +7373,120 @@
                 return;
             }
             
-            let html = '';
+            // Fixed worker order
+            const workerOrder = ['Matt', 'Drew', 'Michael', 'Allan', 'Stephen', 'Red'];
+            
+            // Collect all events flat, then group by calendar_owner
+            const allEvents = []; // { dateStr, event }
             Object.keys(byDate).sort().forEach(dateStr => {
-                const date = new Date(dateStr + 'T00:00:00');
-                const dayName = dayNames[date.getDay()];
-                const dayNum = date.getDate();
-                const isToday = dateStr === todayStr;
-                
-                html += `
-                    <div style="margin-bottom: 12px;">
-                        <div style="font-weight: 600; font-size: 12px; color: ${isToday ? '#1e3a5f' : '#6b7280'}; margin-bottom: 6px; ${isToday ? 'background: #dbeafe; padding: 4px 8px; border-radius: 4px;' : ''}">
-                            ${isToday ? '⭐ TODAY - ' : ''}${dayName} ${dayNum}
-                        </div>
-                `;
-                
                 byDate[dateStr].forEach(event => {
-                    const isServiceDay = event.is_service_day;
-                    const icon = isServiceDay ? '🚛' : '📋';
-                    const bgColor = isServiceDay ? 'white' : '#f8fafc';
-                    // Use event's calendar_owner for color when showing all workers
-                    const eventWorker = currentSelectedWorker || event.calendar_owner || '';
-                    const showWorkerName = !currentSelectedWorker && event.calendar_owner;
-                    
-                    if (isServiceDay) {
-                        html += `
-                            <div onclick="openWorkerRunsheet('${event.service_day_name}', '${dateStr}')"
-                                 style="display: flex; align-items: center; gap: 8px; padding: 8px; background: ${bgColor}; border-radius: 6px; margin-bottom: 4px; margin-left: 12px; border-left: 3px solid ${getWorkerColor(eventWorker)}; cursor: pointer;">
-                                <span>${icon}</span>
-                                <div style="flex: 1;">
-                                    <div style="font-weight: 500; font-size: 13px;">${event.service_day_name || event.event_title}</div>
-                                    ${showWorkerName ? `<div style="font-size: 11px; color: #6b7280;">👤 ${event.calendar_owner}</div>` : ''}
-                                    ${event.event_title !== event.service_day_name ? `<div style="font-size: 11px; color: #6b7280;">${event.event_title}</div>` : ''}
-                                </div>
-                                <span style="color: #6b7280; font-size: 12px;">→</span>
-                            </div>
-                        `;
-                    } else {
-                        // Non-service-day event: show with tick/cross and worker color
-                        const eventStatus = db.getCalendarEventStatus(event.id);
-                        const completedClass = eventStatus === 'completed' ? ' event-completed' : '';
-                        const cancelledClass = eventStatus === 'cancelled' ? ' event-cancelled' : '';
-                        const eventBgColor = getWorkerColorLight(eventWorker);
-                        const eventBorderColor = getWorkerColor(eventWorker);
-                        
-                        html += `
-                            <div class="calendar-event-item${completedClass}${cancelledClass}" 
-                                 style="margin-bottom: 4px; margin-left: 12px; background: ${eventBgColor}; border-left-color: ${eventBorderColor};">
-                                <span style="margin-right: 6px;">${icon}</span>
-                                <span class="calendar-event-title" onclick="showCalendarEventModal('${event.id}', '${dateStr}')">
-                                    ${event.event_title}
-                                    ${showWorkerName ? `<span style="font-size: 10px; color: #6b7280;"> (${event.calendar_owner})</span>` : ''}
-                                </span>
-                                <div class="calendar-event-actions">
-                                    <button class="event-tick-btn${eventStatus === 'completed' ? ' active' : ''}" onclick="toggleCalendarEventStatus('${event.id}', 'completed')" title="Done">✓</button>
-                                    <button class="event-cross-btn${eventStatus === 'cancelled' ? ' active' : ''}" onclick="toggleCalendarEventStatus('${event.id}', 'cancelled')" title="Not done">✗</button>
-                                </div>
-                            </div>
-                        `;
-                    }
+                    allEvents.push({ dateStr, event });
+                });
+            });
+            
+            // Group by worker
+            const byWorker = {};
+            allEvents.forEach(({ dateStr, event }) => {
+                const owner = event.calendar_owner || 'Other';
+                if (!byWorker[owner]) byWorker[owner] = [];
+                byWorker[owner].push({ dateStr, event });
+            });
+            
+            // If a specific worker is selected, only show that worker
+            const workersToShow = currentSelectedWorker
+                ? [currentSelectedWorker]
+                : [...workerOrder.filter(w => byWorker[w]), ...Object.keys(byWorker).filter(w => !workerOrder.includes(w))];
+            
+            let html = '';
+            workersToShow.forEach(worker => {
+                const events = byWorker[worker];
+                if (!events || events.length === 0) return;
+                
+                const workerColor = getWorkerColor(worker);
+                const workerColorLight = getWorkerColorLight(worker);
+                
+                // Worker header (only show when viewing all workers)
+                if (!currentSelectedWorker) {
+                    html += `
+                        <div style="margin-bottom: 8px; margin-top: 12px; padding: 6px 10px; background: ${workerColorLight}; border-left: 4px solid ${workerColor}; border-radius: 4px; font-weight: 700; font-size: 13px; color: #111827;">
+                            👤 ${worker}
+                        </div>
+                    `;
+                }
+                
+                // Group this worker's events by date
+                const workerByDate = {};
+                events.forEach(({ dateStr, event }) => {
+                    if (!workerByDate[dateStr]) workerByDate[dateStr] = [];
+                    workerByDate[dateStr].push(event);
                 });
                 
-                html += '</div>';
+                Object.keys(workerByDate).sort().forEach(dateStr => {
+                    const date = new Date(dateStr + 'T00:00:00');
+                    const dayName = dayNames[date.getDay()];
+                    const dayNum = date.getDate();
+                    const isToday = dateStr === todayStr;
+                    
+                    // Add data-date so we can scroll to today
+                    html += `
+                        <div style="margin-bottom: 10px;" data-date="${dateStr}">
+                            <div style="font-weight: 600; font-size: 12px; color: ${isToday ? '#1e3a5f' : '#6b7280'}; margin-bottom: 5px; ${isToday ? 'background: #dbeafe; padding: 4px 8px; border-radius: 4px;' : 'padding: 2px 0;'}">
+                                ${isToday ? '⭐ TODAY — ' : ''}${dayName} ${dayNum}
+                            </div>
+                    `;
+                    
+                    workerByDate[dateStr].forEach(event => {
+                        const isServiceDay = event.is_service_day;
+                        const icon = isServiceDay ? '🚛' : '📋';
+                        const eventWorker = currentSelectedWorker || event.calendar_owner || '';
+                        
+                        if (isServiceDay) {
+                            html += `
+                                <div onclick="openWorkerRunsheet('${event.service_day_name}', '${dateStr}')"
+                                     style="display: flex; align-items: center; gap: 8px; padding: 8px; background: white; border-radius: 6px; margin-bottom: 4px; margin-left: 12px; border-left: 3px solid ${workerColor}; cursor: pointer;">
+                                    <span>${icon}</span>
+                                    <div style="flex: 1;">
+                                        <div style="font-weight: 500; font-size: 13px;">${event.service_day_name || event.event_title}</div>
+                                        ${event.event_title !== event.service_day_name ? `<div style="font-size: 11px; color: #6b7280;">${event.event_title}</div>` : ''}
+                                    </div>
+                                    <span style="color: #6b7280; font-size: 12px;">→</span>
+                                </div>
+                            `;
+                        } else {
+                            const eventStatus = db.getCalendarEventStatus(event.id);
+                            const completedClass = eventStatus === 'completed' ? ' event-completed' : '';
+                            const cancelledClass = eventStatus === 'cancelled' ? ' event-cancelled' : '';
+                            html += `
+                                <div class="calendar-event-item${completedClass}${cancelledClass}"
+                                     style="margin-bottom: 4px; margin-left: 12px; background: ${workerColorLight}; border-left-color: ${workerColor};">
+                                    <span style="margin-right: 6px;">${icon}</span>
+                                    <span class="calendar-event-title" onclick="showCalendarEventModal('${event.id}', '${dateStr}')">
+                                        ${event.event_title}
+                                    </span>
+                                    <div class="calendar-event-actions">
+                                        <button class="event-tick-btn${eventStatus === 'completed' ? ' active' : ''}" onclick="toggleCalendarEventStatus('${event.id}', 'completed')" title="Done">✓</button>
+                                        <button class="event-cross-btn${eventStatus === 'cancelled' ? ' active' : ''}" onclick="toggleCalendarEventStatus('${event.id}', 'cancelled')" title="Not done">✗</button>
+                                    </div>
+                                </div>
+                            `;
+                        }
+                    });
+                    
+                    html += '</div>';
+                });
             });
             
             eventsList.innerHTML = html;
+            
+            // Scroll so today's first occurrence is at the top of the list container
+            requestAnimationFrame(() => {
+                const todayEl = eventsList.querySelector(`[data-date="${todayStr}"]`);
+                if (todayEl) {
+                    todayEl.scrollIntoView({ block: 'start', behavior: 'instant' });
+                }
+            });
         }
-        
+
         function openWorkerRunsheet(serviceDayName, dateStr) {
             // Store the date we're working on
             currentServiceDate = dateStr;
@@ -7492,6 +7560,8 @@
                 // Render list view
                 renderWorkerListView(byDate, todayStr);
                 
+                // Apply correct view (list on mobile, week on desktop)
+                setWorkerCalendarView(workerCalendarView);
                 eventsContainer.style.display = 'block';
                 
             } catch (e) {
