@@ -530,6 +530,22 @@
             color: white;
         }
 
+        @media (max-width: 767px) {
+            .product-line {
+                flex-wrap: wrap;
+            }
+            .product-line select {
+                flex: 1 1 100%;
+            }
+            .product-line input[type="number"] {
+                width: 70px;
+                flex-shrink: 0;
+            }
+            .product-line button {
+                flex-shrink: 0;
+            }
+        }
+
         .add-product-btn {
             background: #059669;
             color: white;
@@ -5326,6 +5342,7 @@
         function showView(viewId) {
             document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
             document.getElementById(viewId).classList.add('active');
+            window.scrollTo(0, 0);
             
             // Show/hide FAB based on view
             const fab = document.getElementById('homeFab');
