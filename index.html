@@ -5417,9 +5417,19 @@
         
         // Back button — restore previous view
         window.addEventListener('popstate', function(e) {
-            const viewId = e.state && e.state.viewId;
+            const state = e.state;
+            const viewId = state && state.viewId;
             if (viewId && document.getElementById(viewId)) {
                 showView(viewId, true);
+                // If returning to admin dashboard, close any open subpanel
+                if (viewId === 'adminDashboardView') {
+                    document.getElementById('adminRunsheetContainer').style.display = 'none';
+                    document.getElementById('monthlyInvoicesContainer').style.display = 'none';
+                    document.getElementById('adminCalendarContainer').style.display = 'block';
+                    document.getElementById('calendarViewTab').classList.add('active');
+                    document.getElementById('listViewTab').classList.remove('active');
+                    renderAdminCalendar();
+                }
             } else {
                 // No state = first entry, go home
                 showView('homeView', true);
@@ -6127,6 +6137,7 @@
             document.getElementById('adminRunsheetContainer').style.display = 'none';
             document.getElementById('bimonthlyContainer').style.display = 'none';
             document.getElementById('monthlyInvoicesContainer').style.display = 'block';
+            history.pushState({ viewId: 'adminDashboardView', subview: 'invoices' }, '');
             
             // Update tab states
             document.getElementById('calendarViewTab').classList.remove('active');
@@ -6681,6 +6692,7 @@
             document.getElementById('bimonthlyContainer').style.display = 'none';
             document.getElementById('monthlyInvoicesContainer').style.display = 'none';
             document.getElementById('adminRunsheetContainer').style.display = 'block';
+            history.pushState({ viewId: 'adminDashboardView', subview: 'runsheet' }, '');
             document.getElementById('calendarViewTab').classList.remove('active');
             document.getElementById('listViewTab').classList.add('active');
             document.getElementById('bimonthlyViewTab').classList.remove('active');
