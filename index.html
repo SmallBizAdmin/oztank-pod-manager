@@ -5397,10 +5397,15 @@
         // initializeApp is now called from the Supabase loader above
 
         // Views
-        function showView(viewId) {
+        function showView(viewId, skipHistory) {
             document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
             document.getElementById(viewId).classList.add('active');
             window.scrollTo(0, 0);
+            
+            // Push history state unless called from popstate handler
+            if (!skipHistory) {
+                history.pushState({ viewId }, '', '');
+            }
             
             // Show/hide FAB based on view
             const fab = document.getElementById('homeFab');
@@ -5409,6 +5414,17 @@
                 closeFabMenu(); // Always close menu when switching views
             }
         }
+        
+        // Back button — restore previous view
+        window.addEventListener('popstate', function(e) {
+            const viewId = e.state && e.state.viewId;
+            if (viewId && document.getElementById(viewId)) {
+                showView(viewId, true);
+            } else {
+                // No state = first entry, go home
+                showView('homeView', true);
+            }
+        });
 
         function showHomeView() {
             // Clean up any existing other-workers-section before re-rendering
