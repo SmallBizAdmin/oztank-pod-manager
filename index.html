@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oz Tank - Service POD Manager v11.10</title>
+    <title>Oz Tank - Service POD Manager v11.11</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -4132,6 +4132,7 @@
             scheduledDays: [],
             calendarEvents: [],
             calendarEventStatus: {},
+                calendarEventNotes: {},
             calendarSyncSettings: null,
             invoiceEntries: [],
             
@@ -4192,8 +4193,8 @@
                         
                         console.log(`Loaded ${this.scheduledDays.length} scheduled days and ${this.calendarEvents.length} other events for ${MONTH_NAMES[selectedMonth]} ${selectedYear}`);
                         
-                        // Load event status from localStorage (temp solution until DB table exists)
-                        this.loadCalendarEventStatus();
+                        // Load event status from Supabase
+                        await this.loadCalendarEventStatus();
                     }
                     
                     // Also load invoice entries for the month
@@ -4450,8 +4451,8 @@
                         
                         console.log(`Loaded ${this.scheduledDays.length} scheduled days and ${this.calendarEvents.length} other events for week starting ${startStr}`);
                         
-                        // Load event status from localStorage
-                        this.loadCalendarEventStatus();
+                        // Load event status from Supabase
+                        await this.loadCalendarEventStatus();
                     }
                     
                     // Also load invoice entries for the week
@@ -4464,31 +4465,70 @@
                 }
             },
             
-            // Calendar event status management (using localStorage until DB table exists)
-            loadCalendarEventStatus() {
+            // Calendar event status management (Supabase-backed, shared across all devices)
+            async loadCalendarEventStatus() {
                 try {
-                    const stored = localStorage.getItem('calendarEventStatus');
-                    this.calendarEventStatus = stored ? JSON.parse(stored) : {};
-                } catch (e) {
+                    const { data, error } = await supabase
+                        .from('calendar_event_status')
+                        .select('event_id, status, notes');
+                    if (error) throw error;
                     this.calendarEventStatus = {};
+                    this.calendarEventNotes = {};
+                    (data || []).forEach(row => {
+                        if (row.status) this.calendarEventStatus[row.event_id] = { status: row.status };
+                        if (row.notes) this.calendarEventNotes[row.event_id] = row.notes;
+                    });
+                } catch (e) {
+                    console.warn('loadCalendarEventStatus error:', e);
+                    this.calendarEventStatus = {};
+                    this.calendarEventNotes = {};
                 }
             },
             
-            saveCalendarEventStatus(eventId, status) {
-                // status: 'completed', 'cancelled', or null to remove
-                if (status) {
-                    this.calendarEventStatus[eventId] = {
-                        status: status,
-                        timestamp: new Date().toISOString()
-                    };
-                } else {
-                    delete this.calendarEventStatus[eventId];
+            async saveCalendarEventStatus(eventId, status) {
+                // status: 'completed', 'cancelled', or null to clear
+                try {
+                    if (status) {
+                        this.calendarEventStatus[eventId] = { status };
+                        const { error } = await supabase
+                            .from('calendar_event_status')
+                            .upsert({ event_id: eventId, status, updated_at: new Date().toISOString() }, { onConflict: 'event_id' });
+                        if (error) throw error;
+                    } else {
+                        delete this.calendarEventStatus[eventId];
+                        const { error } = await supabase
+                            .from('calendar_event_status')
+                            .update({ status: null, updated_at: new Date().toISOString() })
+                            .eq('event_id', eventId);
+                        if (error) throw error;
+                    }
+                } catch (e) {
+                    console.warn('saveCalendarEventStatus error:', e);
                 }
-                localStorage.setItem('calendarEventStatus', JSON.stringify(this.calendarEventStatus));
             },
             
             getCalendarEventStatus(eventId) {
                 return this.calendarEventStatus[eventId]?.status || null;
+            },
+            
+            getCalendarEventNotes(eventId) {
+                return this.calendarEventNotes[eventId] || '';
+            },
+            
+            async saveCalendarEventNotes(eventId, notes) {
+                try {
+                    if (notes) {
+                        this.calendarEventNotes[eventId] = notes;
+                    } else {
+                        delete this.calendarEventNotes[eventId];
+                    }
+                    const { error } = await supabase
+                        .from('calendar_event_status')
+                        .upsert({ event_id: eventId, notes: notes || null, updated_at: new Date().toISOString() }, { onConflict: 'event_id' });
+                    if (error) throw error;
+                } catch (e) {
+                    console.warn('saveCalendarEventNotes error:', e);
+                }
             },
             
             async saveCustomer(customer) {
@@ -5392,6 +5432,30 @@
             
             // Load worker calendar events to show calendar view on initial load
             await loadWorkerCalendarEvents();
+            
+            // Set up realtime subscription for calendar_event_status
+            setupCalendarStatusRealtime();
+        }
+        
+        // Realtime subscription so status/notes changes on any device instantly reflect everywhere
+        function setupCalendarStatusRealtime() {
+            supabase
+                .channel('calendar_event_status_changes')
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'calendar_event_status' }, async (payload) => {
+                    console.log('calendar_event_status realtime change:', payload.eventType);
+                    // Refresh the in-memory cache
+                    await db.loadCalendarEventStatus();
+                    // Re-render whichever views are visible
+                    renderAdminCalendar();
+                    if (document.getElementById('adminListContainer') && document.getElementById('adminListContainer').style.display !== 'none') {
+                        renderAdminChronologicalList();
+                    }
+                    loadWorkerCalendarEvents();
+                })
+                .subscribe((status) => {
+                    if (status === 'SUBSCRIBED') console.log('✅ Realtime: calendar_event_status subscribed');
+                    if (status === 'CHANNEL_ERROR') console.warn('⚠️ Realtime: calendar_event_status subscription error');
+                });
         }
         
         // initializeApp is now called from the Supabase loader above
@@ -5969,7 +6033,7 @@
                     // Render calendar events
                     eventsOnDate.forEach(event => {
                         const status = db.getCalendarEventStatus(event.id);
-                        const storedNotes = localStorage.getItem(`calEventNotes_${event.id}`) || '';
+                        const storedNotes = db.getCalendarEventNotes(event.id);
                         const completedStyle = status === 'completed' ? 'opacity: 0.5;' : '';
                         const cancelledStyle = status === 'cancelled' ? 'opacity: 0.4; filter: grayscale(60%);' : '';
                         const statusIcon = status === 'completed' ? '✅' : status === 'cancelled' ? '❌' : '📋';
@@ -6538,7 +6602,7 @@
                 
                 eventsOnDate.forEach(event => {
                     const status = db.getCalendarEventStatus(event.id);
-                    const storedNotes = localStorage.getItem(`calEventNotes_${event.id}`) || '';
+                    const storedNotes = db.getCalendarEventNotes(event.id);
                     const eventEl = document.createElement('div');
                     eventEl.className = `calendar-event-item${status === 'completed' ? ' event-completed' : ''}${status === 'cancelled' ? ' event-cancelled' : ''}`;
                     
@@ -6572,14 +6636,14 @@
         }
         
         // Calendar event tick/cross toggle
-        function toggleCalendarEventStatus(eventId, status) {
+        async function toggleCalendarEventStatus(eventId, status) {
             const currentStatus = db.getCalendarEventStatus(eventId);
             if (currentStatus === status) {
                 // Toggle off
-                db.saveCalendarEventStatus(eventId, null);
+                await db.saveCalendarEventStatus(eventId, null);
             } else {
                 // Set new status
-                db.saveCalendarEventStatus(eventId, status);
+                await db.saveCalendarEventStatus(eventId, status);
             }
             // Re-render whichever calendar view is active
             renderAdminCalendar();
@@ -6649,8 +6713,8 @@
             const existingModal = document.getElementById('calendarEventChooserModal');
             if (existingModal) existingModal.remove();
             
-            // Get existing notes from localStorage
-            const storedNotes = localStorage.getItem(`calEventNotes_${eventId}`) || '';
+            // Get existing notes from Supabase-backed cache
+            const storedNotes = db.getCalendarEventNotes(eventId);
             
             const modal = document.createElement('div');
             modal.id = 'calendarEventNotesModal';
@@ -6674,15 +6738,16 @@
             document.body.appendChild(modal);
         }
         
-        function saveCalendarEventNotes(eventId) {
+        async function saveCalendarEventNotes(eventId) {
             const notes = document.getElementById('calEventNotesInput').value.trim();
-            if (notes) {
-                localStorage.setItem(`calEventNotes_${eventId}`, notes);
-            } else {
-                localStorage.removeItem(`calEventNotes_${eventId}`);
-            }
+            await db.saveCalendarEventNotes(eventId, notes || null);
             document.getElementById('calendarEventNotesModal').remove();
             showToast('Notes saved', 'success');
+            // Re-render to show updated notes
+            renderAdminCalendar();
+            if (document.getElementById('adminListContainer').style.display !== 'none') {
+                renderAdminChronologicalList();
+            }
         }
         
         async function openRunsheetForDate(runDay, dateStr) {
