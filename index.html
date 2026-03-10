@@ -5454,14 +5454,15 @@
                 .channel('calendar_event_status_changes')
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'calendar_event_status' }, async (payload) => {
                     console.log('calendar_event_status realtime change:', payload.eventType);
-                    // Refresh the in-memory cache
+                    // Refresh the in-memory cache first
                     await db.loadCalendarEventStatus();
                     // Re-render whichever views are visible
                     renderAdminCalendar();
                     if (document.getElementById('adminListContainer') && document.getElementById('adminListContainer').style.display !== 'none') {
                         renderAdminChronologicalList();
                     }
-                    loadWorkerCalendarEvents();
+                    // Re-render worker calendar with updated status
+                    await loadWorkerCalendarEvents();
                 })
                 .subscribe((status) => {
                     if (status === 'SUBSCRIBED') console.log('✅ Realtime: calendar_event_status subscribed');
