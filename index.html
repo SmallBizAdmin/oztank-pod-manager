@@ -4325,8 +4325,8 @@
             async loadPodsForWeek() {
                 try {
                     const startStr = formatDateLocal(selectedWeekStart);
-                    const friday = new Date(selectedWeekStart);
-                    friday.setDate(friday.getDate() + 4);
+                    const friday = new Date(selectedWeekStart); // extended to Sunday
+                    friday.setDate(friday.getDate() + 6);
                     const endStr = formatDateLocal(friday);
                     
                     const { data: pods, error: podsError } = await supabase
@@ -4419,8 +4419,8 @@
             async loadScheduledDaysForWeek() {
                 try {
                     const startStr = formatDateLocal(selectedWeekStart);
-                    const friday = new Date(selectedWeekStart);
-                    friday.setDate(friday.getDate() + 4);
+                    const friday = new Date(selectedWeekStart); // extended to Sunday
+                    friday.setDate(friday.getDate() + 6);
                     const endStr = formatDateLocal(friday);
                     
                     // Load ALL calendar events (both service days and other events)
