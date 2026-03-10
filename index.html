@@ -6035,6 +6035,10 @@
             populateAdminServiceDaySelect();
             updatePeriodDisplay();
             await refreshForPeriod();
+            // On mobile, default to list view since calendar is hidden
+            if (window.innerWidth <= 768) {
+                showAdminListView();
+            }
         }
         
         function showAdminCalendarView() {
@@ -6124,7 +6128,7 @@
                 const hasContent = serviceDaysOnDate.length > 0 || eventsOnDate.length > 0 || adHocPods.length > 0 || adHocTankMoves.length > 0 || invoicesOnDate.length > 0;
                 
                 html += `
-                    <div class="card" style="margin-bottom: 12px; ${isToday ? 'border-left: 4px solid #3b82f6; background: #f0f9ff;' : ''}">
+                    <div class="card" data-date="${dateStr}" style="margin-bottom: 12px; ${isToday ? 'border-left: 4px solid #3b82f6; background: #f0f9ff;' : ''}">
                         <div style="font-weight: 700; font-size: 16px; color: ${isToday ? '#1e40af' : '#374151'}; margin-bottom: 12px;">
                             ${isToday ? '⭐ TODAY - ' : ''}${dayName} ${dayNum} ${monthName}
                         </div>
@@ -6233,6 +6237,12 @@
             });
             
             container.innerHTML = html;
+            
+            // Scroll to today
+            requestAnimationFrame(() => {
+                const todayCard = container.querySelector(`[data-date="${todayStr}"]`);
+                if (todayCard) todayCard.scrollIntoView({ block: "start", behavior: "instant" });
+            });
         }
         
         let bimonthlyFilter = 'all';
@@ -7889,11 +7899,12 @@
                 eventsList.innerHTML = html;
             }
             
-            // Scroll so today's first occurrence is at the top of the list container
+            // Scroll within the list container so today is visible without moving the whole page
             requestAnimationFrame(() => {
+                const listContainer = document.getElementById('workerListView');
                 const todayEl = eventsList.querySelector(`[data-date="${todayStr}"]`);
-                if (todayEl) {
-                    todayEl.scrollIntoView({ block: 'start', behavior: 'instant' });
+                if (todayEl && listContainer) {
+                    listContainer.scrollTop = todayEl.offsetTop - listContainer.offsetTop;
                 }
             });
         }
