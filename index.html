@@ -2263,7 +2263,7 @@
     <div id="customerListView" class="view">
         <div class="header">
             <div class="header-content">
-                <button class="back-btn" onclick="showHomeView()">← Back</button>
+                <button class="back-btn" onclick="history.back()">← Back</button>
                 <div>
                     <h1 id="currentRunDay">Monday</h1>
                     <p class="subtitle" id="customerCount">0 customers</p>
@@ -2283,7 +2283,7 @@
     <div id="podView" class="view">
         <div class="header">
             <div class="header-content">
-                <button class="back-btn" onclick="backToCustomerList()">← Back</button>
+                <button class="back-btn" onclick="history.back()">← Back</button>
                 <div>
                     <h1 id="podCustomerName">Customer Name</h1>
                     <p class="subtitle">Create POD</p>
@@ -2382,7 +2382,7 @@
     <div id="adminView" class="view">
         <div class="header">
             <div class="header-content">
-                <button class="back-btn" onclick="showHomeView()">← Back</button>
+                <button class="back-btn" onclick="history.back()">← Back</button>
                 <div>
                     <h1>Import Panel</h1>
                     <p class="subtitle">Manage customers, products & service days</p>
@@ -2595,7 +2595,7 @@
     <div id="exportView" class="view">
         <div class="header">
             <div class="header-content">
-                <button class="back-btn" onclick="showHomeView()">← Back</button>
+                <button class="back-btn" onclick="history.back()">← Back</button>
                 <div>
                     <h1>🔍 Search PODs</h1>
                     <p class="subtitle">Search customer service history</p>
@@ -2636,7 +2636,7 @@
     <div id="adminDashboardView" class="view">
         <div class="header">
             <div class="header-content">
-                <button class="back-btn" onclick="showHomeView()">← Back</button>
+                <button class="back-btn" onclick="history.back()">← Back</button>
                 <div>
                     <h1>Admin Dashboard</h1>
                     <p class="subtitle">Runsheet overview & management</p>
@@ -2754,7 +2754,7 @@
                             <h2 id="invoiceRunsheetTitle" style="margin-bottom: 4px;">📄 Monthly Invoices</h2>
                             <p id="invoiceRunsheetDate" style="color: #6b7280; font-size: 14px;"></p>
                         </div>
-                        <button class="btn btn-secondary" onclick="showAdminListView()">← Back to List</button>
+                        <button class="btn btn-secondary" onclick="history.back()">← Back to List</button>
                     </div>
                     
                     <!-- Stats Summary -->
@@ -5869,7 +5869,7 @@
                 </div>
 
                 <button class="btn" onclick="editExistingPod(${pod.id})">Edit POD</button>
-                <button class="btn btn-secondary" onclick="backToCustomerList()">Back to List</button>
+                <button class="btn btn-secondary" onclick="history.back()">← Back to List</button>
             `;
         }
 
@@ -9628,7 +9628,7 @@
             const backRow = document.createElement('tr');
             backRow.innerHTML = `
                 <td colspan="9" style="padding: 8px; background: #f3f4f6;">
-                    <button class="btn btn-secondary" style="padding: 6px 16px; font-size: 13px;" onclick="backToAdminCalendar()">
+                    <button class="btn btn-secondary" style="padding: 6px 16px; font-size: 13px;" onclick="history.back()">
                         ← Back to Calendar
                     </button>
                     <span style="margin-left: 12px; color: #6b7280;">Viewing: ${formatDisplayDate(selectedDate)} (${MONTH_NAMES[viewMonth]} ${viewYear})</span>
@@ -9850,7 +9850,7 @@
             const backRow = document.createElement('tr');
             backRow.innerHTML = `
                 <td colspan="9" style="padding: 8px; background: #f3f4f6;">
-                    <button class="btn" onclick="showCalendarView()" style="padding: 8px 16px;">
+                    <button class="btn" onclick="history.back()" style="padding: 8px 16px;">
                         ← Back to Calendar
                     </button>
                 </td>
