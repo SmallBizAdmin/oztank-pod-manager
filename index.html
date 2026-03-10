@@ -5438,6 +5438,7 @@
             setupPodsRealtime();
             setupInvoiceStatusRealtime();
             setupCustomersRealtime();
+            setupWorkerCalendarEventsRealtime();
         }
         
         // Realtime subscription so status/notes changes on any device instantly reflect everywhere
@@ -5586,6 +5587,29 @@
                 .subscribe((status) => {
                     if (status === 'SUBSCRIBED') console.log('✅ Realtime: customers subscribed');
                     if (status === 'CHANNEL_ERROR') console.warn('⚠️ Realtime: customers subscription error');
+                });
+        }
+
+        // ─── Real-time: worker_calendar_events ───────────────────────────────────
+        // Triggers whenever the Google Apps Script sync writes new data to Supabase,
+        // so all open devices see updated schedules the moment the sync runs.
+        function setupWorkerCalendarEventsRealtime() {
+            supabase
+                .channel('worker_calendar_events_changes')
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'worker_calendar_events' }, async (payload) => {
+                    console.log('worker_calendar_events realtime change:', payload.eventType);
+                    await loadWorkerCalendarEvents();
+                    renderAdminCalendar();
+                    if (document.getElementById('adminListContainer')?.style.display !== 'none') {
+                        renderAdminChronologicalList();
+                    }
+                    if (document.getElementById('homeView')?.classList.contains('active')) {
+                        renderRunDays();
+                    }
+                })
+                .subscribe((status) => {
+                    if (status === 'SUBSCRIBED') console.log('✅ Realtime: worker_calendar_events subscribed');
+                    if (status === 'CHANNEL_ERROR') console.warn('⚠️ Realtime: worker_calendar_events subscription error');
                 });
         }
 
