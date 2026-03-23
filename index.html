@@ -5710,10 +5710,16 @@
                 const workDate = currentServiceDate || formatDateLocal(new Date());
                 
                 // Check if POD already exists for this customer on the work date
-                const existingPod = db.pods.find(pod => 
+                let existingPod = db.pods.find(pod => 
                     pod.customerId === customer.id && 
                     pod.date === workDate
                 );
+                
+                // Fallback: check if a POD exists for this customer on any date in the
+                // loaded data (covers PODs saved ahead of time on a different date)
+                if (!existingPod) {
+                    existingPod = db.pods.find(pod => pod.customerId === customer.id);
+                }
                 
                 if (existingPod) {
                     // Show existing POD with edit option
