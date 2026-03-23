@@ -9280,8 +9280,9 @@
                         <strong>${customer.name}</strong>
                         <small>${details.join(' | ')}</small>
                     </div>
-                    <div style="display: flex; gap: 8px;">
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                         <button class="btn" style="padding: 6px 12px; font-size: 12px; background: #374151;" onclick="editCustomer(${customer.id})">Edit</button>
+                        <button class="btn" style="padding: 6px 12px; font-size: 12px; background: #0891b2;" onclick="showCustomerEditModal(${customer.id})">📅 Schedule & Notes</button>
                         <button class="delete-btn" onclick="deleteCustomer(${customer.id})">Delete</button>
                     </div>
                 `;
