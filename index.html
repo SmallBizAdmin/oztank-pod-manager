@@ -5879,6 +5879,7 @@
 
                 <button class="btn" onclick="editExistingPod(${pod.id})">Edit POD</button>
                 <button class="btn btn-secondary" onclick="history.back()">← Back to List</button>
+                <button class="btn btn-danger" onclick="deleteExistingPod(${pod.id}, \`${pod.customerName}\`, '${pod.date}')" style="margin-top: 8px;">🗑️ Delete POD</button>
             `;
         }
 
@@ -6030,6 +6031,18 @@
 
         let currentEditingPodId = null;
         let currentEditingServiceType = null;
+        
+        async function deleteExistingPod(podId, customerName, podDate) {
+            if (!confirm(`Delete POD for ${customerName} on ${podDate}?\n\nThis cannot be undone.`)) return;
+            
+            const success = await db.deletePOD(podId);
+            if (success) {
+                showToast('POD deleted', 'success');
+                setTimeout(() => history.back(), 800);
+            } else {
+                showToast('Error deleting POD', 'error');
+            }
+        }
 
         function showAdminPanelView() {
             showView('adminView');
