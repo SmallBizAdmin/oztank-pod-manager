@@ -2961,6 +2961,14 @@
                     <button type="button" onclick="clearTankMovementCustomer()" style="float: right; background: none; border: none; cursor: pointer; color: #dc2626;">✕</button>
                 </div>
 
+                <div class="search-divider">OR</div>
+
+                <div class="freetext-section" style="margin-bottom: 16px;">
+                    <label>New / Unlisted Customer</label>
+                    <input type="text" id="tankMovementFreetextCustomer" class="freetext-input" placeholder="Enter customer name if not yet in system...">
+                    <p style="font-size: 12px; color: #9ca3af; margin-top: 4px;">Use this only if the customer isn't set up yet. Link to their record later via admin.</p>
+                </div>
+
                 <!-- Movement Type -->
                 <div class="form-group">
                     <label style="font-weight: 600;">Movement Type</label>
@@ -9280,10 +9288,9 @@
                         <strong>${customer.name}</strong>
                         <small>${details.join(' | ')}</small>
                     </div>
-                    <div style="display: flex; flex-direction: column; gap: 6px; min-width: 160px;">
+                    <div style="display: flex; gap: 8px;">
                         <button class="btn" style="padding: 6px 12px; font-size: 12px; background: #374151;" onclick="editCustomer(${customer.id})">Edit</button>
-                        <button class="btn" style="padding: 6px 12px; font-size: 12px; background: #0891b2;" onclick="showCustomerEditModal(${customer.id})">📅 Schedule & Notes</button>
-                        <button class="delete-btn" style="width: 100%;" onclick="deleteCustomer(${customer.id})">Delete</button>
+                        <button class="delete-btn" onclick="deleteCustomer(${customer.id})">Delete</button>
                     </div>
                 `;
                 list.appendChild(div);
@@ -11594,6 +11601,7 @@
             document.getElementById('tankMovementCustomerSearch').value = '';
             document.getElementById('tankMovementSearchResults').style.display = 'none';
             document.getElementById('tankMovementSelectedCustomer').style.display = 'none';
+            document.getElementById('tankMovementFreetextCustomer').value = '';
             document.querySelector('input[name="movementType"][value="Swap"]').checked = true;
             document.getElementById('tankNoPlaced').value = '';
             document.getElementById('tankNoPulled').value = '';
@@ -11664,8 +11672,9 @@
         }
         
         async function saveTankMovement() {
-            if (!selectedTankMovementCustomer) {
-                showToast('Please select a customer', 'error');
+            const freetextName = document.getElementById('tankMovementFreetextCustomer').value.trim();
+            if (!selectedTankMovementCustomer && !freetextName) {
+                showToast('Please select a customer or enter a name', 'error');
                 return;
             }
             
@@ -11695,11 +11704,13 @@
             // If tank movement was initiated from a runsheet, use that runsheet's day
             // If from main menu (tankMovementSourceRunDay is null), always use 'Ad-Hoc'
             const effectiveRunDay = tankMovementSourceRunDay !== null ? tankMovementSourceRunDay : 'Ad-Hoc';
+            const effectiveCustomerId = selectedTankMovementCustomer ? selectedTankMovementCustomer.id : null;
+            const effectiveCustomerName = selectedTankMovementCustomer ? selectedTankMovementCustomer.name : freetextName;
             
             const movement = {
                 id: Date.now(),
-                customerId: selectedTankMovementCustomer.id,
-                customerName: selectedTankMovementCustomer.name,
+                customerId: effectiveCustomerId,
+                customerName: effectiveCustomerName,
                 runDay: effectiveRunDay,
                 date: workDate,
                 timestamp: nowUTC.toISOString(),
