@@ -6172,7 +6172,7 @@
             
             // Get date range based on period
             if (calendarPeriod === 'week') {
-                for (let i = 0; i < 7; i++) {
+                for (let i = 0; i < 5; i++) {
                     const d = new Date(selectedWeekStart);
                     d.setDate(d.getDate() + i);
                     dates.push(formatDateLocal(d));
@@ -6664,7 +6664,7 @@
             grid.style.background = '#e5e7eb';
             
             if (calendarPeriod === 'week') {
-                grid.style.gridTemplateColumns = 'repeat(7, minmax(0, 1fr))';
+                grid.style.gridTemplateColumns = 'repeat(5, minmax(0, 1fr))';
             } else {
                 grid.style.gridTemplateColumns = 'repeat(7, minmax(0, 1fr))';
             }
@@ -6683,8 +6683,8 @@
             });
             
             if (calendarPeriod === 'week') {
-                // Render Monday through Sunday of selected week
-                for (let i = 0; i < 7; i++) {
+                // Render Monday through Friday of selected week
+                for (let i = 0; i < 5; i++) {
                     const date = new Date(selectedWeekStart);
                     date.setDate(date.getDate() + i);
                     
