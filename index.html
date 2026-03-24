@@ -5768,10 +5768,9 @@
             if (carbsolveContainer) {
                 carbsolveContainer.style.display = isDelivery ? 'none' : 'block';
             }
-            const customerCarbsolve = currentCustomer.carbsolve || '';
+            const customerCarbsolve = (currentCustomer.carbsolve || '').replace(/^(Carbsolve\s*[-:]\s*|Carb:\s*)/i, '').trim();
             const carbsolveSelect = document.getElementById('podCarbsolveDisplay');
             carbsolveSelect.value = customerCarbsolve;
-            // Highlight the label to show it's the default
             carbsolveSelect.style.borderColor = '#d1d5db';
             carbsolveSelect.title = customerCarbsolve ? `Default: ${customerCarbsolve}` : 'No default set';
             
@@ -5923,8 +5922,8 @@
                 carbsolveContainer.style.display = isDelivery ? 'none' : 'block';
             }
             
-            const customerCarbsolve = currentCustomer.carbsolve || '';
-            const savedCarbsolve = pod.carbsolve || customerCarbsolve;
+            const customerCarbsolve = (currentCustomer.carbsolve || '').replace(/^(Carbsolve\s*[-:]\s*|Carb:\s*)/i, '').trim();
+            const savedCarbsolve = (pod.carbsolve || customerCarbsolve).replace(/^(Carbsolve\s*[-:]\s*|Carb:\s*)/i, '').trim();
             const carbsolveSelect = document.getElementById('podCarbsolveDisplay');
             carbsolveSelect.value = savedCarbsolve;
             // Highlight orange if the saved value differs from the customer default
