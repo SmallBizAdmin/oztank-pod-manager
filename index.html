@@ -2307,9 +2307,7 @@
                     <h1 id="currentRunDay">Monday</h1>
                     <p class="subtitle" id="customerCount">0 customers</p>
                 </div>
-                <button class="remaining-toggle-btn" id="remainingToggleBtn" onclick="toggleRemainingOnly()">
-                    ☑ Remaining <span class="toggle-count" id="remainingToggleCount"></span>
-                </button>
+                <button class="remaining-toggle-btn" id="remainingToggleBtn" onclick="toggleRemainingOnly()">All</button>
             </div>
         </div>
         <div class="container">
@@ -8497,32 +8495,14 @@
             if (!btn) return;
 
             const allItems = document.querySelectorAll('#customerList .customer-item');
-            let remainingCount = 0;
 
             allItems.forEach(item => {
-                const isCompleted = item.classList.contains('completed');
-                const isSkipped = item.classList.contains('skipped');
-                const isDone = isCompleted || isSkipped;
-
-                if (showRemainingOnly && isDone) {
-                    item.style.display = 'none';
-                } else {
-                    item.style.display = '';
-                    if (!isDone) remainingCount++;
-                }
+                const isDone = item.classList.contains('completed') || item.classList.contains('skipped');
+                item.style.display = (showRemainingOnly && isDone) ? 'none' : '';
             });
 
-            // Count remaining when filter is off (for the badge)
-            if (!showRemainingOnly) {
-                remainingCount = [...allItems].filter(i =>
-                    !i.classList.contains('completed') && !i.classList.contains('skipped')
-                ).length;
-            }
-
             btn.classList.toggle('active', showRemainingOnly);
-            btn.innerHTML = showRemainingOnly
-                ? `✓ Remaining <span class="toggle-count" id="remainingToggleCount">${remainingCount}</span>`
-                : `☑ Remaining <span class="toggle-count" id="remainingToggleCount">${remainingCount}</span>`;
+            btn.textContent = showRemainingOnly ? 'Remaining' : 'All';
         }
 
         function renderCustomerList() {
