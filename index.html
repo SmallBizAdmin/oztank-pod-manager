@@ -2305,10 +2305,21 @@
                             <div id="podServiceTypeDisplay" style="font-size: 16px; font-weight: 600; color: #111827;">Service</div>
                         </div>
                         
-                        <!-- Carbsolve Display (hidden for deliveries) -->
+                        <!-- Carbsolve Selector (hidden for deliveries) -->
                         <div id="podCarbsolveContainer" style="flex: 1; min-width: 100px;">
                             <label style="display: block; margin-bottom: 4px; font-weight: 500; color: #6b7280; font-size: 12px;">Carbsolve</label>
-                            <div id="podCarbsolveDisplay" style="font-size: 16px; font-weight: 600; color: #111827;">-</div>
+                            <select id="podCarbsolveDisplay" style="width: 100%; padding: 10px; border: 2px solid #d1d5db; border-radius: 6px; font-size: 15px; font-weight: 600; color: #111827; background: white;">
+                                <option value="">None</option>
+                                <option value="4kg">4kg</option>
+                                <option value="4kg spcl">4kg spcl</option>
+                                <option value="7kg">7kg</option>
+                                <option value="7kg spcl">7kg spcl</option>
+                                <option value="10kg">10kg</option>
+                                <option value="11kg spcl">11kg spcl</option>
+                                <option value="14kg">14kg</option>
+                                <option value="17kg">17kg</option>
+                                <option value="21kg">21kg</option>
+                            </select>
                         </div>
                         
                         <!-- Waste Display (if applicable) -->
@@ -5751,14 +5762,18 @@
             const displayServiceType = isAdHocService ? adHocServiceType : (currentCustomer.serviceType || 'Service');
             document.getElementById('podServiceTypeDisplay').textContent = displayServiceType;
             
-            // Display carbsolve from customer data (read-only) - hide for deliveries
+            // Display carbsolve dropdown - default to customer's stored value, hide for deliveries
             const isDelivery = displayServiceType === 'Delivery';
             const carbsolveContainer = document.getElementById('podCarbsolveContainer');
             if (carbsolveContainer) {
                 carbsolveContainer.style.display = isDelivery ? 'none' : 'block';
             }
-            const customerCarbsolve = currentCustomer.carbsolve || '-';
-            document.getElementById('podCarbsolveDisplay').textContent = customerCarbsolve;
+            const customerCarbsolve = currentCustomer.carbsolve || '';
+            const carbsolveSelect = document.getElementById('podCarbsolveDisplay');
+            carbsolveSelect.value = customerCarbsolve;
+            // Highlight the label to show it's the default
+            carbsolveSelect.style.borderColor = '#d1d5db';
+            carbsolveSelect.title = customerCarbsolve ? `Default: ${customerCarbsolve}` : 'No default set';
             
             // Display waste if applicable
             const wasteContainer = document.getElementById('podWasteContainer');
@@ -5902,14 +5917,19 @@
             const isDelivery = podServiceType === 'Delivery';
             document.getElementById('podServiceTypeDisplay').textContent = podServiceType;
             
-            // Hide carbsolve for deliveries
+            // Hide carbsolve for deliveries; set dropdown to POD's saved value (may differ from customer default)
             const carbsolveContainer = document.getElementById('podCarbsolveContainer');
             if (carbsolveContainer) {
                 carbsolveContainer.style.display = isDelivery ? 'none' : 'block';
             }
             
-            const customerCarbsolve = currentCustomer.carbsolve || '-';
-            document.getElementById('podCarbsolveDisplay').textContent = customerCarbsolve;
+            const customerCarbsolve = currentCustomer.carbsolve || '';
+            const savedCarbsolve = pod.carbsolve || customerCarbsolve;
+            const carbsolveSelect = document.getElementById('podCarbsolveDisplay');
+            carbsolveSelect.value = savedCarbsolve;
+            // Highlight orange if the saved value differs from the customer default
+            carbsolveSelect.style.borderColor = (savedCarbsolve && savedCarbsolve !== customerCarbsolve) ? '#f97316' : '#d1d5db';
+            carbsolveSelect.title = customerCarbsolve ? `Default: ${customerCarbsolve}` : 'No default set';
             
             // Display waste if applicable
             const wasteContainer = document.getElementById('podWasteContainer');
@@ -9103,8 +9123,8 @@
             // Use the service date if set (when working from calendar), otherwise today
             const podDate = currentServiceDate || formatDateLocal(nowAEST);
             
-            // Get carbsolve from customer data
-            const carbsolve = currentCustomer.carbsolve || '';
+            // Get carbsolve from dropdown (worker may have changed it from customer default)
+            const carbsolve = document.getElementById('podCarbsolveDisplay') ? document.getElementById('podCarbsolveDisplay').value : (currentCustomer.carbsolve || '');
             
             // Check if this is a "no service required" (rental only) situation — based on notes
             const notesValue = document.getElementById('notes').value.trim();
@@ -9819,6 +9839,14 @@
                     }
                 }
 
+                // Build carbsolve display — highlight orange if worker used a different size to customer default
+                const customerDefaultCarbsolve = (customer.carbsolve || '').replace(/^(Carbsolve\s*[-:]\s*|Carb:\s*)/i, '');
+                const podCarbsolveValue = pod ? (pod.carbsolve || '').replace(/^(Carbsolve\s*[-:]\s*|Carb:\s*)/i, '') : '';
+                const carbsolveOverridden = pod && podCarbsolveValue && customerDefaultCarbsolve && podCarbsolveValue !== customerDefaultCarbsolve;
+                const carbsolveDisplay = carbsolveOverridden
+                    ? `<span style="background: #fff7ed; color: #c2410c; border: 2px solid #f97316; padding: 3px 8px; border-radius: 6px; font-weight: 700; white-space: nowrap;">⚠️ ${carbsolve}</span><br><span style="font-size: 10px; color: #9ca3af;">default: ${customerDefaultCarbsolve}</span>`
+                    : carbsolve;
+
                 tr.innerHTML = `
                     <td style="padding: 12px; text-align: center;">
                         ${statusDisplay}
@@ -9831,7 +9859,7 @@
                     </td>
                     <td style="padding: 12px;">${customerNameDisplay}</td>
                     <td style="padding: 12px;">${serviceType}</td>
-                    <td style="padding: 12px;">${carbsolve}</td>
+                    <td style="padding: 12px;">${carbsolveDisplay}</td>
                     <td style="padding: 12px;">${productsStr}</td>
                     <td style="padding: 12px; font-size: 12px; font-style: italic;">${notesHtml}</td>
                     <td style="padding: 12px; text-align: center;">${statusBadgeHtml}</td>
