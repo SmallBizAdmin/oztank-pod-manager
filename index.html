@@ -317,6 +317,45 @@
             color: #9ca3af;
         }
 
+        /* Mobile-only remaining toggle */
+        .remaining-toggle-btn {
+            display: none;
+        }
+        @media (max-width: 767px) {
+            .remaining-toggle-btn {
+                display: inline-flex;
+                align-items: center;
+                gap: 5px;
+                padding: 5px 11px;
+                border-radius: 20px;
+                border: 1.5px solid #d1d5db;
+                background: #fff;
+                color: #374151;
+                font-size: 12px;
+                font-weight: 500;
+                cursor: pointer;
+                white-space: nowrap;
+            }
+            .remaining-toggle-btn.active {
+                background: #1a56db;
+                border-color: #1a56db;
+                color: #fff;
+            }
+            .remaining-toggle-btn .toggle-count {
+                background: rgba(0,0,0,0.12);
+                border-radius: 10px;
+                padding: 1px 6px;
+                font-size: 11px;
+                font-weight: 600;
+            }
+            .remaining-toggle-btn.active .toggle-count {
+                background: rgba(255,255,255,0.25);
+            }
+            #customerListView .header-content {
+                justify-content: space-between;
+            }
+        }
+
         .customer-item.skipped .customer-address,
         .customer-item.skipped .customer-phone {
             text-decoration: line-through;
@@ -2268,6 +2307,9 @@
                     <h1 id="currentRunDay">Monday</h1>
                     <p class="subtitle" id="customerCount">0 customers</p>
                 </div>
+                <button class="remaining-toggle-btn" id="remainingToggleBtn" onclick="toggleRemainingOnly()">
+                    ☑ Remaining <span class="toggle-count" id="remainingToggleCount"></span>
+                </button>
             </div>
         </div>
         <div class="container">
@@ -5319,6 +5361,7 @@
         // Current state
         let currentRunDay = '';
         let currentServiceDate = null; // Track which date worker is working on
+        let showRemainingOnly = false; // Mobile toggle: show only incomplete customers
         let currentCustomer = null;
 
         // Toast notification system (replaces alerts)
@@ -5644,6 +5687,11 @@
 
         // Views
         function showView(viewId, skipHistory) {
+            // Reset remaining-only filter when navigating away from customer list
+            if (viewId !== 'customerListView') {
+                showRemainingOnly = false;
+            }
+
             document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
             document.getElementById(viewId).classList.add('active');
             window.scrollTo(0, 0);
@@ -8439,6 +8487,44 @@
             `;
         }
 
+        function toggleRemainingOnly() {
+            showRemainingOnly = !showRemainingOnly;
+            applyRemainingFilter();
+        }
+
+        function applyRemainingFilter() {
+            const btn = document.getElementById('remainingToggleBtn');
+            if (!btn) return;
+
+            const allItems = document.querySelectorAll('#customerList .customer-item');
+            let remainingCount = 0;
+
+            allItems.forEach(item => {
+                const isCompleted = item.classList.contains('completed');
+                const isSkipped = item.classList.contains('skipped');
+                const isDone = isCompleted || isSkipped;
+
+                if (showRemainingOnly && isDone) {
+                    item.style.display = 'none';
+                } else {
+                    item.style.display = '';
+                    if (!isDone) remainingCount++;
+                }
+            });
+
+            // Count remaining when filter is off (for the badge)
+            if (!showRemainingOnly) {
+                remainingCount = [...allItems].filter(i =>
+                    !i.classList.contains('completed') && !i.classList.contains('skipped')
+                ).length;
+            }
+
+            btn.classList.toggle('active', showRemainingOnly);
+            btn.innerHTML = showRemainingOnly
+                ? `✓ Remaining <span class="toggle-count" id="remainingToggleCount">${remainingCount}</span>`
+                : `☑ Remaining <span class="toggle-count" id="remainingToggleCount">${remainingCount}</span>`;
+        }
+
         function renderCustomerList() {
             const customers = db.customers
                 .filter(c => c.runDay === currentRunDay)
@@ -8766,6 +8852,9 @@
                     list.appendChild(li);
                 });
             }
+
+            // Apply remaining-only filter if active (mobile)
+            applyRemainingFilter();
         }
 
         // Drag and drop handlers
