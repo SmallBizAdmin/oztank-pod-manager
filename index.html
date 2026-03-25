@@ -2255,6 +2255,12 @@
                     
                     <!-- List View (hidden by default) -->
                     <div id="workerListView" style="display: none; padding: 12px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0; max-height: 60vh; overflow-y: auto;">
+                        <!-- Mobile single-day nav (mobile only) -->
+                        <div id="workerMobileDayNav" style="display: none; align-items: center; justify-content: space-between; margin-bottom: 12px; gap: 8px;">
+                            <button onclick="navigateWorkerMobileDay(-1)" style="background: #e5e7eb; border: none; border-radius: 6px; padding: 6px 14px; font-size: 18px; cursor: pointer; line-height: 1;">&#8249;</button>
+                            <span id="workerMobileDayLabel" style="font-weight: 700; font-size: 14px; color: #1e3a5f; flex: 1; text-align: center;"></span>
+                            <button onclick="navigateWorkerMobileDay(1)" style="background: #e5e7eb; border: none; border-radius: 6px; padding: 6px 14px; font-size: 18px; cursor: pointer; line-height: 1;">&#8250;</button>
+                        </div>
                         <div id="workerEventsList"></div>
                     </div>
                 </div>
@@ -7374,6 +7380,7 @@
         
         let workerCalendarView = window.innerWidth < 768 ? 'list' : 'week'; // 'week' or 'list'
         let workerWeekStart = getMondayOfWeek(new Date()); // Track which week we're viewing
+        let workerMobileDate = new Date(); // Mobile list view: single day being shown
         let workerPeriod = 'week'; // 'week' or 'month' - for the top selector
         let workerMonthYear = { month: new Date().getMonth(), year: new Date().getFullYear() };
         
@@ -7416,6 +7423,28 @@
             updateWorkerPeriodDisplay();
             loadWorkerCalendarEvents();
             renderRunDays(); // Update service day tiles for current period
+        }
+        
+        function navigateWorkerMobileDay(delta) {
+            workerMobileDate = new Date(workerMobileDate);
+            workerMobileDate.setDate(workerMobileDate.getDate() + delta);
+            // Keep the fetch window aligned to the week containing the selected day
+            workerWeekStart = getMondayOfWeek(workerMobileDate);
+            updateWorkerMobileDayHeader();
+            loadWorkerCalendarEvents();
+        }
+        
+        function updateWorkerMobileDayHeader() {
+            const el = document.getElementById('workerMobileDayLabel');
+            if (!el) return;
+            const dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+            const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+            const d = workerMobileDate;
+            const todayStr = formatDateLocal(new Date());
+            const isToday = formatDateLocal(d) === todayStr;
+            el.textContent = isToday
+                ? `Today \u2014 ${dayNames[d.getDay()]} ${d.getDate()} ${monthNames[d.getMonth()]}`
+                : `${dayNames[d.getDay()]} ${d.getDate()} ${monthNames[d.getMonth()]}`;
         }
         
         function updateWorkerPeriodDisplay() {
@@ -7486,6 +7515,13 @@
             document.getElementById('workerListViewBtn').classList.toggle('active', view === 'list');
             document.getElementById('workerWeekView').style.display = view === 'week' ? 'block' : 'none';
             document.getElementById('workerListView').style.display = view === 'list' ? 'block' : 'none';
+            // Show mobile day nav only on mobile in list view
+            const isMobile = window.innerWidth < 768;
+            const mobileDayNav = document.getElementById('workerMobileDayNav');
+            if (mobileDayNav) {
+                mobileDayNav.style.display = (isMobile && view === 'list') ? 'flex' : 'none';
+                if (isMobile && view === 'list') updateWorkerMobileDayHeader();
+            }
         }
         
         async function loadWorkerCalendarEvents() {
@@ -7811,8 +7847,17 @@
             const eventsList = document.getElementById('workerEventsList');
             const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
             
+            // On mobile, filter byDate to just the selected day
+            const isMobile = window.innerWidth < 768;
+            if (isMobile) {
+                const selectedDateStr = formatDateLocal(workerMobileDate);
+                const filtered = {};
+                if (byDate[selectedDateStr]) filtered[selectedDateStr] = byDate[selectedDateStr];
+                byDate = filtered;
+            }
+            
             if (Object.keys(byDate).length === 0) {
-                eventsList.innerHTML = '<p style="color: #6b7280; font-size: 13px;">No events scheduled for this week.</p>';
+                eventsList.innerHTML = '<p style="color: #6b7280; font-size: 13px;">No events scheduled for this day.</p>';
                 return;
             }
             
