@@ -6319,7 +6319,7 @@
                                     ${storedNotes ? `<div style="font-size: 11px; color: #6b7280; font-style: italic;">📝 ${storedNotes.substring(0, 50)}${storedNotes.length > 50 ? '...' : ''}</div>` : ''}
                                 </div>
                                 <div style="display: flex; gap: 4px;">
-                                    <button onclick="event.stopPropagation(); handleEventTick('${event.id}', dateStr)" 
+                                    <button onclick="event.stopPropagation(); handleEventTick('${event.id}', '${dateStr}')" 
                                             class="event-tick-btn${status === 'completed' ? ' active' : ''}" 
                                             style="width: 28px; height: 28px;" title="Done">✓</button>
                                     <button onclick="event.stopPropagation(); handleEventCross('${event.id}')" 
@@ -6891,7 +6891,7 @@
                     eventEl.innerHTML = `
                         <span class="calendar-event-title" >${event.eventTitle}</span>
                         <div class="calendar-event-actions">
-                            <button class="event-tick-btn${status === 'completed' ? ' active' : ''}" onclick="event.stopPropagation(); handleEventTick('${event.id}', dateStr)" title="Mark complete">✓</button>
+                            <button class="event-tick-btn${status === 'completed' ? ' active' : ''}" onclick="event.stopPropagation(); handleEventTick('${event.id}', '${dateStr}')" title="Mark complete">✓</button>
                             <button class="event-cross-btn${status === 'cancelled' ? ' active' : ''}" onclick="event.stopPropagation(); handleEventCross('${event.id}')" title="Mark cancelled">✗</button>
                         </div>
                     `;
@@ -7804,7 +7804,7 @@
                                         ${showWorkerName ? `<span style="color: #6b7280;">👤</span> ` : ''}${event.event_title}
                                     </span>
                                     <div class="calendar-event-actions">
-                                        <button class="event-tick-btn${eventStatus === 'completed' ? ' active' : ''}" onclick="handleEventTick('${event.id}', dateStr)" title="Done">✓</button>
+                                        <button class="event-tick-btn${eventStatus === 'completed' ? ' active' : ''}" onclick="handleEventTick('${event.id}', '${dateStr}')" title="Done">✓</button>
                                         <button class="event-cross-btn${eventStatus === 'cancelled' ? ' active' : ''}" onclick="handleEventCross('${event.id}')" title="Not done">✗</button>
                                     </div>
                                 </div>
@@ -7904,7 +7904,7 @@
                              style="font-size: 10px; padding: 4px 6px; background: ${eventBgColor}; border-left-color: ${eventBorderColor};">
                             <span class="calendar-event-title"  style="font-size: 10px;">${event.event_title}</span>
                             <div class="calendar-event-actions">
-                                <button class="event-tick-btn${eventStatus === 'completed' ? ' active' : ''}" onclick="event.stopPropagation(); handleEventTick('${event.id}', dateStr)" style="width: 18px; height: 18px; font-size: 10px;" title="Done">✓</button>
+                                <button class="event-tick-btn${eventStatus === 'completed' ? ' active' : ''}" onclick="event.stopPropagation(); handleEventTick('${event.id}', '${dateStr}')" style="width: 18px; height: 18px; font-size: 10px;" title="Done">✓</button>
                                 <button class="event-cross-btn${eventStatus === 'cancelled' ? ' active' : ''}" onclick="event.stopPropagation(); handleEventCross('${event.id}')" style="width: 18px; height: 18px; font-size: 10px;" title="Not done">✗</button>
                             </div>
                         </div>
@@ -8011,7 +8011,7 @@
                                         <span style="margin-right: 6px;">${icon}</span>
                                         <span class="calendar-event-title" >${event.event_title}</span>
                                         <div class="calendar-event-actions">
-                                            <button class="event-tick-btn${eventStatus === 'completed' ? ' active' : ''}" onclick="handleEventTick('${event.id}', dateStr)" title="Done">✓</button>
+                                            <button class="event-tick-btn${eventStatus === 'completed' ? ' active' : ''}" onclick="handleEventTick('${event.id}', '${dateStr}')" title="Done">✓</button>
                                             <button class="event-cross-btn${eventStatus === 'cancelled' ? ' active' : ''}" onclick="handleEventCross('${event.id}')" title="Not done">✗</button>
                                         </div>
                                     </div>`;
@@ -8103,7 +8103,7 @@
                                         <span style="margin-right: 6px;">${icon}</span>
                                         <span class="calendar-event-title" >${event.event_title}</span>
                                         <div class="calendar-event-actions">
-                                            <button class="event-tick-btn${eventStatus === 'completed' ? ' active' : ''}" onclick="handleEventTick('${event.id}', dateStr)" title="Done">✓</button>
+                                            <button class="event-tick-btn${eventStatus === 'completed' ? ' active' : ''}" onclick="handleEventTick('${event.id}', '${dateStr}')" title="Done">✓</button>
                                             <button class="event-cross-btn${eventStatus === 'cancelled' ? ' active' : ''}" onclick="handleEventCross('${event.id}')" title="Not done">✗</button>
                                         </div>
                                     </div>`;
