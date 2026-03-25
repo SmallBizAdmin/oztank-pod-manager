@@ -6319,10 +6319,10 @@
                                     ${storedNotes ? `<div style="font-size: 11px; color: #6b7280; font-style: italic;">📝 ${storedNotes.substring(0, 50)}${storedNotes.length > 50 ? '...' : ''}</div>` : ''}
                                 </div>
                                 <div style="display: flex; gap: 4px;">
-                                    <button onclick="event.stopPropagation(); toggleCalendarEventStatus('${event.id}', 'completed')" 
+                                    <button onclick="event.stopPropagation(); handleEventTick('${event.id}', dateStr)" 
                                             class="event-tick-btn${status === 'completed' ? ' active' : ''}" 
                                             style="width: 28px; height: 28px;" title="Done">✓</button>
-                                    <button onclick="event.stopPropagation(); toggleCalendarEventStatus('${event.id}', 'cancelled')" 
+                                    <button onclick="event.stopPropagation(); handleEventCross('${event.id}')" 
                                             class="event-cross-btn${status === 'cancelled' ? ' active' : ''}" 
                                             style="width: 28px; height: 28px;" title="Not done">✗</button>
                                 </div>
@@ -6889,10 +6889,10 @@
                     eventEl.style.background = workerBgColor;
                     
                     eventEl.innerHTML = `
-                        <span class="calendar-event-title" onclick="event.stopPropagation(); showCalendarEventModal('${event.id}', '${dateStr}')">${event.eventTitle}</span>
+                        <span class="calendar-event-title" >${event.eventTitle}</span>
                         <div class="calendar-event-actions">
-                            <button class="event-tick-btn${status === 'completed' ? ' active' : ''}" onclick="event.stopPropagation(); toggleCalendarEventStatus('${event.id}', 'completed')" title="Mark complete">✓</button>
-                            <button class="event-cross-btn${status === 'cancelled' ? ' active' : ''}" onclick="event.stopPropagation(); toggleCalendarEventStatus('${event.id}', 'cancelled')" title="Mark cancelled">✗</button>
+                            <button class="event-tick-btn${status === 'completed' ? ' active' : ''}" onclick="event.stopPropagation(); handleEventTick('${event.id}', dateStr)" title="Mark complete">✓</button>
+                            <button class="event-cross-btn${status === 'cancelled' ? ' active' : ''}" onclick="event.stopPropagation(); handleEventCross('${event.id}')" title="Mark cancelled">✗</button>
                         </div>
                     `;
                     if (storedNotes) {
@@ -6911,20 +6911,85 @@
             return cell;
         }
         
-        // Calendar event tick/cross toggle
+        // Calendar event tick/cross toggle (internal save — called after UI confirmation)
         async function toggleCalendarEventStatus(eventId, status) {
             const currentStatus = db.getCalendarEventStatus(eventId);
             if (currentStatus === status) {
-                // Toggle off
                 await db.saveCalendarEventStatus(eventId, null);
             } else {
-                // Set new status
                 await db.saveCalendarEventStatus(eventId, status);
             }
-            // Re-render whichever calendar view is active
             renderAdminCalendar();
             loadWorkerCalendarEvents();
-            // Also refresh list view if visible
+            if (document.getElementById('adminListContainer').style.display !== 'none') {
+                renderAdminChronologicalList();
+            }
+        }
+
+        // Tick button handler — opens the ad-hoc modal with a Confirm Complete option
+        function handleEventTick(eventId, dateStr) {
+            showCalendarEventModal(eventId, dateStr);
+        }
+
+        // Cross button handler — requires free-text reason before marking cancelled
+        function handleEventCross(eventId) {
+            const existingModal = document.getElementById('calendarEventCancelModal');
+            if (existingModal) existingModal.remove();
+
+            const modal = document.createElement('div');
+            modal.id = 'calendarEventCancelModal';
+            modal.className = 'search-modal-overlay active';
+            modal.innerHTML = `
+                <div class="search-modal" style="max-width: 380px;">
+                    <div class="search-modal-header" style="background: #dc2626;">
+                        <h2>✗ Mark Not Done</h2>
+                        <button class="search-modal-close" onclick="document.getElementById('calendarEventCancelModal').remove()">×</button>
+                    </div>
+                    <div class="search-modal-body">
+                        <div class="form-group">
+                            <label style="font-weight: 600; color: #374151;">Reason not done <span style="color: #dc2626;">*</span></label>
+                            <textarea id="cancelReasonInput" placeholder="Why wasn't this completed?" style="min-height: 100px; border: 2px solid #fca5a5;" oninput="document.getElementById('cancelConfirmBtn').disabled = this.value.trim().length === 0;"></textarea>
+                        </div>
+                        <button id="cancelConfirmBtn" class="btn" disabled
+                            onclick="confirmEventCancelled('${eventId}')"
+                            style="background: #dc2626; opacity: 0.5; cursor: not-allowed; width: 100%;">
+                            ✗ Confirm Not Done
+                        </button>
+                        <button class="btn btn-secondary" onclick="document.getElementById('calendarEventCancelModal').remove()" style="margin-top: 8px; width: 100%;">
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            `;
+            // Enable button when text is entered
+            modal.querySelector('#cancelConfirmBtn');
+            document.body.appendChild(modal);
+            modal.querySelector('#cancelReasonInput').focus();
+
+            // Wire up button enable/disable after appending
+            const textarea = modal.querySelector('#cancelReasonInput');
+            const btn = modal.querySelector('#cancelConfirmBtn');
+            textarea.addEventListener('input', () => {
+                const hasText = textarea.value.trim().length > 0;
+                btn.disabled = !hasText;
+                btn.style.opacity = hasText ? '1' : '0.5';
+                btn.style.cursor = hasText ? 'pointer' : 'not-allowed';
+            });
+        }
+
+        async function confirmEventCancelled(eventId) {
+            const textarea = document.getElementById('cancelReasonInput');
+            const reason = textarea ? textarea.value.trim() : '';
+            if (!reason) return;
+
+            // Save the reason as notes, then mark cancelled
+            await db.saveCalendarEventNotes(eventId, reason);
+            await db.saveCalendarEventStatus(eventId, 'cancelled');
+
+            document.getElementById('calendarEventCancelModal')?.remove();
+            showToast('Marked as not done', 'success');
+            renderAdminCalendar();
+            loadWorkerCalendarEvents();
             if (document.getElementById('adminListContainer').style.display !== 'none') {
                 renderAdminChronologicalList();
             }
@@ -6963,6 +7028,10 @@
                         </div>
                         
                         <div style="display: flex; flex-direction: column; gap: 10px;">
+                            <button class="btn" onclick="document.getElementById('calendarEventChooserModal').remove(); toggleCalendarEventStatus('${eventId}', 'completed').then(() => showToast('✓ Marked complete', 'success'));" style="padding: 16px; font-size: 16px; background: #16a34a; font-weight: 700;">
+                                ✓ Confirm Complete
+                            </button>
+                            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 2px 0;">
                             <button class="btn btn-adhoc" onclick="document.getElementById('calendarEventChooserModal').remove(); showCustomerSearchModal(null, 'Service');" style="padding: 16px; font-size: 16px;">
                                 🔧 Service
                             </button>
@@ -7731,12 +7800,12 @@
                             gridHtml += `
                                 <div class="calendar-event-item${completedClass}${cancelledClass}" 
                                      style="margin-bottom: 4px; background: ${eventBgColor}; border-left-color: ${eventBorderColor};">
-                                    <span class="calendar-event-title" onclick="showCalendarEventModal('${event.id}', '${dateStr}')" style="font-size: 11px;">
+                                    <span class="calendar-event-title"  style="font-size: 11px;">
                                         ${showWorkerName ? `<span style="color: #6b7280;">👤</span> ` : ''}${event.event_title}
                                     </span>
                                     <div class="calendar-event-actions">
-                                        <button class="event-tick-btn${eventStatus === 'completed' ? ' active' : ''}" onclick="toggleCalendarEventStatus('${event.id}', 'completed')" title="Done">✓</button>
-                                        <button class="event-cross-btn${eventStatus === 'cancelled' ? ' active' : ''}" onclick="toggleCalendarEventStatus('${event.id}', 'cancelled')" title="Not done">✗</button>
+                                        <button class="event-tick-btn${eventStatus === 'completed' ? ' active' : ''}" onclick="handleEventTick('${event.id}', dateStr)" title="Done">✓</button>
+                                        <button class="event-cross-btn${eventStatus === 'cancelled' ? ' active' : ''}" onclick="handleEventCross('${event.id}')" title="Not done">✗</button>
                                     </div>
                                 </div>
                             `;
@@ -7833,10 +7902,10 @@
                     html += `
                         <div class="calendar-event-item${completedClass}${cancelledClass}" 
                              style="font-size: 10px; padding: 4px 6px; background: ${eventBgColor}; border-left-color: ${eventBorderColor};">
-                            <span class="calendar-event-title" onclick="showCalendarEventModal('${event.id}', '${dateStr}')" style="font-size: 10px;">${event.event_title}</span>
+                            <span class="calendar-event-title"  style="font-size: 10px;">${event.event_title}</span>
                             <div class="calendar-event-actions">
-                                <button class="event-tick-btn${eventStatus === 'completed' ? ' active' : ''}" onclick="event.stopPropagation(); toggleCalendarEventStatus('${event.id}', 'completed')" style="width: 18px; height: 18px; font-size: 10px;" title="Done">✓</button>
-                                <button class="event-cross-btn${eventStatus === 'cancelled' ? ' active' : ''}" onclick="event.stopPropagation(); toggleCalendarEventStatus('${event.id}', 'cancelled')" style="width: 18px; height: 18px; font-size: 10px;" title="Not done">✗</button>
+                                <button class="event-tick-btn${eventStatus === 'completed' ? ' active' : ''}" onclick="event.stopPropagation(); handleEventTick('${event.id}', dateStr)" style="width: 18px; height: 18px; font-size: 10px;" title="Done">✓</button>
+                                <button class="event-cross-btn${eventStatus === 'cancelled' ? ' active' : ''}" onclick="event.stopPropagation(); handleEventCross('${event.id}')" style="width: 18px; height: 18px; font-size: 10px;" title="Not done">✗</button>
                             </div>
                         </div>
                     `;
@@ -7940,10 +8009,10 @@
                                     <div class="calendar-event-item${completedClass}${cancelledClass}"
                                          style="margin-bottom: 4px; background: ${workerColorLight}; border-left-color: ${workerColor};">
                                         <span style="margin-right: 6px;">${icon}</span>
-                                        <span class="calendar-event-title" onclick="showCalendarEventModal('${event.id}', '${dateStr}')">${event.event_title}</span>
+                                        <span class="calendar-event-title" >${event.event_title}</span>
                                         <div class="calendar-event-actions">
-                                            <button class="event-tick-btn${eventStatus === 'completed' ? ' active' : ''}" onclick="toggleCalendarEventStatus('${event.id}', 'completed')" title="Done">✓</button>
-                                            <button class="event-cross-btn${eventStatus === 'cancelled' ? ' active' : ''}" onclick="toggleCalendarEventStatus('${event.id}', 'cancelled')" title="Not done">✗</button>
+                                            <button class="event-tick-btn${eventStatus === 'completed' ? ' active' : ''}" onclick="handleEventTick('${event.id}', dateStr)" title="Done">✓</button>
+                                            <button class="event-cross-btn${eventStatus === 'cancelled' ? ' active' : ''}" onclick="handleEventCross('${event.id}')" title="Not done">✗</button>
                                         </div>
                                     </div>`;
                             }
@@ -8032,10 +8101,10 @@
                                     <div class="calendar-event-item${completedClass}${cancelledClass}"
                                          style="margin-bottom: 4px; margin-left: 12px; background: ${workerColorLight}; border-left-color: ${workerColor};">
                                         <span style="margin-right: 6px;">${icon}</span>
-                                        <span class="calendar-event-title" onclick="showCalendarEventModal('${event.id}', '${dateStr}')">${event.event_title}</span>
+                                        <span class="calendar-event-title" >${event.event_title}</span>
                                         <div class="calendar-event-actions">
-                                            <button class="event-tick-btn${eventStatus === 'completed' ? ' active' : ''}" onclick="toggleCalendarEventStatus('${event.id}', 'completed')" title="Done">✓</button>
-                                            <button class="event-cross-btn${eventStatus === 'cancelled' ? ' active' : ''}" onclick="toggleCalendarEventStatus('${event.id}', 'cancelled')" title="Not done">✗</button>
+                                            <button class="event-tick-btn${eventStatus === 'completed' ? ' active' : ''}" onclick="handleEventTick('${event.id}', dateStr)" title="Done">✓</button>
+                                            <button class="event-cross-btn${eventStatus === 'cancelled' ? ' active' : ''}" onclick="handleEventCross('${event.id}')" title="Not done">✗</button>
                                         </div>
                                     </div>`;
                             }
