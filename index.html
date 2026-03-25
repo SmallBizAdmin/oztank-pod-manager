@@ -7381,6 +7381,8 @@
         let workerCalendarView = window.innerWidth < 768 ? 'list' : 'week'; // 'week' or 'list'
         let workerWeekStart = getMondayOfWeek(new Date()); // Track which week we're viewing
         let workerMobileDate = new Date(); // Mobile list view: single day being shown
+        let workerCachedByDate = {}; // Cached event data for re-rendering list view
+        let workerCachedTodayStr = '';
         let workerPeriod = 'week'; // 'week' or 'month' - for the top selector
         let workerMonthYear = { month: new Date().getMonth(), year: new Date().getFullYear() };
         
@@ -7520,7 +7522,13 @@
             const mobileDayNav = document.getElementById('workerMobileDayNav');
             if (mobileDayNav) {
                 mobileDayNav.style.display = (isMobile && view === 'list') ? 'flex' : 'none';
-                if (isMobile && view === 'list') updateWorkerMobileDayHeader();
+                if (isMobile && view === 'list') {
+                    updateWorkerMobileDayHeader();
+                    // Re-render with filter now that we know we're on mobile
+                    if (workerCachedByDate && workerCachedTodayStr) {
+                        renderWorkerListView(workerCachedByDate, workerCachedTodayStr);
+                    }
+                }
             }
         }
         
@@ -7846,6 +7854,10 @@
         function renderWorkerListView(byDate, todayStr) {
             const eventsList = document.getElementById('workerEventsList');
             const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            
+            // Cache for re-renders (e.g. when mobile nav is shown after initial render)
+            workerCachedByDate = byDate;
+            workerCachedTodayStr = todayStr;
             
             // On mobile, filter byDate to just the selected day
             const isMobile = window.innerWidth < 768;
