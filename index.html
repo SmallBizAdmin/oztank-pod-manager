@@ -9651,6 +9651,7 @@
                             <option value="USE PO" ${customer.invoiceType === 'USE PO' ? 'selected' : ''}>📋 USE PO</option>
                             <option value="No Invoice" ${customer.invoiceType === 'No Invoice' ? 'selected' : ''}>No Invoice</option>
                             <option value="Forward Invoices" ${customer.invoiceType === 'Forward Invoices' ? 'selected' : ''}>📋 Forward Invoices</option>
+                            <option value="Rent & SS" ${customer.invoiceType === 'Rent & SS' ? 'selected' : ''}>📋 Rent & SS</option>
                         </select>
                         
                         <input type="text" id="edit-code-${id}" value="${customer.code || ''}" placeholder="Code" style="width: 100%; padding: 8px; margin-bottom: 4px;">
