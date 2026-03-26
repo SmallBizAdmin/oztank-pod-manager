@@ -6250,8 +6250,14 @@
                 if (!hasContent) {
                     html += `<div style="color: #9ca3af; font-size: 13px;">No events scheduled</div>`;
                 } else {
-                    // Render service days
-                    serviceDaysOnDate.forEach(sd => {
+                    // Render service days sorted by worker order
+                    const workerOrder = ['Matt', 'Drew', 'Michael', 'Allan', 'Stephen', 'Red'];
+                    const sortedServiceDaysOnDate = [...serviceDaysOnDate].sort((a, b) => {
+                        const iA = workerOrder.findIndex(w => (a.calendarOwner || '').toLowerCase().includes(w.toLowerCase()));
+                        const iB = workerOrder.findIndex(w => (b.calendarOwner || '').toLowerCase().includes(w.toLowerCase()));
+                        return (iA === -1 ? 999 : iA) - (iB === -1 ? 999 : iB);
+                    });
+                    sortedServiceDaysOnDate.forEach(sd => {
                         const pods = podsOnDate.filter(p => p.runDay === sd.serviceDayName);
                         const totalCustomers = db.customers.filter(c => c.runDay === sd.serviceDayName).length;
                         const isInvoiced = db.isServiceDayInvoiced(sd.serviceDayName, dateStr);
@@ -6811,8 +6817,23 @@
                 allServiceDays.add('Ad-Hoc');
             }
             
-            // Render each service day
-            allServiceDays.forEach(runDay => {
+            // Render each service day - sorted by worker order
+            const workerOrder = ['Matt', 'Drew', 'Michael', 'Allan', 'Stephen', 'Red'];
+            const sortedServiceDays = [...allServiceDays].sort((a, b) => {
+                if (a === 'Ad-Hoc') return 1;
+                if (b === 'Ad-Hoc') return -1;
+                const sdA = scheduledOnDate.find(sd => sd.serviceDayName === a);
+                const sdB = scheduledOnDate.find(sd => sd.serviceDayName === b);
+                const ownerA = sdA?.calendarOwner || '';
+                const ownerB = sdB?.calendarOwner || '';
+                const iA = workerOrder.findIndex(w => ownerA.toLowerCase().includes(w.toLowerCase()));
+                const iB = workerOrder.findIndex(w => ownerB.toLowerCase().includes(w.toLowerCase()));
+                const rankA = iA === -1 ? 999 : iA;
+                const rankB = iB === -1 ? 999 : iB;
+                return rankA - rankB;
+            });
+
+            sortedServiceDays.forEach(runDay => {
                 const pods = serviceDayPods[runDay] || [];
                 const scheduledDay = scheduledOnDate.find(sd => sd.serviceDayName === runDay);
                 
