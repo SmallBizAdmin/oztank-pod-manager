@@ -2586,6 +2586,13 @@
                             <label>Product Name</label>
                             <input type="text" id="newProductName" required placeholder="e.g., Ovensolve 20L">
                         </div>
+                        <div class="form-group">
+                            <label>Category</label>
+                            <select id="newProductCategory" style="width:100%;padding:10px;border:1px solid #d1d5db;border-radius:6px;font-size:15px;">
+                                <option value="sale">Sale / Delivery</option>
+                                <option value="repair">Repair</option>
+                            </select>
+                        </div>
                         <button type="submit" class="btn">Add Product</button>
                     </form>
                 </div>
@@ -4684,11 +4691,14 @@
                 }
             },
             
-            async saveProduct(productName) {
+            async saveProduct(product) {
                 try {
+                    const record = typeof product === 'string'
+                        ? { name: product }
+                        : { name: product.name, category: product.category };
                     const { data, error } = await supabase
                         .from('products')
-                        .upsert({ name: productName });
+                        .upsert(record);
                     if (error) throw error;
                     return true;
                 } catch (error) {
@@ -9524,8 +9534,14 @@
         // Admin - Add product
         document.getElementById('addProductForm').addEventListener('submit', async function(e) {
             e.preventDefault();
-            const product = document.getElementById('newProductName').value;
-            if (!db.products.includes(product)) {
+            const productName = document.getElementById('newProductName').value.trim();
+            const category = document.getElementById('newProductCategory').value;
+            const product = { name: productName, category: category };
+            const exists = db.products.some(p => 
+                (typeof p === 'string' && p === productName) ||
+                (typeof p === 'object' && p.name === productName)
+            );
+            if (!exists) {
                 const success = await db.saveProduct(product);
                 if (success) {
                     db.products.push(product);
