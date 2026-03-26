@@ -10280,6 +10280,54 @@
                 `;
                 tbody.appendChild(emptyRow);
             }
+
+            // Add ticked/crossed calendar events for this date
+            const tickedEvents = (db.calendarEvents || []).filter(ev => {
+                if (ev.eventDate !== selectedDate) return false;
+                const status = db.getCalendarEventStatus(ev.id);
+                return status === 'completed' || status === 'cancelled';
+            }).sort((a, b) => workerRank(a.calendarOwner) - workerRank(b.calendarOwner));
+
+            if (tickedEvents.length > 0) {
+                // Section header row
+                const headerRow = document.createElement('tr');
+                headerRow.innerHTML = `
+                    <td colspan="9" style="padding: 10px 12px; background: #f0fdf4; border-top: 2px solid #86efac;">
+                        <strong style="color: #166534;">📋 Calendar Events (Ticked / Crossed)</strong>
+                    </td>
+                `;
+                tbody.appendChild(headerRow);
+
+                tickedEvents.forEach(ev => {
+                    const status = db.getCalendarEventStatus(ev.id);
+                    const notes = db.getCalendarEventNotes(ev.id);
+                    const isDone = status === 'completed';
+                    const workerColor = getWorkerColor(ev.calendarOwner);
+                    const tr = document.createElement('tr');
+                    tr.style.borderBottom = '1px solid #e5e7eb';
+                    tr.style.background = isDone ? '#f0fdf4' : '#fef2f2';
+                    tr.innerHTML = `
+                        <td style="padding: 12px; text-align: center;">
+                            <span style="font-size: 16px;">${isDone ? '✅' : '❌'}</span>
+                        </td>
+                        <td style="padding: 12px; text-align: center;">-</td>
+                        <td style="padding: 12px;">
+                            <span style="font-weight: 500;">${ev.eventTitle}</span>
+                            ${ev.calendarOwner ? `<span style="display:inline-block;margin-left:8px;background:${workerColor};color:white;padding:1px 6px;border-radius:8px;font-size:10px;">👤 ${ev.calendarOwner}</span>` : ''}
+                        </td>
+                        <td style="padding: 12px; color: #6b7280; font-size: 12px;">Free text</td>
+                        <td style="padding: 12px;">-</td>
+                        <td style="padding: 12px;">-</td>
+                        <td style="padding: 12px; font-size: 12px; font-style: italic;">${notes || '-'}</td>
+                        <td style="padding: 12px; text-align: center;">
+                            <span style="background: ${isDone ? '#dcfce7' : '#fee2e2'}; color: ${isDone ? '#166534' : '#991b1b'}; padding: 2px 6px; border-radius: 8px; font-size: 10px;">
+                                ${isDone ? 'Done' : 'Not done'}
+                            </span>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
             
             // Hide the regular ad-hoc and tank movement sections
             const adHocSection = document.getElementById('adHocPodsSection');
