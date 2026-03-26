@@ -2365,6 +2365,7 @@
                                 <option value="14kg">14kg</option>
                                 <option value="17kg">17kg</option>
                                 <option value="21kg">21kg</option>
+                                <option value="28kg">28kg</option>
                             </select>
                         </div>
                         
@@ -2511,6 +2512,7 @@
                                 <option value="14kg">14kg</option>
                                 <option value="17kg">17kg</option>
                                 <option value="21kg">21kg</option>
+                                <option value="28kg">28kg</option>
                             </select>
                         </div>
                         <div class="form-group">
@@ -3064,6 +3066,7 @@
                         <option value="10kg">10kg</option>
                         <option value="14kg">14kg</option>
                         <option value="21kg">21kg</option>
+                        <option value="28kg">28kg</option>
                     </select>
                 </div>
 
@@ -4014,7 +4017,7 @@
             skippedInvoiceStatus: {}, // "customerId|date" → { invoiced, checkedSent }
             serviceDayInvoiceStatus: {},
             tankMovements: [],
-            monthlySkips: {}, // Tracks customers skipped for specific months (key: "customerId-YYYY-MM")
+            monthlySkips: {}, // Tracks customers skipped for specific run dates (key: "customerId-YYYY-MM-DD")
             
             async load() {
                 try {
@@ -5030,96 +5033,112 @@
             // Monthly skip functions - for customers to be skipped in a particular month
             async loadMonthlySkips() {
                 try {
-                    const yearMonth = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}`;
-                    
+                    // Load all skips for the entire selected month (covers multiple runs in same month)
+                    const monthStart = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-01`;
+                    const nextMonth = selectedMonth === 11 ? 1 : selectedMonth + 2;
+                    const nextYear = selectedMonth === 11 ? selectedYear + 1 : selectedYear;
+                    const monthEnd = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`;
+
                     const { data, error } = await supabase
                         .from('customer_monthly_skips')
                         .select('*')
-                        .eq('year_month', yearMonth);
-                    
+                        .gte('skip_date', monthStart)
+                        .lt('skip_date', monthEnd);
+
                     if (error) {
-                        // Table might not exist yet - that's okay
                         console.log('Monthly skips table may not exist yet');
                         this.monthlySkips = {};
                         return;
                     }
-                    
+
                     this.monthlySkips = {};
                     if (data) {
                         data.forEach(skip => {
-                            const key = `${skip.customer_id}-${skip.year_month}`;
+                            const key = `${skip.customer_id}-${skip.skip_date}`;
                             this.monthlySkips[key] = {
                                 reason: skip.reason || '',
                                 createdAt: skip.created_at
                             };
                         });
                     }
-                    
-                    console.log(`Loaded ${Object.keys(this.monthlySkips).length} monthly skips for ${yearMonth}`);
+
+                    console.log(`Loaded ${Object.keys(this.monthlySkips).length} skips for ${monthStart} – ${monthEnd}`);
                 } catch (e) {
                     console.log('Error loading monthly skips:', e);
                     this.monthlySkips = {};
                 }
             },
-            
-            async saveMonthlySkip(customerId, yearMonth, reason = '') {
+
+            async saveMonthlySkip(customerId, skipDate, reason = '') {
                 try {
+                    // Derive year_month from skipDate for backward compat with DB column
+                    const yearMonth = skipDate.substring(0, 7); // 'YYYY-MM-DD' → 'YYYY-MM'
                     const { error } = await supabase
                         .from('customer_monthly_skips')
                         .upsert({
                             customer_id: customerId,
+                            skip_date: skipDate,
                             year_month: yearMonth,
                             reason: reason,
                             created_at: new Date().toISOString()
-                        }, { onConflict: 'customer_id,year_month' });
-                    
+                        }, { onConflict: 'customer_id,skip_date' });
+
                     if (error) throw error;
-                    
-                    // Update local cache
-                    const key = `${customerId}-${yearMonth}`;
+
+                    const key = `${customerId}-${skipDate}`;
                     this.monthlySkips[key] = {
                         reason: reason,
                         createdAt: new Date().toISOString()
                     };
-                    
+
                     return true;
                 } catch (e) {
-                    console.error('Error saving monthly skip:', e);
+                    console.error('Error saving skip:', e);
                     return false;
                 }
             },
-            
-            async removeMonthlySkip(customerId, yearMonth) {
+
+            async removeMonthlySkip(customerId, skipDate) {
                 try {
                     const { error } = await supabase
                         .from('customer_monthly_skips')
                         .delete()
                         .eq('customer_id', customerId)
-                        .eq('year_month', yearMonth);
-                    
+                        .eq('skip_date', skipDate);
+
                     if (error) throw error;
-                    
-                    // Update local cache
-                    const key = `${customerId}-${yearMonth}`;
+
+                    const key = `${customerId}-${skipDate}`;
                     delete this.monthlySkips[key];
-                    
+
                     return true;
                 } catch (e) {
-                    console.error('Error removing monthly skip:', e);
+                    console.error('Error removing skip:', e);
                     return false;
                 }
             },
-            
-            isCustomerSkipped(customerId, month, year) {
-                const yearMonth = `${year}-${String(month + 1).padStart(2, '0')}`;
-                const key = `${customerId}-${yearMonth}`;
+
+            // Check skip by exact run date
+            isCustomerSkipped(customerId, date) {
+                const key = `${customerId}-${date}`;
                 return !!this.monthlySkips[key];
             },
-            
-            getSkipReason(customerId, month, year) {
-                const yearMonth = `${year}-${String(month + 1).padStart(2, '0')}`;
-                const key = `${customerId}-${yearMonth}`;
+
+            getSkipReason(customerId, date) {
+                const key = `${customerId}-${date}`;
                 return this.monthlySkips[key]?.reason || '';
+            },
+
+            // For historical/admin views: check if skipped on any date within a given month
+            isCustomerSkippedInMonth(customerId, month, year) {
+                const prefix = `${customerId}-${year}-${String(month + 1).padStart(2, '0')}`;
+                return Object.keys(this.monthlySkips).some(k => k.startsWith(prefix));
+            },
+
+            getSkipReasonInMonth(customerId, month, year) {
+                const prefix = `${customerId}-${year}-${String(month + 1).padStart(2, '0')}`;
+                const key = Object.keys(this.monthlySkips).find(k => k.startsWith(prefix));
+                return key ? this.monthlySkips[key]?.reason || '' : '';
             }
         };
 
@@ -5757,10 +5776,12 @@
             
             // For historical months, only show existing PODs
             if (isPastMonth()) {
-                // Find any existing POD for this customer in the selected month
-                const existingPod = db.pods.find(pod => 
-                    pod.customerId === customer.id
-                );
+                // Find POD for this customer in the selected month/year
+                const existingPod = db.pods.find(pod => {
+                    if (pod.customerId !== customer.id) return false;
+                    const podDate = new Date(pod.date + 'T00:00:00');
+                    return podDate.getMonth() === selectedMonth && podDate.getFullYear() === selectedYear;
+                });
                 
                 if (existingPod) {
                     showExistingPod(existingPod);
@@ -5777,12 +5798,6 @@
                     pod.customerId === customer.id && 
                     pod.date === workDate
                 );
-                
-                // Fallback: check if a POD exists for this customer on any date in the
-                // loaded data (covers PODs saved ahead of time on a different date)
-                if (!existingPod) {
-                    existingPod = db.pods.find(pod => pod.customerId === customer.id);
-                }
                 
                 if (existingPod) {
                     // Show existing POD with edit option
@@ -6235,8 +6250,11 @@
                 if (!hasContent) {
                     html += `<div style="color: #9ca3af; font-size: 13px;">No events scheduled</div>`;
                 } else {
-                    // Render service days
-                    serviceDaysOnDate.forEach(sd => {
+                    // Render service days sorted by worker order
+                    const sortedServiceDaysOnDate = [...serviceDaysOnDate].sort((a, b) =>
+                        workerRank(a.calendarOwner) - workerRank(b.calendarOwner)
+                    );
+                    sortedServiceDaysOnDate.forEach(sd => {
                         const pods = podsOnDate.filter(p => p.runDay === sd.serviceDayName);
                         const totalCustomers = db.customers.filter(c => c.runDay === sd.serviceDayName).length;
                         const isInvoiced = db.isServiceDayInvoiced(sd.serviceDayName, dateStr);
@@ -6300,8 +6318,11 @@
                         `;
                     }
                     
-                    // Render calendar events
-                    eventsOnDate.forEach(event => {
+                    // Render calendar events sorted by worker order
+                    const sortedEventsOnDate = [...eventsOnDate].sort((a, b) =>
+                        workerRank(a.calendarOwner) - workerRank(b.calendarOwner)
+                    );
+                    sortedEventsOnDate.forEach(event => {
                         const status = db.getCalendarEventStatus(event.id);
                         const storedNotes = db.getCalendarEventNotes(event.id);
                         const completedStyle = status === 'completed' ? 'opacity: 0.5;' : '';
@@ -6319,10 +6340,10 @@
                                     ${storedNotes ? `<div style="font-size: 11px; color: #6b7280; font-style: italic;">📝 ${storedNotes.substring(0, 50)}${storedNotes.length > 50 ? '...' : ''}</div>` : ''}
                                 </div>
                                 <div style="display: flex; gap: 4px;">
-                                    <button onclick="event.stopPropagation(); toggleCalendarEventStatus('${event.id}', 'completed')" 
+                                    <button onclick="event.stopPropagation(); handleEventTick('${event.id}', '${dateStr}')" 
                                             class="event-tick-btn${status === 'completed' ? ' active' : ''}" 
                                             style="width: 28px; height: 28px;" title="Done">✓</button>
-                                    <button onclick="event.stopPropagation(); toggleCalendarEventStatus('${event.id}', 'cancelled')" 
+                                    <button onclick="event.stopPropagation(); handleEventCross('${event.id}')" 
                                             class="event-cross-btn${status === 'cancelled' ? ' active' : ''}" 
                                             style="width: 28px; height: 28px;" title="Not done">✗</button>
                                 </div>
@@ -6796,8 +6817,16 @@
                 allServiceDays.add('Ad-Hoc');
             }
             
-            // Render each service day
-            allServiceDays.forEach(runDay => {
+            // Render each service day - sorted by worker order
+            const sortedServiceDays = [...allServiceDays].sort((a, b) => {
+                if (a === 'Ad-Hoc') return 1;
+                if (b === 'Ad-Hoc') return -1;
+                const sdA = scheduledOnDate.find(sd => sd.serviceDayName === a);
+                const sdB = scheduledOnDate.find(sd => sd.serviceDayName === b);
+                return workerRank(sdA?.calendarOwner) - workerRank(sdB?.calendarOwner);
+            });
+
+            sortedServiceDays.forEach(runDay => {
                 const pods = serviceDayPods[runDay] || [];
                 const scheduledDay = scheduledOnDate.find(sd => sd.serviceDayName === runDay);
                 
@@ -6875,8 +6904,12 @@
             if (eventsOnDate.length > 0) {
                 const eventsSection = document.createElement('div');
                 eventsSection.className = 'calendar-events-section';
-                
-                eventsOnDate.forEach(event => {
+
+                const sortedEventsOnDate = [...eventsOnDate].sort((a, b) =>
+                    workerRank(a.calendarOwner) - workerRank(b.calendarOwner)
+                );
+
+                sortedEventsOnDate.forEach(event => {
                     const status = db.getCalendarEventStatus(event.id);
                     const storedNotes = db.getCalendarEventNotes(event.id);
                     const eventEl = document.createElement('div');
@@ -6889,10 +6922,10 @@
                     eventEl.style.background = workerBgColor;
                     
                     eventEl.innerHTML = `
-                        <span class="calendar-event-title" onclick="event.stopPropagation(); showCalendarEventModal('${event.id}', '${dateStr}')">${event.eventTitle}</span>
+                        <span class="calendar-event-title" >${event.eventTitle}</span>
                         <div class="calendar-event-actions">
-                            <button class="event-tick-btn${status === 'completed' ? ' active' : ''}" onclick="event.stopPropagation(); toggleCalendarEventStatus('${event.id}', 'completed')" title="Mark complete">✓</button>
-                            <button class="event-cross-btn${status === 'cancelled' ? ' active' : ''}" onclick="event.stopPropagation(); toggleCalendarEventStatus('${event.id}', 'cancelled')" title="Mark cancelled">✗</button>
+                            <button class="event-tick-btn${status === 'completed' ? ' active' : ''}" onclick="event.stopPropagation(); handleEventTick('${event.id}', '${dateStr}')" title="Mark complete">✓</button>
+                            <button class="event-cross-btn${status === 'cancelled' ? ' active' : ''}" onclick="event.stopPropagation(); handleEventCross('${event.id}')" title="Mark cancelled">✗</button>
                         </div>
                     `;
                     if (storedNotes) {
@@ -6911,20 +6944,85 @@
             return cell;
         }
         
-        // Calendar event tick/cross toggle
+        // Calendar event tick/cross toggle (internal save — called after UI confirmation)
         async function toggleCalendarEventStatus(eventId, status) {
             const currentStatus = db.getCalendarEventStatus(eventId);
             if (currentStatus === status) {
-                // Toggle off
                 await db.saveCalendarEventStatus(eventId, null);
             } else {
-                // Set new status
                 await db.saveCalendarEventStatus(eventId, status);
             }
-            // Re-render whichever calendar view is active
             renderAdminCalendar();
             loadWorkerCalendarEvents();
-            // Also refresh list view if visible
+            if (document.getElementById('adminListContainer').style.display !== 'none') {
+                renderAdminChronologicalList();
+            }
+        }
+
+        // Tick button handler — opens the ad-hoc modal with a Confirm Complete option
+        function handleEventTick(eventId, dateStr) {
+            showCalendarEventModal(eventId, dateStr);
+        }
+
+        // Cross button handler — requires free-text reason before marking cancelled
+        function handleEventCross(eventId) {
+            const existingModal = document.getElementById('calendarEventCancelModal');
+            if (existingModal) existingModal.remove();
+
+            const modal = document.createElement('div');
+            modal.id = 'calendarEventCancelModal';
+            modal.className = 'search-modal-overlay active';
+            modal.innerHTML = `
+                <div class="search-modal" style="max-width: 380px;">
+                    <div class="search-modal-header" style="background: #dc2626;">
+                        <h2>✗ Mark Not Done</h2>
+                        <button class="search-modal-close" onclick="document.getElementById('calendarEventCancelModal').remove()">×</button>
+                    </div>
+                    <div class="search-modal-body">
+                        <div class="form-group">
+                            <label style="font-weight: 600; color: #374151;">Reason not done <span style="color: #dc2626;">*</span></label>
+                            <textarea id="cancelReasonInput" placeholder="Why wasn't this completed?" style="min-height: 100px; border: 2px solid #fca5a5;" oninput="document.getElementById('cancelConfirmBtn').disabled = this.value.trim().length === 0;"></textarea>
+                        </div>
+                        <button id="cancelConfirmBtn" class="btn" disabled
+                            onclick="confirmEventCancelled('${eventId}')"
+                            style="background: #dc2626; opacity: 0.5; cursor: not-allowed; width: 100%;">
+                            ✗ Confirm Not Done
+                        </button>
+                        <button class="btn btn-secondary" onclick="document.getElementById('calendarEventCancelModal').remove()" style="margin-top: 8px; width: 100%;">
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            `;
+            // Enable button when text is entered
+            modal.querySelector('#cancelConfirmBtn');
+            document.body.appendChild(modal);
+            modal.querySelector('#cancelReasonInput').focus();
+
+            // Wire up button enable/disable after appending
+            const textarea = modal.querySelector('#cancelReasonInput');
+            const btn = modal.querySelector('#cancelConfirmBtn');
+            textarea.addEventListener('input', () => {
+                const hasText = textarea.value.trim().length > 0;
+                btn.disabled = !hasText;
+                btn.style.opacity = hasText ? '1' : '0.5';
+                btn.style.cursor = hasText ? 'pointer' : 'not-allowed';
+            });
+        }
+
+        async function confirmEventCancelled(eventId) {
+            const textarea = document.getElementById('cancelReasonInput');
+            const reason = textarea ? textarea.value.trim() : '';
+            if (!reason) return;
+
+            // Save the reason as notes, then mark cancelled
+            await db.saveCalendarEventNotes(eventId, reason);
+            await db.saveCalendarEventStatus(eventId, 'cancelled');
+
+            document.getElementById('calendarEventCancelModal')?.remove();
+            showToast('Marked as not done', 'success');
+            renderAdminCalendar();
+            loadWorkerCalendarEvents();
             if (document.getElementById('adminListContainer').style.display !== 'none') {
                 renderAdminChronologicalList();
             }
@@ -6963,6 +7061,10 @@
                         </div>
                         
                         <div style="display: flex; flex-direction: column; gap: 10px;">
+                            <button class="btn" onclick="document.getElementById('calendarEventChooserModal').remove(); toggleCalendarEventStatus('${eventId}', 'completed').then(() => showToast('✓ Marked complete', 'success'));" style="padding: 16px; font-size: 16px; background: #16a34a; font-weight: 700;">
+                                ✓ Confirm Complete
+                            </button>
+                            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 2px 0;">
                             <button class="btn btn-adhoc" onclick="document.getElementById('calendarEventChooserModal').remove(); showCustomerSearchModal(null, 'Service');" style="padding: 16px; font-size: 16px;">
                                 🔧 Service
                             </button>
@@ -7731,12 +7833,12 @@
                             gridHtml += `
                                 <div class="calendar-event-item${completedClass}${cancelledClass}" 
                                      style="margin-bottom: 4px; background: ${eventBgColor}; border-left-color: ${eventBorderColor};">
-                                    <span class="calendar-event-title" onclick="showCalendarEventModal('${event.id}', '${dateStr}')" style="font-size: 11px;">
+                                    <span class="calendar-event-title"  style="font-size: 11px;">
                                         ${showWorkerName ? `<span style="color: #6b7280;">👤</span> ` : ''}${event.event_title}
                                     </span>
                                     <div class="calendar-event-actions">
-                                        <button class="event-tick-btn${eventStatus === 'completed' ? ' active' : ''}" onclick="toggleCalendarEventStatus('${event.id}', 'completed')" title="Done">✓</button>
-                                        <button class="event-cross-btn${eventStatus === 'cancelled' ? ' active' : ''}" onclick="toggleCalendarEventStatus('${event.id}', 'cancelled')" title="Not done">✗</button>
+                                        <button class="event-tick-btn${eventStatus === 'completed' ? ' active' : ''}" onclick="handleEventTick('${event.id}', '${dateStr}')" title="Done">✓</button>
+                                        <button class="event-cross-btn${eventStatus === 'cancelled' ? ' active' : ''}" onclick="handleEventCross('${event.id}')" title="Not done">✗</button>
                                     </div>
                                 </div>
                             `;
@@ -7833,10 +7935,10 @@
                     html += `
                         <div class="calendar-event-item${completedClass}${cancelledClass}" 
                              style="font-size: 10px; padding: 4px 6px; background: ${eventBgColor}; border-left-color: ${eventBorderColor};">
-                            <span class="calendar-event-title" onclick="showCalendarEventModal('${event.id}', '${dateStr}')" style="font-size: 10px;">${event.event_title}</span>
+                            <span class="calendar-event-title"  style="font-size: 10px;">${event.event_title}</span>
                             <div class="calendar-event-actions">
-                                <button class="event-tick-btn${eventStatus === 'completed' ? ' active' : ''}" onclick="event.stopPropagation(); toggleCalendarEventStatus('${event.id}', 'completed')" style="width: 18px; height: 18px; font-size: 10px;" title="Done">✓</button>
-                                <button class="event-cross-btn${eventStatus === 'cancelled' ? ' active' : ''}" onclick="event.stopPropagation(); toggleCalendarEventStatus('${event.id}', 'cancelled')" style="width: 18px; height: 18px; font-size: 10px;" title="Not done">✗</button>
+                                <button class="event-tick-btn${eventStatus === 'completed' ? ' active' : ''}" onclick="event.stopPropagation(); handleEventTick('${event.id}', '${dateStr}')" style="width: 18px; height: 18px; font-size: 10px;" title="Done">✓</button>
+                                <button class="event-cross-btn${eventStatus === 'cancelled' ? ' active' : ''}" onclick="event.stopPropagation(); handleEventCross('${event.id}')" style="width: 18px; height: 18px; font-size: 10px;" title="Not done">✗</button>
                             </div>
                         </div>
                     `;
@@ -7940,10 +8042,10 @@
                                     <div class="calendar-event-item${completedClass}${cancelledClass}"
                                          style="margin-bottom: 4px; background: ${workerColorLight}; border-left-color: ${workerColor};">
                                         <span style="margin-right: 6px;">${icon}</span>
-                                        <span class="calendar-event-title" onclick="showCalendarEventModal('${event.id}', '${dateStr}')">${event.event_title}</span>
+                                        <span class="calendar-event-title" >${event.event_title}</span>
                                         <div class="calendar-event-actions">
-                                            <button class="event-tick-btn${eventStatus === 'completed' ? ' active' : ''}" onclick="toggleCalendarEventStatus('${event.id}', 'completed')" title="Done">✓</button>
-                                            <button class="event-cross-btn${eventStatus === 'cancelled' ? ' active' : ''}" onclick="toggleCalendarEventStatus('${event.id}', 'cancelled')" title="Not done">✗</button>
+                                            <button class="event-tick-btn${eventStatus === 'completed' ? ' active' : ''}" onclick="handleEventTick('${event.id}', '${dateStr}')" title="Done">✓</button>
+                                            <button class="event-cross-btn${eventStatus === 'cancelled' ? ' active' : ''}" onclick="handleEventCross('${event.id}')" title="Not done">✗</button>
                                         </div>
                                     </div>`;
                             }
@@ -8032,10 +8134,10 @@
                                     <div class="calendar-event-item${completedClass}${cancelledClass}"
                                          style="margin-bottom: 4px; margin-left: 12px; background: ${workerColorLight}; border-left-color: ${workerColor};">
                                         <span style="margin-right: 6px;">${icon}</span>
-                                        <span class="calendar-event-title" onclick="showCalendarEventModal('${event.id}', '${dateStr}')">${event.event_title}</span>
+                                        <span class="calendar-event-title" >${event.event_title}</span>
                                         <div class="calendar-event-actions">
-                                            <button class="event-tick-btn${eventStatus === 'completed' ? ' active' : ''}" onclick="toggleCalendarEventStatus('${event.id}', 'completed')" title="Done">✓</button>
-                                            <button class="event-cross-btn${eventStatus === 'cancelled' ? ' active' : ''}" onclick="toggleCalendarEventStatus('${event.id}', 'cancelled')" title="Not done">✗</button>
+                                            <button class="event-tick-btn${eventStatus === 'completed' ? ' active' : ''}" onclick="handleEventTick('${event.id}', '${dateStr}')" title="Done">✓</button>
+                                            <button class="event-cross-btn${eventStatus === 'cancelled' ? ' active' : ''}" onclick="handleEventCross('${event.id}')" title="Not done">✗</button>
                                         </div>
                                     </div>`;
                             }
@@ -8141,6 +8243,14 @@
             }
         }
         
+        const WORKER_ORDER = ['Matt', 'Drew', 'Michael', 'Allan', 'Stephen', 'Red'];
+        function workerRank(owner) {
+            if (!owner) return 999;
+            const o = owner.toLowerCase();
+            const idx = WORKER_ORDER.findIndex(w => o === w.toLowerCase() || o.startsWith(w.toLowerCase() + ' ') || o.startsWith(w.toLowerCase() + '-'));
+            return idx === -1 ? 998 : idx;
+        }
+
         function getWorkerColor(worker) {
             // Border/accent colors matching Google Calendar
             const colors = {
@@ -8363,12 +8473,12 @@
             
             // Filter out skipped customers AND off-month customers for this month
             const activeCustomers = allCustomers.filter(c => 
-                !db.isCustomerSkipped(c.id, countMonth, countYear) && 
+                !db.isCustomerSkippedInMonth(c.id, countMonth, countYear) && 
                 !isOffMonth(c, countMonth, countYear)
             );
-            const skippedCount = allCustomers.filter(c => db.isCustomerSkipped(c.id, countMonth, countYear)).length;
+            const skippedCount = allCustomers.filter(c => db.isCustomerSkippedInMonth(c.id, countMonth, countYear)).length;
             const offMonthCount = allCustomers.filter(c => 
-                !db.isCustomerSkipped(c.id, countMonth, countYear) && 
+                !db.isCustomerSkippedInMonth(c.id, countMonth, countYear) && 
                 isOffMonth(c, countMonth, countYear)
             ).length;
             const excludedCount = skippedCount + offMonthCount;
@@ -8456,9 +8566,13 @@
             }
 
             // Only count active customers (not skipped, not off-month)
+            const summaryWorkDate = currentServiceDate || formatDateLocal(new Date());
+            const summaryDateObj = new Date(summaryWorkDate + 'T00:00:00');
+            const summaryCheckMonth = summaryDateObj.getMonth();
+            const summaryCheckYear = summaryDateObj.getFullYear();
             const active = customers.filter(c => {
-                if (db.isCustomerSkipped(c.id, selectedMonth, selectedYear)) return false;
-                if (isOffMonth(c, selectedMonth, selectedYear)) return false;
+                if (db.isCustomerSkipped(c.id, summaryWorkDate)) return false;
+                if (isOffMonth(c, summaryCheckMonth, summaryCheckYear)) return false;
                 return true;
             });
 
@@ -8507,6 +8621,8 @@
                     bagCounts['10kg'] += 1;
                 } else if (raw === '21kg') {
                     bagCounts['7kg'] += 3; // 3 × 7kg bags
+                } else if (raw === '28kg') {
+                    bagCounts['7kg'] += 4; // 4 × 7kg bags
                 } else {
                     const match = bagSizes.find(s => normalise(s) === raw);
                     if (match) bagCounts[match]++;
@@ -8571,6 +8687,12 @@
             const today = formatDateLocal(new Date());
             const workDate = currentServiceDate || today;
             const isHistorical = isPastMonth();
+
+            // For off-month and skip checks, use the actual work date's month
+            // (may differ from selectedMonth when event crosses into next month)
+            const workDateObj = new Date(workDate + 'T00:00:00');
+            const checkMonth = isHistorical ? selectedMonth : workDateObj.getMonth();
+            const checkYear = isHistorical ? selectedYear : workDateObj.getFullYear();
             
             // Update header with date context
             let headerText = currentRunDay;
@@ -8583,11 +8705,16 @@
             document.getElementById('currentRunDay').textContent = headerText;
             
             // Count skipped and off-month customers
-            const skippedCount = customers.filter(c => db.isCustomerSkipped(c.id, selectedMonth, selectedYear)).length;
-            const offMonthCount = customers.filter(c => 
-                !db.isCustomerSkipped(c.id, selectedMonth, selectedYear) && 
-                isOffMonth(c, selectedMonth, selectedYear)
+            const skippedCount = customers.filter(c => isHistorical
+                ? db.isCustomerSkippedInMonth(c.id, checkMonth, checkYear)
+                : db.isCustomerSkipped(c.id, workDate)
             ).length;
+            const offMonthCount = customers.filter(c => {
+                const skipped = isHistorical
+                    ? db.isCustomerSkippedInMonth(c.id, checkMonth, checkYear)
+                    : db.isCustomerSkipped(c.id, workDate);
+                return !skipped && isOffMonth(c, checkMonth, checkYear);
+            }).length;
             const excludedTotal = skippedCount + offMonthCount;
             const activeCount = customers.length - excludedTotal;
             let countText = `${customers.length} customers`;
@@ -8613,12 +8740,18 @@
             }
             
             customers.forEach((customer, index) => {
-                // Check if customer is skipped for the current month
-                const isSkipped = db.isCustomerSkipped(customer.id, selectedMonth, selectedYear);
-                const skipReason = isSkipped ? db.getSkipReason(customer.id, selectedMonth, selectedYear) : '';
+                // Check if customer is skipped for this specific run date (or anywhere in month for historical)
+                const isSkipped = isHistorical
+                    ? db.isCustomerSkippedInMonth(customer.id, checkMonth, checkYear)
+                    : db.isCustomerSkipped(customer.id, workDate);
+                const skipReason = isSkipped
+                    ? (isHistorical
+                        ? db.getSkipReasonInMonth(customer.id, checkMonth, checkYear)
+                        : db.getSkipReason(customer.id, workDate))
+                    : '';
                 
                 // Check if this is an off-month for bi-monthly customers
-                const customerIsOffMonth = isOffMonth(customer, selectedMonth, selectedYear);
+                const customerIsOffMonth = isOffMonth(customer, checkMonth, checkYear);
                 const scheduleLabel = getScheduleLabel(customer.serviceMonths);
                 
                 // Treat off-month as effectively skipped (auto-strikethrough)
@@ -8627,8 +8760,14 @@
                 // Find completed POD for the selected month (matches service day card logic)
                 const completedPod = db.pods.find(pod => {
                     if (pod.customerId !== customer.id) return false;
-                    const podDate = new Date(pod.date + 'T00:00:00');
-                    return podDate.getMonth() === selectedMonth && podDate.getFullYear() === selectedYear;
+                    if (isHistorical) {
+                        // Historical view: match any pod in that month/year
+                        const podDate = new Date(pod.date + 'T00:00:00');
+                        return podDate.getMonth() === selectedMonth && podDate.getFullYear() === selectedYear;
+                    } else {
+                        // Current month: match exact service date (same logic as summary counter)
+                        return pod.date === workDate;
+                    }
                 });
                 
                 const li = document.createElement('li');
@@ -8775,10 +8914,11 @@
                 list.appendChild(li);
             });
             
-            // Add ad-hoc PODs section - show ad-hocs that belong to this runsheet
+            // Add ad-hoc PODs section - show ad-hocs that belong to this runsheet ON THIS DATE ONLY
             // New PODs: runDay = service day, isAdHoc = true
             // Old PODs: runDay = 'Ad-Hoc', sourceRunDay = service day
             const adHocPods = db.pods.filter(pod => {
+                if (pod.date !== workDate) return false;
                 // New format: isAdHoc flag and runDay matches
                 if (pod.isAdHoc && pod.runDay === currentRunDay) {
                     return true;
@@ -8960,31 +9100,28 @@
             });
         }
 
-        // Toggle customer skip status for the current month
+        // Toggle customer skip status for the current run date
         async function toggleCustomerSkip(customerId, isCurrentlySkipped) {
-            const yearMonth = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}`;
-            
+            const skipDate = currentServiceDate || formatDateLocal(new Date());
+
             if (isCurrentlySkipped) {
-                // Unskip
-                const success = await db.removeMonthlySkip(customerId, yearMonth);
+                const success = await db.removeMonthlySkip(customerId, skipDate);
                 if (success) {
-                    showToast('Customer restored for ' + MONTH_NAMES[selectedMonth], 'success');
+                    showToast('Customer restored for ' + formatDisplayDate(skipDate), 'success');
                     renderCustomerList();
                     renderRunDays();
                 } else {
                     showToast('Error restoring customer', 'error');
                 }
             } else {
-                // Show skip reason dialog
-                showSkipReasonModal(customerId, yearMonth);
+                showSkipReasonModal(customerId, skipDate);
             }
         }
-        
-        function showSkipReasonModal(customerId, yearMonth) {
+
+        function showSkipReasonModal(customerId, skipDate) {
             const customer = db.customers.find(c => c.id === customerId);
             const customerName = customer ? customer.name : 'Customer';
-            
-            // Create modal
+
             const modal = document.createElement('div');
             modal.className = 'search-modal-overlay active';
             modal.id = 'skipReasonModal';
@@ -8995,8 +9132,8 @@
                         <button class="search-modal-close" onclick="closeSkipReasonModal()">×</button>
                     </div>
                     <div class="search-modal-body">
-                        <p style="color: #6b7280; margin-bottom: 16px;">This customer will be marked as skipped for ${MONTH_NAMES[selectedMonth]} ${selectedYear}.</p>
-                        
+                        <p style="color: #6b7280; margin-bottom: 16px;">This customer will be skipped for the ${formatDisplayDate(skipDate)} run only.</p>
+
                         <div class="form-group">
                             <label>Reason</label>
                             <select id="skipReasonSelect" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 16px;">
@@ -9010,13 +9147,13 @@
                                 <option value="Other">Other</option>
                             </select>
                         </div>
-                        
+
                         <div class="form-group">
                             <label>Comments (optional)</label>
                             <textarea id="skipComments" placeholder="Add any additional comments..." style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; min-height: 80px; resize: vertical;"></textarea>
                         </div>
-                        
-                        <button class="btn" onclick="confirmSkipCustomer(${customerId}, '${yearMonth}')" style="margin-top: 8px;">
+
+                        <button class="btn" onclick="confirmSkipCustomer(${customerId}, '${skipDate}')" style="margin-top: 8px;">
                             Skip Customer
                         </button>
                     </div>
@@ -9030,16 +9167,15 @@
             if (modal) modal.remove();
         }
         
-        async function confirmSkipCustomer(customerId, yearMonth) {
+        async function confirmSkipCustomer(customerId, skipDate) {
             const reason = document.getElementById('skipReasonSelect').value;
             const comments = document.getElementById('skipComments').value.trim();
-            // Combine reason and comments into the reason field
             const fullReason = comments ? `${reason ? reason + ': ' : ''}${comments}` : reason;
             
-            const success = await db.saveMonthlySkip(customerId, yearMonth, fullReason);
+            const success = await db.saveMonthlySkip(customerId, skipDate, fullReason);
             if (success) {
                 closeSkipReasonModal();
-                showToast('Customer skipped for ' + MONTH_NAMES[selectedMonth], 'success');
+                showToast('Customer skipped for ' + formatDisplayDate(skipDate), 'success');
                 renderCustomerList();
                 renderRunDays();
             } else {
@@ -9501,6 +9637,7 @@
                             <option value="14kg" ${customer.carbsolve === '14kg' ? 'selected' : ''}>14kg</option>
                             <option value="17kg" ${customer.carbsolve === '17kg' ? 'selected' : ''}>17kg</option>
                             <option value="21kg" ${customer.carbsolve === '21kg' ? 'selected' : ''}>21kg</option>
+                            <option value="28kg" ${customer.carbsolve === '28kg' ? 'selected' : ''}>28kg</option>
                         </select>
                         
                         <select id="edit-waste-${id}" style="width: 100%; padding: 8px; margin-bottom: 4px;">
@@ -9724,13 +9861,20 @@
                 const currentMonth = now.getMonth();
                 const currentYear = now.getFullYear();
                 
+                // Calculate 3 days ahead (to allow early runs across month boundary)
+                const threeDaysAhead = new Date(now);
+                threeDaysAhead.setDate(threeDaysAhead.getDate() + 3);
+                const threeDaysAheadStr = formatDateLocal(threeDaysAhead);
+
                 const validDates = [...allDates]
                     .filter(date => {
                         // Always include past dates
                         if (date <= today) return true;
-                        // Include future dates only if they're in the current month
+                        // Include future dates in current month, OR within 3 days (handles month-end early runs)
                         const dateObj = new Date(date + 'T00:00:00');
-                        return dateObj.getMonth() === currentMonth && dateObj.getFullYear() === currentYear;
+                        const inCurrentMonth = dateObj.getMonth() === currentMonth && dateObj.getFullYear() === currentYear;
+                        const within3Days = date <= threeDaysAheadStr;
+                        return inCurrentMonth || within3Days;
                     })
                     .sort((a, b) => b.localeCompare(a)) // newest first
                     .slice(0, 15); // increased limit to accommodate future dates
@@ -9822,16 +9966,14 @@
             tbody.appendChild(backRow);
             
             customers.forEach(customer => {
-                // Find POD for this customer within the viewed month (matches worker view logic)
-                const pod = db.pods.find(p => {
-                    if (p.customerId !== customer.id) return false;
-                    const podDate = new Date(p.date + 'T00:00:00');
-                    return podDate.getMonth() === viewMonth && podDate.getFullYear() === viewYear;
-                });
+                // Find POD for this customer on the exact selected date
+                const pod = db.pods.find(p => 
+                    p.customerId === customer.id && p.date === selectedDate
+                );
                 
                 // Check if customer is skipped for this month
-                const isSkipped = db.isCustomerSkipped(customer.id, viewMonth, viewYear);
-                const skipReason = isSkipped ? db.getSkipReason(customer.id, viewMonth, viewYear) : '';
+                const isSkipped = db.isCustomerSkippedInMonth(customer.id, viewMonth, viewYear);
+                const skipReason = isSkipped ? db.getSkipReasonInMonth(customer.id, viewMonth, viewYear) : '';
                 
                 // Check if this is an off-month for bi-monthly customers
                 const customerIsOffMonth = isOffMonth(customer, viewMonth, viewYear);
