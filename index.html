@@ -5068,11 +5068,14 @@
 
             async saveMonthlySkip(customerId, skipDate, reason = '') {
                 try {
+                    // Derive year_month from skipDate for backward compat with DB column
+                    const yearMonth = skipDate.substring(0, 7); // 'YYYY-MM-DD' → 'YYYY-MM'
                     const { error } = await supabase
                         .from('customer_monthly_skips')
                         .upsert({
                             customer_id: customerId,
                             skip_date: skipDate,
+                            year_month: yearMonth,
                             reason: reason,
                             created_at: new Date().toISOString()
                         }, { onConflict: 'customer_id,skip_date' });
