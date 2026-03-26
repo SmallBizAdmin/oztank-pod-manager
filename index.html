@@ -6589,6 +6589,15 @@
                                        style="width: 18px; height: 18px; cursor: pointer;">
                                 <span style="font-weight: 500;">Freight Added</span>
                             </label>
+
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" 
+                                       ${inv.checked_sent ? 'checked' : ''} 
+                                       ${!inv.invoiced ? 'disabled' : ''}
+                                       onchange="toggleInvoiceField(${inv.id}, 'checked_sent', this.checked)"
+                                       style="width: 18px; height: 18px; cursor: pointer; ${!inv.invoiced ? 'opacity:0.4;' : ''}">
+                                <span style="font-weight: 500; ${!inv.invoiced ? 'color:#9ca3af;' : ''}">Checked & Sent</span>
+                            </label>
                         </div>
                         
                         <div style="display: flex; gap: 8px; align-items: center;">
