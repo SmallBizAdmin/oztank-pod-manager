@@ -9940,12 +9940,10 @@
             tbody.appendChild(backRow);
             
             customers.forEach(customer => {
-                // Find POD for this customer within the viewed month (matches worker view logic)
-                const pod = db.pods.find(p => {
-                    if (p.customerId !== customer.id) return false;
-                    const podDate = new Date(p.date + 'T00:00:00');
-                    return podDate.getMonth() === viewMonth && podDate.getFullYear() === viewYear;
-                });
+                // Find POD for this customer on the exact selected date
+                const pod = db.pods.find(p => 
+                    p.customerId === customer.id && p.date === selectedDate
+                );
                 
                 // Check if customer is skipped for this month
                 const isSkipped = db.isCustomerSkippedInMonth(customer.id, viewMonth, viewYear);
