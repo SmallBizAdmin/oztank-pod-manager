@@ -5773,10 +5773,12 @@
             
             // For historical months, only show existing PODs
             if (isPastMonth()) {
-                // Find any existing POD for this customer in the selected month
-                const existingPod = db.pods.find(pod => 
-                    pod.customerId === customer.id
-                );
+                // Find POD for this customer in the selected month/year
+                const existingPod = db.pods.find(pod => {
+                    if (pod.customerId !== customer.id) return false;
+                    const podDate = new Date(pod.date + 'T00:00:00');
+                    return podDate.getMonth() === selectedMonth && podDate.getFullYear() === selectedYear;
+                });
                 
                 if (existingPod) {
                     showExistingPod(existingPod);
@@ -5793,12 +5795,6 @@
                     pod.customerId === customer.id && 
                     pod.date === workDate
                 );
-                
-                // Fallback: check if a POD exists for this customer on any date in the
-                // loaded data (covers PODs saved ahead of time on a different date)
-                if (!existingPod) {
-                    existingPod = db.pods.find(pod => pod.customerId === customer.id);
-                }
                 
                 if (existingPod) {
                     // Show existing POD with edit option
