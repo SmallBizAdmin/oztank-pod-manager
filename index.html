@@ -8696,8 +8696,14 @@
                 // Find completed POD for the selected month (matches service day card logic)
                 const completedPod = db.pods.find(pod => {
                     if (pod.customerId !== customer.id) return false;
-                    const podDate = new Date(pod.date + 'T00:00:00');
-                    return podDate.getMonth() === selectedMonth && podDate.getFullYear() === selectedYear;
+                    if (isHistorical) {
+                        // Historical view: match any pod in that month/year
+                        const podDate = new Date(pod.date + 'T00:00:00');
+                        return podDate.getMonth() === selectedMonth && podDate.getFullYear() === selectedYear;
+                    } else {
+                        // Current month: match exact service date (same logic as summary counter)
+                        return pod.date === workDate;
+                    }
                 });
                 
                 const li = document.createElement('li');
@@ -9793,13 +9799,20 @@
                 const currentMonth = now.getMonth();
                 const currentYear = now.getFullYear();
                 
+                // Calculate 3 days ahead (to allow early runs across month boundary)
+                const threeDaysAhead = new Date(now);
+                threeDaysAhead.setDate(threeDaysAhead.getDate() + 3);
+                const threeDaysAheadStr = formatDateLocal(threeDaysAhead);
+
                 const validDates = [...allDates]
                     .filter(date => {
                         // Always include past dates
                         if (date <= today) return true;
-                        // Include future dates only if they're in the current month
+                        // Include future dates in current month, OR within 3 days (handles month-end early runs)
                         const dateObj = new Date(date + 'T00:00:00');
-                        return dateObj.getMonth() === currentMonth && dateObj.getFullYear() === currentYear;
+                        const inCurrentMonth = dateObj.getMonth() === currentMonth && dateObj.getFullYear() === currentYear;
+                        const within3Days = date <= threeDaysAheadStr;
+                        return inCurrentMonth || within3Days;
                     })
                     .sort((a, b) => b.localeCompare(a)) // newest first
                     .slice(0, 15); // increased limit to accommodate future dates
