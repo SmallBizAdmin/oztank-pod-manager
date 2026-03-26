@@ -6289,8 +6289,13 @@
                         `;
                     });
                     
-                    // Render ad-hoc items
-                    if (adHocPods.length > 0 || adHocTankMoves.length > 0) {
+                    // Render ad-hoc items (PODs, tank movements, or any calendar events)
+                    if (adHocPods.length > 0 || adHocTankMoves.length > 0 || eventsOnDate.length > 0) {
+                        const tickedCount = eventsOnDate.filter(ev => db.getCalendarEventStatus(ev.id)).length;
+                        const parts = [];
+                        if (adHocPods.length > 0) parts.push(`${adHocPods.length} PODs`);
+                        if (adHocTankMoves.length > 0) parts.push(`${adHocTankMoves.length} tank movements`);
+                        if (eventsOnDate.length > 0) parts.push(`${tickedCount}/${eventsOnDate.length} events`);
                         html += `
                             <div onclick="openRunsheetForDate('Ad-Hoc', '${dateStr}')" 
                                  style="display: flex; align-items: center; gap: 12px; padding: 12px; background: #fffbeb; border-radius: 8px; margin-bottom: 8px; border-left: 4px solid #f59e0b; cursor: pointer;"
@@ -6298,7 +6303,7 @@
                                 <div style="font-size: 24px;">📋</div>
                                 <div style="flex: 1;">
                                     <div style="font-weight: 600; color: #92400e;">Ad-Hoc Services & Deliveries</div>
-                                    <div style="font-size: 12px; color: #92400e;">${adHocPods.length} PODs, ${adHocTankMoves.length} tank movements</div>
+                                    <div style="font-size: 12px; color: #92400e;">${parts.join(', ')}</div>
                                 </div>
                                 <div style="color: #92400e;">→</div>
                             </div>
@@ -6831,8 +6836,9 @@
             const trulyAdHocTankMoves = tankMovementsArr.filter(tm => 
                 tm.date === dateStr && tm.runDay === 'Ad-Hoc' && !tm.sourceRunDay
             );
-            
-            if (trulyAdHocPods.length > 0 || trulyAdHocTankMoves.length > 0) {
+
+            // Also show Ad-Hoc if there are any calendar events for this date
+            if (trulyAdHocPods.length > 0 || trulyAdHocTankMoves.length > 0 || eventsOnDate.length > 0) {
                 allServiceDays.add('Ad-Hoc');
             }
             
@@ -6849,11 +6855,12 @@
                 const pods = serviceDayPods[runDay] || [];
                 const scheduledDay = scheduledOnDate.find(sd => sd.serviceDayName === runDay);
                 
-                // For Ad-Hoc, count only truly ad-hoc items
+                // For Ad-Hoc, count truly ad-hoc items + calendar events
                 let completedCount, totalCustomers;
                 if (runDay === 'Ad-Hoc') {
-                    completedCount = trulyAdHocPods.length + trulyAdHocTankMoves.length;
-                    totalCustomers = 0; // No scheduled total for ad-hoc
+                    const tickedEvents = eventsOnDate.filter(ev => db.getCalendarEventStatus(ev.id));
+                    completedCount = trulyAdHocPods.length + trulyAdHocTankMoves.length + tickedEvents.length;
+                    totalCustomers = eventsOnDate.length; // total = all events
                 } else {
                     completedCount = pods.length;
                     totalCustomers = db.customers.filter(c => c.runDay === runDay).length;
@@ -10274,41 +10281,45 @@
             if (adHocPods.length === 0 && adHocTankMoves.length === 0) {
                 const emptyRow = document.createElement('tr');
                 emptyRow.innerHTML = `
-                    <td colspan="9" style="padding: 24px; text-align: center; color: #6b7280;">
-                        No ad-hoc services or deliveries for this date
+                    <td colspan="9" style="padding: 16px; text-align: center; color: #9ca3af; font-size: 13px; font-style: italic;">
+                        No ad-hoc PODs or tank movements for this date
                     </td>
                 `;
                 tbody.appendChild(emptyRow);
             }
 
-            // Add ticked/crossed calendar events for this date
-            const tickedEvents = (db.calendarEvents || []).filter(ev => {
-                if (ev.eventDate !== selectedDate) return false;
-                const status = db.getCalendarEventStatus(ev.id);
-                return status === 'completed' || status === 'cancelled';
-            }).sort((a, b) => workerRank(a.calendarOwner) - workerRank(b.calendarOwner));
+            // Add ALL calendar events for this date (ticked, crossed, or pending)
+            const allEvents = (db.calendarEvents || []).filter(ev => ev.eventDate === selectedDate)
+                .sort((a, b) => workerRank(a.calendarOwner) - workerRank(b.calendarOwner));
 
-            if (tickedEvents.length > 0) {
+            if (allEvents.length > 0) {
                 // Section header row
                 const headerRow = document.createElement('tr');
                 headerRow.innerHTML = `
                     <td colspan="9" style="padding: 10px 12px; background: #f0fdf4; border-top: 2px solid #86efac;">
-                        <strong style="color: #166534;">📋 Calendar Events (Ticked / Crossed)</strong>
+                        <strong style="color: #166534;">📋 Calendar Events (${allEvents.length})</strong>
                     </td>
                 `;
                 tbody.appendChild(headerRow);
 
-                tickedEvents.forEach(ev => {
+                allEvents.forEach(ev => {
                     const status = db.getCalendarEventStatus(ev.id);
                     const notes = db.getCalendarEventNotes(ev.id);
                     const isDone = status === 'completed';
+                    const isCancelled = status === 'cancelled';
                     const workerColor = getWorkerColor(ev.calendarOwner);
+                    const rowBg = isDone ? '#f0fdf4' : isCancelled ? '#fef2f2' : '#ffffff';
+                    const statusBadge = isDone
+                        ? '<span style="background:#dcfce7;color:#166534;padding:2px 6px;border-radius:8px;font-size:10px;">✅ Done</span>'
+                        : isCancelled
+                        ? '<span style="background:#fee2e2;color:#991b1b;padding:2px 6px;border-radius:8px;font-size:10px;">❌ Not done</span>'
+                        : '<span style="color:#9ca3af;font-size:10px;">— Pending</span>';
                     const tr = document.createElement('tr');
                     tr.style.borderBottom = '1px solid #e5e7eb';
-                    tr.style.background = isDone ? '#f0fdf4' : '#fef2f2';
+                    tr.style.background = rowBg;
                     tr.innerHTML = `
-                        <td style="padding: 12px; text-align: center;">
-                            <span style="font-size: 16px;">${isDone ? '✅' : '❌'}</span>
+                        <td style="padding: 12px; text-align: center; font-size: 16px;">
+                            ${isDone ? '✅' : isCancelled ? '❌' : '—'}
                         </td>
                         <td style="padding: 12px; text-align: center;">-</td>
                         <td style="padding: 12px;">
@@ -10319,11 +10330,7 @@
                         <td style="padding: 12px;">-</td>
                         <td style="padding: 12px;">-</td>
                         <td style="padding: 12px; font-size: 12px; font-style: italic;">${notes || '-'}</td>
-                        <td style="padding: 12px; text-align: center;">
-                            <span style="background: ${isDone ? '#dcfce7' : '#fee2e2'}; color: ${isDone ? '#166534' : '#991b1b'}; padding: 2px 6px; border-radius: 8px; font-size: 10px;">
-                                ${isDone ? 'Done' : 'Not done'}
-                            </span>
-                        </td>
+                        <td style="padding: 12px; text-align: center;">${statusBadge}</td>
                     `;
                     tbody.appendChild(tr);
                 });
