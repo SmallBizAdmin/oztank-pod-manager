@@ -9971,12 +9971,13 @@
                     p.customerId === customer.id && p.date === selectedDate
                 );
                 
-                // Check if customer is skipped for this month
-                const isSkipped = db.isCustomerSkippedInMonth(customer.id, viewMonth, viewYear);
-                const skipReason = isSkipped ? db.getSkipReasonInMonth(customer.id, viewMonth, viewYear) : '';
-                
+                // Check if customer is skipped for this exact run date
+                const isSkipped = db.isCustomerSkipped(customer.id, selectedDate);
+                const skipReason = isSkipped ? db.getSkipReason(customer.id, selectedDate) : '';
+
                 // Check if this is an off-month for bi-monthly customers
-                const customerIsOffMonth = isOffMonth(customer, viewMonth, viewYear);
+                const selectedDateObj2 = new Date(selectedDate + 'T00:00:00');
+                const customerIsOffMonth = isOffMonth(customer, selectedDateObj2.getMonth(), selectedDateObj2.getFullYear());
                 const scheduleLabel = getScheduleLabel(customer.serviceMonths);
                 
                 const tr = document.createElement('tr');
