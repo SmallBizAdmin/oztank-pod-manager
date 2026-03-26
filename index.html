@@ -3599,7 +3599,7 @@
                             'July', 'August', 'September', 'October', 'November', 'December'];
         
         // Waste field values that are billing instructions, not physical collection types
-        const BILLING_WASTE_FLAGS = ['blanket invoice', 'use po', 'blanket po', 'po number', 'forward invoice'];
+        const BILLING_WASTE_FLAGS = ['blanket invoice', 'use po', 'blanket po', 'po number', 'forward invoice', 'rent & ss'];
         function isBillingWaste(waste) {
             if (!waste) return false;
             return BILLING_WASTE_FLAGS.some(f => waste.toLowerCase().includes(f));
@@ -10044,6 +10044,9 @@
                 
                 // Build comprehensive notes display (all notes from POD)
                 let allNotesDisplay = [];
+                if (customer.waste && !isBillingWaste(customer.waste)) {
+                    allNotesDisplay.push(`<span style="background:#fff7ed;color:#c2410c;border:1px solid #fdba74;padding:1px 6px;border-radius:8px;font-size:11px;font-weight:600;">🛢️ ${customer.waste}</span>`);
+                }
                 if (pod) {
                     if (pod.serviceNotes) allNotesDisplay.push(`<strong>Service:</strong> ${pod.serviceNotes}`);
                     if (pod.notes) allNotesDisplay.push(`<strong>Notes:</strong> ${pod.notes}`);
