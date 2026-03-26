@@ -8883,10 +8883,11 @@
                 list.appendChild(li);
             });
             
-            // Add ad-hoc PODs section - show ad-hocs that belong to this runsheet
+            // Add ad-hoc PODs section - show ad-hocs that belong to this runsheet ON THIS DATE ONLY
             // New PODs: runDay = service day, isAdHoc = true
             // Old PODs: runDay = 'Ad-Hoc', sourceRunDay = service day
             const adHocPods = db.pods.filter(pod => {
+                if (pod.date !== workDate) return false;
                 // New format: isAdHoc flag and runDay matches
                 if (pod.isAdHoc && pod.runDay === currentRunDay) {
                     return true;
