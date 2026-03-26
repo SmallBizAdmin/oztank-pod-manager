@@ -4014,7 +4014,7 @@
             skippedInvoiceStatus: {}, // "customerId|date" → { invoiced, checkedSent }
             serviceDayInvoiceStatus: {},
             tankMovements: [],
-            monthlySkips: {}, // Tracks customers skipped for specific months (key: "customerId-YYYY-MM")
+            monthlySkips: {}, // Tracks customers skipped for specific run dates (key: "customerId-YYYY-MM-DD")
             
             async load() {
                 try {
@@ -5030,96 +5030,109 @@
             // Monthly skip functions - for customers to be skipped in a particular month
             async loadMonthlySkips() {
                 try {
-                    const yearMonth = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}`;
-                    
+                    // Load all skips for the entire selected month (covers multiple runs in same month)
+                    const monthStart = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-01`;
+                    const nextMonth = selectedMonth === 11 ? 1 : selectedMonth + 2;
+                    const nextYear = selectedMonth === 11 ? selectedYear + 1 : selectedYear;
+                    const monthEnd = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`;
+
                     const { data, error } = await supabase
                         .from('customer_monthly_skips')
                         .select('*')
-                        .eq('year_month', yearMonth);
-                    
+                        .gte('skip_date', monthStart)
+                        .lt('skip_date', monthEnd);
+
                     if (error) {
-                        // Table might not exist yet - that's okay
                         console.log('Monthly skips table may not exist yet');
                         this.monthlySkips = {};
                         return;
                     }
-                    
+
                     this.monthlySkips = {};
                     if (data) {
                         data.forEach(skip => {
-                            const key = `${skip.customer_id}-${skip.year_month}`;
+                            const key = `${skip.customer_id}-${skip.skip_date}`;
                             this.monthlySkips[key] = {
                                 reason: skip.reason || '',
                                 createdAt: skip.created_at
                             };
                         });
                     }
-                    
-                    console.log(`Loaded ${Object.keys(this.monthlySkips).length} monthly skips for ${yearMonth}`);
+
+                    console.log(`Loaded ${Object.keys(this.monthlySkips).length} skips for ${monthStart} – ${monthEnd}`);
                 } catch (e) {
                     console.log('Error loading monthly skips:', e);
                     this.monthlySkips = {};
                 }
             },
-            
-            async saveMonthlySkip(customerId, yearMonth, reason = '') {
+
+            async saveMonthlySkip(customerId, skipDate, reason = '') {
                 try {
                     const { error } = await supabase
                         .from('customer_monthly_skips')
                         .upsert({
                             customer_id: customerId,
-                            year_month: yearMonth,
+                            skip_date: skipDate,
                             reason: reason,
                             created_at: new Date().toISOString()
-                        }, { onConflict: 'customer_id,year_month' });
-                    
+                        }, { onConflict: 'customer_id,skip_date' });
+
                     if (error) throw error;
-                    
-                    // Update local cache
-                    const key = `${customerId}-${yearMonth}`;
+
+                    const key = `${customerId}-${skipDate}`;
                     this.monthlySkips[key] = {
                         reason: reason,
                         createdAt: new Date().toISOString()
                     };
-                    
+
                     return true;
                 } catch (e) {
-                    console.error('Error saving monthly skip:', e);
+                    console.error('Error saving skip:', e);
                     return false;
                 }
             },
-            
-            async removeMonthlySkip(customerId, yearMonth) {
+
+            async removeMonthlySkip(customerId, skipDate) {
                 try {
                     const { error } = await supabase
                         .from('customer_monthly_skips')
                         .delete()
                         .eq('customer_id', customerId)
-                        .eq('year_month', yearMonth);
-                    
+                        .eq('skip_date', skipDate);
+
                     if (error) throw error;
-                    
-                    // Update local cache
-                    const key = `${customerId}-${yearMonth}`;
+
+                    const key = `${customerId}-${skipDate}`;
                     delete this.monthlySkips[key];
-                    
+
                     return true;
                 } catch (e) {
-                    console.error('Error removing monthly skip:', e);
+                    console.error('Error removing skip:', e);
                     return false;
                 }
             },
-            
-            isCustomerSkipped(customerId, month, year) {
-                const yearMonth = `${year}-${String(month + 1).padStart(2, '0')}`;
-                const key = `${customerId}-${yearMonth}`;
+
+            // Check skip by exact run date
+            isCustomerSkipped(customerId, date) {
+                const key = `${customerId}-${date}`;
                 return !!this.monthlySkips[key];
             },
-            
-            getSkipReason(customerId, month, year) {
-                const yearMonth = `${year}-${String(month + 1).padStart(2, '0')}`;
-                const key = `${customerId}-${yearMonth}`;
+
+            getSkipReason(customerId, date) {
+                const key = `${customerId}-${date}`;
                 return this.monthlySkips[key]?.reason || '';
+            },
+
+            // For historical/admin views: check if skipped on any date within a given month
+            isCustomerSkippedInMonth(customerId, month, year) {
+                const prefix = `${customerId}-${year}-${String(month + 1).padStart(2, '0')}`;
+                return Object.keys(this.monthlySkips).some(k => k.startsWith(prefix));
+            },
+
+            getSkipReasonInMonth(customerId, month, year) {
+                const prefix = `${customerId}-${year}-${String(month + 1).padStart(2, '0')}`;
+                const key = Object.keys(this.monthlySkips).find(k => k.startsWith(prefix));
+                return key ? this.monthlySkips[key]?.reason || '' : '';
             }
         };
 
@@ -8432,12 +8445,12 @@
             
             // Filter out skipped customers AND off-month customers for this month
             const activeCustomers = allCustomers.filter(c => 
-                !db.isCustomerSkipped(c.id, countMonth, countYear) && 
+                !db.isCustomerSkippedInMonth(c.id, countMonth, countYear) && 
                 !isOffMonth(c, countMonth, countYear)
             );
-            const skippedCount = allCustomers.filter(c => db.isCustomerSkipped(c.id, countMonth, countYear)).length;
+            const skippedCount = allCustomers.filter(c => db.isCustomerSkippedInMonth(c.id, countMonth, countYear)).length;
             const offMonthCount = allCustomers.filter(c => 
-                !db.isCustomerSkipped(c.id, countMonth, countYear) && 
+                !db.isCustomerSkippedInMonth(c.id, countMonth, countYear) && 
                 isOffMonth(c, countMonth, countYear)
             ).length;
             const excludedCount = skippedCount + offMonthCount;
@@ -8525,8 +8538,9 @@
             }
 
             // Only count active customers (not skipped, not off-month)
+            const summaryWorkDate = currentServiceDate || formatDateLocal(new Date());
             const active = customers.filter(c => {
-                if (db.isCustomerSkipped(c.id, selectedMonth, selectedYear)) return false;
+                if (db.isCustomerSkipped(c.id, summaryWorkDate)) return false;
                 if (isOffMonth(c, selectedMonth, selectedYear)) return false;
                 return true;
             });
@@ -8652,11 +8666,16 @@
             document.getElementById('currentRunDay').textContent = headerText;
             
             // Count skipped and off-month customers
-            const skippedCount = customers.filter(c => db.isCustomerSkipped(c.id, selectedMonth, selectedYear)).length;
-            const offMonthCount = customers.filter(c => 
-                !db.isCustomerSkipped(c.id, selectedMonth, selectedYear) && 
-                isOffMonth(c, selectedMonth, selectedYear)
+            const skippedCount = customers.filter(c => isHistorical
+                ? db.isCustomerSkippedInMonth(c.id, selectedMonth, selectedYear)
+                : db.isCustomerSkipped(c.id, workDate)
             ).length;
+            const offMonthCount = customers.filter(c => {
+                const skipped = isHistorical
+                    ? db.isCustomerSkippedInMonth(c.id, selectedMonth, selectedYear)
+                    : db.isCustomerSkipped(c.id, workDate);
+                return !skipped && isOffMonth(c, selectedMonth, selectedYear);
+            }).length;
             const excludedTotal = skippedCount + offMonthCount;
             const activeCount = customers.length - excludedTotal;
             let countText = `${customers.length} customers`;
@@ -8682,9 +8701,15 @@
             }
             
             customers.forEach((customer, index) => {
-                // Check if customer is skipped for the current month
-                const isSkipped = db.isCustomerSkipped(customer.id, selectedMonth, selectedYear);
-                const skipReason = isSkipped ? db.getSkipReason(customer.id, selectedMonth, selectedYear) : '';
+                // Check if customer is skipped for this specific run date (or anywhere in month for historical)
+                const isSkipped = isHistorical
+                    ? db.isCustomerSkippedInMonth(customer.id, selectedMonth, selectedYear)
+                    : db.isCustomerSkipped(customer.id, workDate);
+                const skipReason = isSkipped
+                    ? (isHistorical
+                        ? db.getSkipReasonInMonth(customer.id, selectedMonth, selectedYear)
+                        : db.getSkipReason(customer.id, workDate))
+                    : '';
                 
                 // Check if this is an off-month for bi-monthly customers
                 const customerIsOffMonth = isOffMonth(customer, selectedMonth, selectedYear);
@@ -9035,31 +9060,28 @@
             });
         }
 
-        // Toggle customer skip status for the current month
+        // Toggle customer skip status for the current run date
         async function toggleCustomerSkip(customerId, isCurrentlySkipped) {
-            const yearMonth = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}`;
-            
+            const skipDate = currentServiceDate || formatDateLocal(new Date());
+
             if (isCurrentlySkipped) {
-                // Unskip
-                const success = await db.removeMonthlySkip(customerId, yearMonth);
+                const success = await db.removeMonthlySkip(customerId, skipDate);
                 if (success) {
-                    showToast('Customer restored for ' + MONTH_NAMES[selectedMonth], 'success');
+                    showToast('Customer restored for ' + formatDisplayDate(skipDate), 'success');
                     renderCustomerList();
                     renderRunDays();
                 } else {
                     showToast('Error restoring customer', 'error');
                 }
             } else {
-                // Show skip reason dialog
-                showSkipReasonModal(customerId, yearMonth);
+                showSkipReasonModal(customerId, skipDate);
             }
         }
-        
-        function showSkipReasonModal(customerId, yearMonth) {
+
+        function showSkipReasonModal(customerId, skipDate) {
             const customer = db.customers.find(c => c.id === customerId);
             const customerName = customer ? customer.name : 'Customer';
-            
-            // Create modal
+
             const modal = document.createElement('div');
             modal.className = 'search-modal-overlay active';
             modal.id = 'skipReasonModal';
@@ -9070,8 +9092,8 @@
                         <button class="search-modal-close" onclick="closeSkipReasonModal()">×</button>
                     </div>
                     <div class="search-modal-body">
-                        <p style="color: #6b7280; margin-bottom: 16px;">This customer will be marked as skipped for ${MONTH_NAMES[selectedMonth]} ${selectedYear}.</p>
-                        
+                        <p style="color: #6b7280; margin-bottom: 16px;">This customer will be skipped for the ${formatDisplayDate(skipDate)} run only.</p>
+
                         <div class="form-group">
                             <label>Reason</label>
                             <select id="skipReasonSelect" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 16px;">
@@ -9085,13 +9107,13 @@
                                 <option value="Other">Other</option>
                             </select>
                         </div>
-                        
+
                         <div class="form-group">
                             <label>Comments (optional)</label>
                             <textarea id="skipComments" placeholder="Add any additional comments..." style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; min-height: 80px; resize: vertical;"></textarea>
                         </div>
-                        
-                        <button class="btn" onclick="confirmSkipCustomer(${customerId}, '${yearMonth}')" style="margin-top: 8px;">
+
+                        <button class="btn" onclick="confirmSkipCustomer(${customerId}, '${skipDate}')" style="margin-top: 8px;">
                             Skip Customer
                         </button>
                     </div>
@@ -9105,16 +9127,15 @@
             if (modal) modal.remove();
         }
         
-        async function confirmSkipCustomer(customerId, yearMonth) {
+        async function confirmSkipCustomer(customerId, skipDate) {
             const reason = document.getElementById('skipReasonSelect').value;
             const comments = document.getElementById('skipComments').value.trim();
-            // Combine reason and comments into the reason field
             const fullReason = comments ? `${reason ? reason + ': ' : ''}${comments}` : reason;
             
-            const success = await db.saveMonthlySkip(customerId, yearMonth, fullReason);
+            const success = await db.saveMonthlySkip(customerId, skipDate, fullReason);
             if (success) {
                 closeSkipReasonModal();
-                showToast('Customer skipped for ' + MONTH_NAMES[selectedMonth], 'success');
+                showToast('Customer skipped for ' + formatDisplayDate(skipDate), 'success');
                 renderCustomerList();
                 renderRunDays();
             } else {
@@ -9912,8 +9933,8 @@
                 });
                 
                 // Check if customer is skipped for this month
-                const isSkipped = db.isCustomerSkipped(customer.id, viewMonth, viewYear);
-                const skipReason = isSkipped ? db.getSkipReason(customer.id, viewMonth, viewYear) : '';
+                const isSkipped = db.isCustomerSkippedInMonth(customer.id, viewMonth, viewYear);
+                const skipReason = isSkipped ? db.getSkipReasonInMonth(customer.id, viewMonth, viewYear) : '';
                 
                 // Check if this is an off-month for bi-monthly customers
                 const customerIsOffMonth = isOffMonth(customer, viewMonth, viewYear);
