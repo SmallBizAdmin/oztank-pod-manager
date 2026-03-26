@@ -8538,9 +8538,12 @@
 
             // Only count active customers (not skipped, not off-month)
             const summaryWorkDate = currentServiceDate || formatDateLocal(new Date());
+            const summaryDateObj = new Date(summaryWorkDate + 'T00:00:00');
+            const summaryCheckMonth = summaryDateObj.getMonth();
+            const summaryCheckYear = summaryDateObj.getFullYear();
             const active = customers.filter(c => {
                 if (db.isCustomerSkipped(c.id, summaryWorkDate)) return false;
-                if (isOffMonth(c, selectedMonth, selectedYear)) return false;
+                if (isOffMonth(c, summaryCheckMonth, summaryCheckYear)) return false;
                 return true;
             });
 
@@ -8653,6 +8656,12 @@
             const today = formatDateLocal(new Date());
             const workDate = currentServiceDate || today;
             const isHistorical = isPastMonth();
+
+            // For off-month and skip checks, use the actual work date's month
+            // (may differ from selectedMonth when event crosses into next month)
+            const workDateObj = new Date(workDate + 'T00:00:00');
+            const checkMonth = isHistorical ? selectedMonth : workDateObj.getMonth();
+            const checkYear = isHistorical ? selectedYear : workDateObj.getFullYear();
             
             // Update header with date context
             let headerText = currentRunDay;
@@ -8666,14 +8675,14 @@
             
             // Count skipped and off-month customers
             const skippedCount = customers.filter(c => isHistorical
-                ? db.isCustomerSkippedInMonth(c.id, selectedMonth, selectedYear)
+                ? db.isCustomerSkippedInMonth(c.id, checkMonth, checkYear)
                 : db.isCustomerSkipped(c.id, workDate)
             ).length;
             const offMonthCount = customers.filter(c => {
                 const skipped = isHistorical
-                    ? db.isCustomerSkippedInMonth(c.id, selectedMonth, selectedYear)
+                    ? db.isCustomerSkippedInMonth(c.id, checkMonth, checkYear)
                     : db.isCustomerSkipped(c.id, workDate);
-                return !skipped && isOffMonth(c, selectedMonth, selectedYear);
+                return !skipped && isOffMonth(c, checkMonth, checkYear);
             }).length;
             const excludedTotal = skippedCount + offMonthCount;
             const activeCount = customers.length - excludedTotal;
@@ -8702,16 +8711,16 @@
             customers.forEach((customer, index) => {
                 // Check if customer is skipped for this specific run date (or anywhere in month for historical)
                 const isSkipped = isHistorical
-                    ? db.isCustomerSkippedInMonth(customer.id, selectedMonth, selectedYear)
+                    ? db.isCustomerSkippedInMonth(customer.id, checkMonth, checkYear)
                     : db.isCustomerSkipped(customer.id, workDate);
                 const skipReason = isSkipped
                     ? (isHistorical
-                        ? db.getSkipReasonInMonth(customer.id, selectedMonth, selectedYear)
+                        ? db.getSkipReasonInMonth(customer.id, checkMonth, checkYear)
                         : db.getSkipReason(customer.id, workDate))
                     : '';
                 
                 // Check if this is an off-month for bi-monthly customers
-                const customerIsOffMonth = isOffMonth(customer, selectedMonth, selectedYear);
+                const customerIsOffMonth = isOffMonth(customer, checkMonth, checkYear);
                 const scheduleLabel = getScheduleLabel(customer.serviceMonths);
                 
                 // Treat off-month as effectively skipped (auto-strikethrough)
