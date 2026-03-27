@@ -6979,11 +6979,25 @@
         // Calendar event tick/cross toggle (internal save — called after UI confirmation)
         async function toggleCalendarEventStatus(eventId, status) {
             const currentStatus = db.getCalendarEventStatus(eventId);
-            if (currentStatus === status) {
-                await db.saveCalendarEventStatus(eventId, null);
-            } else {
-                await db.saveCalendarEventStatus(eventId, status);
+            const newStatus = currentStatus === status ? null : status;
+
+            // If switching away from a previous state, clear notes and delete any linked POD
+            if (currentStatus && currentStatus !== newStatus) {
+                // Clear notes
+                await db.saveCalendarEventNotes(eventId, '');
+
+                // Delete linked POD if one exists for today's date
+                const today = formatDateLocal(new Date());
+                const linkedPod = db.pods.find(p => p.calendarEventId == eventId);
+                if (linkedPod) {
+                    if (!confirm(`This event has a linked POD for ${linkedPod.customerName}.\n\nSwitching status will delete that POD. Continue?`)) {
+                        return;
+                    }
+                    await db.deletePOD(linkedPod.id);
+                }
             }
+
+            await db.saveCalendarEventStatus(eventId, newStatus);
             renderAdminCalendar();
             loadWorkerCalendarEvents();
             if (document.getElementById('adminListContainer').style.display !== 'none') {
@@ -7048,6 +7062,18 @@
             if (!reason) return;
 
             // Save the reason as notes, then mark cancelled
+            // If switching from completed state, delete any linked POD
+            const currentStatus = db.getCalendarEventStatus(eventId);
+            if (currentStatus === 'completed') {
+                const linkedPod = db.pods.find(p => p.calendarEventId == eventId);
+                if (linkedPod) {
+                    if (!confirm(`This event has a linked POD for ${linkedPod.customerName}.\n\nMarking as not done will delete that POD. Continue?`)) {
+                        document.getElementById('calendarEventCancelModal')?.remove();
+                        return;
+                    }
+                    await db.deletePOD(linkedPod.id);
+                }
+            }
             await db.saveCalendarEventNotes(eventId, reason);
             await db.saveCalendarEventStatus(eventId, 'cancelled');
 
@@ -10384,12 +10410,12 @@
                         <td style="padding: 12px; text-align: center; font-size: 16px;">
                             ${linkedPod ? '✓' : isDone ? '✅' : isCancelled ? '❌' : '—'}
                         </td>
-                        <td style="padding: 12px; text-align: center;">
+                        <td style="padding: 12px; text-align: center;" onclick="event.stopPropagation();">
                             <input type="checkbox" ${isInvoiced ? 'checked' : ''}
                                 onchange="toggleCalEventInvoice('${ev.id}', '${selectedDate}', 'invoiced', this.checked)"
                                 style="width:16px;height:16px;cursor:pointer;">
                         </td>
-                        <td style="padding: 12px; text-align: center;">
+                        <td style="padding: 12px; text-align: center;" onclick="event.stopPropagation();">
                             <input type="checkbox" ${isCheckedSent ? 'checked' : ''} ${!isInvoiced ? 'disabled' : ''}
                                 onchange="toggleCalEventInvoice('${ev.id}', '${selectedDate}', 'checkedSent', this.checked)"
                                 style="width:16px;height:16px;cursor:pointer;${!isInvoiced ? 'opacity:0.4;' : ''}">
