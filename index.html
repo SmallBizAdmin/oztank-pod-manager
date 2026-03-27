@@ -5060,6 +5060,22 @@
                     return true;
                 }
             },
+
+            async deleteTankMovement(id) {
+                try {
+                    const { error } = await supabase
+                        .from('tank_movements')
+                        .delete()
+                        .eq('id', id);
+                    if (error) throw error;
+                    this.tankMovements = this.tankMovements.filter(tm => tm.id !== id);
+                    return true;
+                } catch (error) {
+                    console.error('Error deleting tank movement:', error);
+                    showToast('Error deleting tank movement', 'error');
+                    return false;
+                }
+            },
             
             // Monthly skip functions - for customers to be skipped in a particular month
             async loadMonthlySkips() {
@@ -10356,12 +10372,20 @@
                         <span style="color: #16a34a; font-size: 18px;">✓</span>
                     </td>
                     <td style="padding: 12px; text-align: center;">-</td>
-                    <td style="padding: 12px;">${tm.customerName} <span style="background: #3b82f6; color: white; padding: 2px 6px; border-radius: 8px; font-size: 10px;">Tank ${tm.movementType}</span></td>
+                    <td style="padding: 12px;">
+                        ${tm.customerName}
+                        <div style="margin-top: 4px;"><span style="background: #3b82f6; color: white; padding: 2px 6px; border-radius: 8px; font-size: 10px;">Tank ${tm.movementType}</span></div>
+                    </td>
                     <td style="padding: 12px;">🔄 Tank ${tm.movementType}</td>
                     <td style="padding: 12px;">${tm.carbsolve || '-'}</td>
                     <td style="padding: 12px;">Placed: ${tm.tankNoPlaced || '-'} / Pulled: ${tm.tankNoPulled || '-'}</td>
                     <td style="padding: 12px; font-size: 12px; font-style: italic;">${tm.reason || '-'}</td>
-                    <td style="padding: 12px; text-align: center;"><span style="background: #dbeafe; color: #1e40af; padding: 2px 6px; border-radius: 8px; font-size: 10px;">Tank</span></td>
+                    <td style="padding: 12px; text-align: center;">
+                        <span style="background: #dbeafe; color: #1e40af; padding: 2px 6px; border-radius: 8px; font-size: 10px;">Tank</span>
+                    </td>
+                    <td style="padding: 8px; text-align: center;">
+                        <button onclick="deleteTankMovement(${tm.id}, '${(tm.customerName || '').replace(/'/g, "\\'")}')" style="background: none; border: none; cursor: pointer; color: #dc2626; font-size: 16px;" title="Delete tank movement">🗑️</button>
+                    </td>
                 `;
                 tbody.appendChild(tr);
             });
@@ -10621,7 +10645,10 @@
                     <td style="padding: 10px; text-align: center;">
                         <span style="color: #16a34a; font-size: 18px;">✓</span>
                     </td>
-                    <td style="padding: 10px;">${tm.customerName}${adHocBadge}</td>
+                    <td style="padding: 10px;">
+                        ${tm.customerName}
+                        ${adHocBadge ? `<div style="margin-top: 4px;">${adHocBadge}</div>` : ''}
+                    </td>
                     <td style="padding: 10px;">
                         <span style="padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 500; 
                             background: ${tm.movementType === 'Swap' ? '#fef3c7' : tm.movementType === 'Pull' ? '#fee2e2' : '#dcfce7'}; 
@@ -10633,6 +10660,9 @@
                     <td style="padding: 10px;">${tm.tankNoPulled || '-'}</td>
                     <td style="padding: 10px;">${tm.carbsolve || '-'}</td>
                     <td style="padding: 10px; font-size: 12px; font-style: italic;">${tm.reason || '-'}</td>
+                    <td style="padding: 8px; text-align: center;">
+                        <button onclick="deleteTankMovement(${tm.id}, '${(tm.customerName || '').replace(/'/g, "\\'")}')" style="background: none; border: none; cursor: pointer; color: #dc2626; font-size: 16px;" title="Delete tank movement">🗑️</button>
+                    </td>
                 `;
                 tbody.appendChild(tr);
             });
@@ -12227,7 +12257,23 @@
             document.getElementById('tankMovementCustomerSearch').focus();
         }
         
-        async function saveTankMovement() {
+        async function deleteTankMovement(id, customerName) {
+            if (!confirm(`Delete tank movement for ${customerName}? This cannot be undone.`)) return;
+            const success = await db.deleteTankMovement(id);
+            if (success) {
+                showToast('Tank movement deleted', 'success');
+                // Re-render whichever view is active
+                if (document.getElementById('adminRunsheetContainer').style.display !== 'none') {
+                    const isAdHoc = document.getElementById('adminRunsheetTitle').textContent.includes('Ad-Hoc');
+                    if (isAdHoc) {
+                        loadAdminAdHocRunsheet(currentAdminDateFilter || formatDateLocal(new Date()));
+                    } else {
+                        loadAdminRunsheet(currentAdminRunDay, currentAdminDateFilter);
+                    }
+                }
+                renderTankMovements();
+            }
+        }
             const freetextName = document.getElementById('tankMovementFreetextCustomer').value.trim();
             if (!selectedTankMovementCustomer && !freetextName) {
                 showToast('Please select a customer or enter a name', 'error');
