@@ -9489,6 +9489,7 @@
                     await db.saveCalendarEventStatus(currentCalendarEventId, 'completed');
                     currentCalendarEventId = null;
                     renderAdminCalendar();
+                    loadWorkerCalendarEvents();
                     if (document.getElementById('adminListContainer').style.display !== 'none') {
                         renderAdminChronologicalList();
                     }
@@ -10261,17 +10262,23 @@
                 const tr = document.createElement('tr');
                 tr.style.borderBottom = '1px solid #e5e7eb';
                 tr.style.background = '#fffbeb';
+                tr.style.cursor = 'pointer';
+                tr.title = 'Click to view/edit POD';
+                tr.onclick = () => viewPODFromOverview(pod.id);
                 tr.innerHTML = `
                     <td style="padding: 12px; text-align: center;">
                         <span style="color: #16a34a; font-size: 18px;">✓</span>
                     </td>
+                    <td style="padding: 12px; text-align: center;">-</td>
                     <td style="padding: 12px; text-align: center;">-</td>
                     <td style="padding: 12px;">${customerName}</td>
                     <td style="padding: 12px;">${typeIcon} ${pod.serviceType || 'Service'}</td>
                     <td style="padding: 12px;">${carbsolve}</td>
                     <td style="padding: 12px;">${productsStr}</td>
                     <td style="padding: 12px; font-size: 12px; font-style: italic;">${pod.notes || '-'}</td>
-                    <td style="padding: 12px; text-align: center;"><span style="background: #fef3c7; color: #92400e; padding: 2px 6px; border-radius: 8px; font-size: 10px;">Ad-Hoc</span></td>
+                    <td style="padding: 12px; text-align: center;">
+                        <span style="background: #fef3c7; color: #92400e; padding: 2px 6px; border-radius: 8px; font-size: 10px;">Ad-Hoc</span>
+                    </td>
                 `;
                 tbody.appendChild(tr);
             });
