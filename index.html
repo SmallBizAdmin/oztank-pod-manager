@@ -10375,6 +10375,11 @@
                     const tr = document.createElement('tr');
                     tr.style.borderBottom = '1px solid #e5e7eb';
                     tr.style.background = rowBg;
+                    if (linkedPod) {
+                        tr.style.cursor = 'pointer';
+                        tr.title = 'Click to view/edit POD';
+                        tr.onclick = () => viewPODFromOverview(linkedPod.id);
+                    }
                     tr.innerHTML = `
                         <td style="padding: 12px; text-align: center; font-size: 16px;">
                             ${linkedPod ? '✓' : isDone ? '✅' : isCancelled ? '❌' : '—'}
