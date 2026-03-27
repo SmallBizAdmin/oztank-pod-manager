@@ -4602,6 +4602,15 @@
                 return this.calendarEventStatus[eventId]?.status || null;
             },
             
+            getCalendarEventActionInfo(eventId) {
+                const entry = this.calendarEventStatus[eventId];
+                if (!entry) return null;
+                return {
+                    actioned_by: entry.actioned_by || null,
+                    actioned_at: entry.actioned_at || null
+                };
+            },
+            
             getCalendarEventNotes(eventId) {
                 return this.calendarEventNotes[eventId] || '';
             },
@@ -5945,6 +5954,7 @@
                 <div class="card" style="background: ${isRentalOnly ? '#fef3c7' : '#f0fdf4'}; border: 2px solid ${isRentalOnly ? '#f59e0b' : '#16a34a'};">
                     <h3 style="color: ${isRentalOnly ? '#92400e' : '#16a34a'}; margin-bottom: 12px;">${isRentalOnly ? '📋 Rental Only - No Service Required' : '✓ POD Completed'}</h3>
                     <p style="color: #6b7280; font-size: 14px;">Completed: ${formatTimestamp(pod.timestamp)}</p>
+                    ${pod.completedBy ? `<p style="color: #6b7280; font-size: 13px; margin-top: 4px;">By: <strong style="color: #374151;">${pod.completedBy}</strong></p>` : ''}
                 </div>
 
                 <div class="card">
@@ -6352,11 +6362,15 @@
                     sortedEventsOnDate.forEach(event => {
                         const status = db.getCalendarEventStatus(event.id);
                         const storedNotes = db.getCalendarEventNotes(event.id);
+                        const actionInfo = db.getCalendarEventActionInfo(event.id);
                         const completedStyle = status === 'completed' ? 'opacity: 0.5;' : '';
                         const cancelledStyle = status === 'cancelled' ? 'opacity: 0.4; filter: grayscale(60%);' : '';
                         const statusIcon = status === 'completed' ? '✅' : status === 'cancelled' ? '❌' : '📋';
                         const workerBgColor = getWorkerColorLight(event.calendarOwner);
                         const workerBorderColor = getWorkerColor(event.calendarOwner);
+                        const actionLine = (status && actionInfo && actionInfo.actioned_by)
+                            ? `<div style="font-size: 11px; color: #9ca3af;">${status === 'completed' ? '✓' : '✗'} ${actionInfo.actioned_by}${actionInfo.actioned_at ? ' · ' + new Date(actionInfo.actioned_at).toLocaleString('en-AU', { timeZone: 'Australia/Brisbane', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}</div>`
+                            : '';
                         
                         html += `
                             <div style="display: flex; align-items: center; gap: 12px; padding: 10px 12px; background: ${workerBgColor}; border-left: 3px solid ${workerBorderColor}; border-radius: 8px; margin-bottom: 6px; ${completedStyle}${cancelledStyle}">
@@ -6365,6 +6379,7 @@
                                     <div style="font-weight: 500; color: #374151;">${event.eventTitle}</div>
                                     ${event.calendarOwner ? `<div style="font-size: 11px; color: #6b7280;">👤 ${event.calendarOwner}</div>` : ''}
                                     ${storedNotes ? `<div style="font-size: 11px; color: #6b7280; font-style: italic;">📝 ${storedNotes.substring(0, 50)}${storedNotes.length > 50 ? '...' : ''}</div>` : ''}
+                                    ${actionLine}
                                 </div>
                                 <div style="display: flex; gap: 4px;">
                                     <button onclick="event.stopPropagation(); handleEventTick('${event.id}', '${dateStr}')" 
@@ -6952,6 +6967,7 @@
                 sortedEventsOnDate.forEach(event => {
                     const status = db.getCalendarEventStatus(event.id);
                     const storedNotes = db.getCalendarEventNotes(event.id);
+                    const actionInfo = db.getCalendarEventActionInfo(event.id);
                     const eventEl = document.createElement('div');
                     eventEl.className = `calendar-event-item${status === 'completed' ? ' event-completed' : ''}${status === 'cancelled' ? ' event-cancelled' : ''}`;
                     
@@ -6973,6 +6989,13 @@
                         notesEl.style.cssText = 'font-size: 10px; color: #6b7280; font-style: italic; padding: 2px 4px; margin-top: 2px; background: rgba(255,255,255,0.7); border-radius: 3px; word-break: break-word;';
                         notesEl.textContent = '📝 ' + (storedNotes.length > 60 ? storedNotes.substring(0, 60) + '...' : storedNotes);
                         eventEl.appendChild(notesEl);
+                    }
+                    if (status && actionInfo && actionInfo.actioned_by) {
+                        const actionEl = document.createElement('div');
+                        actionEl.style.cssText = 'font-size: 10px; color: #9ca3af; padding: 2px 4px; margin-top: 2px;';
+                        const actionTime = actionInfo.actioned_at ? new Date(actionInfo.actioned_at).toLocaleString('en-AU', { timeZone: 'Australia/Brisbane', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+                        actionEl.textContent = `${status === 'completed' ? '✓' : '✗'} ${actionInfo.actioned_by}${actionTime ? ' · ' + actionTime : ''}`;
+                        eventEl.appendChild(actionEl);
                     }
                     eventsSection.appendChild(eventEl);
                 });
@@ -11177,6 +11200,7 @@
                             <div class="pod-field"><strong>Run Day:</strong> <span>${pod.runDay}</span></div>
                             <div class="pod-field"><strong>Date:</strong> <span>${pod.date}</span></div>
                             <div class="pod-field"><strong>Time:</strong> <span>${formatTimestamp(pod.timestamp)}</span></div>
+                            ${pod.completedBy ? `<div class="pod-field"><strong>Completed by:</strong> <span>${pod.completedBy}</span></div>` : ''}
                         </div>
 
                         <div class="pod-section">
