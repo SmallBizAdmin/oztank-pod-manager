@@ -7441,12 +7441,6 @@
         }
 
         async function backToCustomerList() {
-            // If this was linked to a calendar event, auto-tick it as completed
-            if (currentCalendarEventId) {
-                await db.saveCalendarEventStatus(currentCalendarEventId, 'completed');
-                currentCalendarEventId = null;
-            }
-
             // If this was an ad-hoc service creation, go back to home
             if (isAdHocService) {
                 isAdHocService = false;
@@ -9489,7 +9483,17 @@
                 const wasAdHoc = isAdHocService;
                 isAdHocService = false; // Reset ad-hoc state
                 adHocCustomerName = '';
-                
+
+                // Auto-tick linked calendar event regardless of navigation path
+                if (currentCalendarEventId) {
+                    await db.saveCalendarEventStatus(currentCalendarEventId, 'completed');
+                    currentCalendarEventId = null;
+                    renderAdminCalendar();
+                    if (document.getElementById('adminListContainer').style.display !== 'none') {
+                        renderAdminChronologicalList();
+                    }
+                }
+
                 showToast('POD saved successfully!', 'success');
                 setTimeout(() => {
                     if (wasAdHoc) {
