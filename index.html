@@ -7208,10 +7208,12 @@
         async function saveCalendarEventNotes(eventId) {
             const notes = document.getElementById('calEventNotesInput').value.trim();
             await db.saveCalendarEventNotes(eventId, notes || null);
+            await db.saveCalendarEventStatus(eventId, 'completed');
             document.getElementById('calendarEventNotesModal').remove();
             showToast('Notes saved', 'success');
             // Re-render to show updated notes
             renderAdminCalendar();
+            loadWorkerCalendarEvents();
             if (document.getElementById('adminListContainer').style.display !== 'none') {
                 renderAdminChronologicalList();
             }
@@ -12084,6 +12086,7 @@
         // Tank Movement Modal Functions
         let selectedTankMovementCustomer = null;
         let tankMovementSourceRunDay = null; // Track which runsheet the tank movement was created from
+        let tankMovementCalendarEventId = null; // Track which calendar event triggered this tank movement
         
         function showActionChooser() {
             // Prevent in historical months
@@ -12139,7 +12142,7 @@
             }
         });
         
-        function showTankMovementModal(sourceRunDay = null) {
+        function showTankMovementModal(sourceRunDay = null, calendarEventId = null) {
             // Prevent in historical months
             if (isPastMonth()) {
                 showToast('Cannot create tank movements for past months.', 'error');
@@ -12148,6 +12151,7 @@
             
             // Track where this tank movement is being created from
             tankMovementSourceRunDay = sourceRunDay;
+            tankMovementCalendarEventId = calendarEventId;
             
             document.getElementById('tankMovementModal').classList.add('active');
             document.getElementById('tankMovementCustomerSearch').value = '';
@@ -12278,6 +12282,18 @@
             if (success) {
                 db.tankMovements.push(movement);
                 hideTankMovementModal();
+                
+                // Auto-tick linked calendar event if triggered from one
+                if (tankMovementCalendarEventId) {
+                    await db.saveCalendarEventStatus(tankMovementCalendarEventId, 'completed');
+                    tankMovementCalendarEventId = null;
+                    renderAdminCalendar();
+                    loadWorkerCalendarEvents();
+                    if (document.getElementById('adminListContainer').style.display !== 'none') {
+                        renderAdminChronologicalList();
+                    }
+                }
+                
                 showToast('Tank movement saved!', 'success');
                 renderRunDays();
             }
