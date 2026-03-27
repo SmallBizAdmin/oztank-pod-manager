@@ -4384,6 +4384,7 @@
                         isQuickComplete: p.is_quick_complete || false,
                         isAdHoc: p.is_ad_hoc || false,
                         sourceRunDay: p.source_run_day,
+                        calendarEventId: p.calendar_event_id || null,
                         archived: p.archived
                     }));
                     
@@ -4434,6 +4435,7 @@
                         isQuickComplete: p.is_quick_complete || false,
                         isAdHoc: p.is_ad_hoc || false,
                         sourceRunDay: p.source_run_day,
+                        calendarEventId: p.calendar_event_id || null,
                         archived: p.archived
                     }));
                     
@@ -4483,6 +4485,7 @@
                         isQuickComplete: p.is_quick_complete || false,
                         isAdHoc: p.is_ad_hoc || false,
                         sourceRunDay: p.source_run_day,
+                        calendarEventId: p.calendar_event_id || null,
                         archived: p.archived
                     }));
                 } catch (error) {
@@ -4746,6 +4749,7 @@
                     is_quick_complete: pod.isQuickComplete || false,
                     is_ad_hoc: pod.isAdHoc || false,
                     source_run_day: pod.sourceRunDay || null,
+                    calendar_event_id: pod.calendarEventId || null,
                     archived: pod.archived || false
                 };
                 
@@ -7093,16 +7097,16 @@
                                 ✓ Confirm Complete
                             </button>
                             <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 2px 0;">
-                            <button class="btn btn-adhoc" onclick="document.getElementById('calendarEventChooserModal').remove(); showCustomerSearchModal(null, 'Service');" style="padding: 16px; font-size: 16px;">
+                            <button class="btn btn-adhoc" onclick="document.getElementById('calendarEventChooserModal').remove(); showCustomerSearchModal(null, 'Service', ${eventId});" style="padding: 16px; font-size: 16px;">
                                 🔧 Service
                             </button>
-                            <button class="btn" onclick="document.getElementById('calendarEventChooserModal').remove(); showCustomerSearchModal(null, 'Delivery');" style="padding: 16px; font-size: 16px; background: #10b981;">
+                            <button class="btn" onclick="document.getElementById('calendarEventChooserModal').remove(); showCustomerSearchModal(null, 'Delivery', ${eventId});" style="padding: 16px; font-size: 16px; background: #10b981;">
                                 📦 Delivery
                             </button>
-                            <button class="btn" onclick="document.getElementById('calendarEventChooserModal').remove(); showCustomerSearchModal(null, 'Repairs');" style="padding: 16px; font-size: 16px; background: #ef4444;">
+                            <button class="btn" onclick="document.getElementById('calendarEventChooserModal').remove(); showCustomerSearchModal(null, 'Repairs', ${eventId});" style="padding: 16px; font-size: 16px; background: #ef4444;">
                                 🔨 Repairs
                             </button>
-                            <button class="btn" onclick="document.getElementById('calendarEventChooserModal').remove(); showTankMovementModal(null);" style="padding: 16px; font-size: 16px; background: #0891b2;">
+                            <button class="btn" onclick="document.getElementById('calendarEventChooserModal').remove(); showTankMovementModal(null, ${eventId});" style="padding: 16px; font-size: 16px; background: #0891b2;">
                                 🔄 Tank Movement
                             </button>
                             <button class="btn btn-secondary" onclick="showCalendarEventNotes('${eventId}', '${dateStr}')" style="padding: 16px; font-size: 16px;">
@@ -7418,7 +7422,7 @@
                         notes: pod.notes, photo: pod.photo, signature: pod.signature,
                         signatureName: pod.signature_name, isRentalOnly: pod.is_rental_only || false,
                         isQuickComplete: pod.is_quick_complete || false, isAdHoc: pod.is_ad_hoc || false,
-                        sourceRunDay: pod.source_run_day, archived: pod.archived
+                        sourceRunDay: pod.source_run_day, calendarEventId: pod.calendar_event_id || null, archived: pod.archived
                     };
                     showExistingPod(mappedPod);
                 }
@@ -7437,6 +7441,12 @@
         }
 
         function backToCustomerList() {
+            // If this was linked to a calendar event, auto-tick it as completed
+            if (currentCalendarEventId) {
+                await db.saveCalendarEventStatus(currentCalendarEventId, 'completed');
+                currentCalendarEventId = null;
+            }
+
             // If this was an ad-hoc service creation, go back to home
             if (isAdHocService) {
                 isAdHocService = false;
@@ -9439,7 +9449,8 @@
                 signatureName: signatureName,
                 isRentalOnly: isRentalOnly, // Flag for rental-only invoicing
                 isAdHoc: isAdHocService,
-                sourceRunDay: isAdHocService ? adHocSourceRunDay : null // Track which runsheet ad-hoc was created from
+                sourceRunDay: isAdHocService ? adHocSourceRunDay : null, // Track which runsheet ad-hoc was created from
+                calendarEventId: currentCalendarEventId || null // Link back to calendar event if triggered from one
             };
 
             console.log('Saving POD:', pod);
@@ -10191,11 +10202,12 @@
             currentAdminServiceDay = 'Ad-Hoc';
             currentAdminDateFilter = selectedDate;
             
-            // Get truly ad-hoc PODs (runDay = 'Ad-Hoc' and no sourceRunDay)
+            // Get truly ad-hoc PODs (runDay = 'Ad-Hoc', no sourceRunDay, not linked to a calendar event)
             const adHocPods = db.pods.filter(pod => 
                 pod.date === selectedDate && 
                 pod.runDay === 'Ad-Hoc' && 
-                !pod.sourceRunDay
+                !pod.sourceRunDay &&
+                !pod.calendarEventId
             );
             
             // Get truly ad-hoc tank movements
@@ -10291,6 +10303,8 @@
             }
 
             // Add ALL calendar events for this date (ticked, crossed, or pending)
+            // PODs linked to a calendar event show inline on the event row
+            const linkedPodEventIds = new Set();
             const allEvents = (db.calendarEvents || []).filter(ev => ev.eventDate === selectedDate)
                 .sort((a, b) => workerRank(a.calendarOwner) - workerRank(b.calendarOwner));
 
@@ -10310,8 +10324,33 @@
                     const isDone = status === 'completed';
                     const isCancelled = status === 'cancelled';
                     const workerColor = getWorkerColor(ev.calendarOwner);
-                    const rowBg = isDone ? '#f0fdf4' : isCancelled ? '#fef2f2' : '#ffffff';
-                    const statusBadge = isDone
+
+                    // Find a POD linked to this calendar event
+                    const linkedPod = db.pods.find(p =>
+                        p.calendarEventId == ev.id && p.date === selectedDate
+                    );
+                    if (linkedPod) linkedPodEventIds.add(ev.id);
+
+                    const rowBg = linkedPod ? '#fffbeb' : isDone ? '#f0fdf4' : isCancelled ? '#fef2f2' : '#ffffff';
+                    const companyCell = linkedPod
+                        ? `<span style="font-weight: 500;">${ev.eventTitle}</span>
+                           ${ev.calendarOwner ? `<span style="display:inline-block;margin-left:8px;background:${workerColor};color:white;padding:1px 6px;border-radius:8px;font-size:10px;">👤 ${ev.calendarOwner}</span>` : ''}
+                           <div style="font-size:11px;color:#92400e;margin-top:4px;">📋 POD: ${linkedPod.customerName || ''}${linkedPod.notes ? ' — ' + linkedPod.notes : ''}</div>`
+                        : `<span style="font-weight: 500;">${ev.eventTitle}</span>
+                           ${ev.calendarOwner ? `<span style="display:inline-block;margin-left:8px;background:${workerColor};color:white;padding:1px 6px;border-radius:8px;font-size:10px;">👤 ${ev.calendarOwner}</span>` : ''}`;
+
+                    const typeCell = linkedPod ? `${linkedPod.serviceType || 'Service'}` : 'Free text';
+                    const carbCell = linkedPod ? (linkedPod.carbsolve || '-') : '-';
+                    const productsCell = linkedPod && linkedPod.products && linkedPod.products.length > 0
+                        ? linkedPod.products.map(p => `${p.product} x${p.quantity}`).join(', ')
+                        : '-';
+                    const notesCell = linkedPod
+                        ? (linkedPod.notes || notes || '-')
+                        : (notes || '-');
+
+                    const statusBadge = linkedPod
+                        ? '<span style="background:#fef3c7;color:#92400e;padding:2px 6px;border-radius:8px;font-size:10px;">Ad-Hoc POD</span>'
+                        : isDone
                         ? '<span style="background:#dcfce7;color:#166534;padding:2px 6px;border-radius:8px;font-size:10px;">✅ Done</span>'
                         : isCancelled
                         ? '<span style="background:#fee2e2;color:#991b1b;padding:2px 6px;border-radius:8px;font-size:10px;">❌ Not done</span>'
@@ -10327,7 +10366,7 @@
                     tr.style.background = rowBg;
                     tr.innerHTML = `
                         <td style="padding: 12px; text-align: center; font-size: 16px;">
-                            ${isDone ? '✅' : isCancelled ? '❌' : '—'}
+                            ${linkedPod ? '✓' : isDone ? '✅' : isCancelled ? '❌' : '—'}
                         </td>
                         <td style="padding: 12px; text-align: center;">
                             <input type="checkbox" ${isInvoiced ? 'checked' : ''}
@@ -10339,14 +10378,11 @@
                                 onchange="toggleCalEventInvoice('${ev.id}', '${selectedDate}', 'checkedSent', this.checked)"
                                 style="width:16px;height:16px;cursor:pointer;${!isInvoiced ? 'opacity:0.4;' : ''}">
                         </td>
-                        <td style="padding: 12px;">
-                            <span style="font-weight: 500;">${ev.eventTitle}</span>
-                            ${ev.calendarOwner ? `<span style="display:inline-block;margin-left:8px;background:${workerColor};color:white;padding:1px 6px;border-radius:8px;font-size:10px;">👤 ${ev.calendarOwner}</span>` : ''}
-                        </td>
-                        <td style="padding: 12px; color: #6b7280; font-size: 12px;">Free text</td>
-                        <td style="padding: 12px;">-</td>
-                        <td style="padding: 12px;">-</td>
-                        <td style="padding: 12px; font-size: 12px; font-style: italic;">${notes || '-'}</td>
+                        <td style="padding: 12px;">${companyCell}</td>
+                        <td style="padding: 12px; color: #6b7280; font-size: 12px;">${typeCell}</td>
+                        <td style="padding: 12px;">${carbCell}</td>
+                        <td style="padding: 12px;">${productsCell}</td>
+                        <td style="padding: 12px; font-size: 12px; font-style: italic;">${notesCell}</td>
                         <td style="padding: 12px; text-align: center;">${statusBadge}</td>
                     `;
                     tbody.appendChild(tr);
@@ -11461,6 +11497,7 @@
         let adHocCustomerName = '';
         let adHocServiceType = 'Service'; // 'Service' or 'Delivery'
         let adHocSourceRunDay = null; // Track which runsheet the ad-hoc was created from
+        let currentCalendarEventId = null; // Track which calendar event triggered this POD
         
         function applyAdHocTypeSections() {
             // Show/hide POD form sections based on adHocServiceType
@@ -11496,7 +11533,7 @@
             }
         }
         
-        function showCustomerSearchModal(sourceRunDay = null, type = 'Service') {
+        function showCustomerSearchModal(sourceRunDay = null, type = 'Service', calendarEventId = null) {
             // Prevent ad-hoc services in historical months
             if (isPastMonth()) {
                 showToast('Cannot create new PODs for past months. Switch to the current month.', 'error');
@@ -11505,6 +11542,7 @@
             
             // Track where this ad-hoc is being created from
             adHocSourceRunDay = sourceRunDay;
+            currentCalendarEventId = calendarEventId;
             
             // Set the service type directly from the button that was clicked
             adHocServiceType = type;
