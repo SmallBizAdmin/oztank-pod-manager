@@ -10419,6 +10419,7 @@
                 allEvents.forEach(ev => {
                     const status = db.getCalendarEventStatus(ev.id);
                     const notes = db.getCalendarEventNotes(ev.id);
+                    const actionInfo = db.getCalendarEventActionInfo(ev.id);
                     const isDone = status === 'completed';
                     const isCancelled = status === 'cancelled';
                     const workerColor = getWorkerColor(ev.calendarOwner);
@@ -10446,12 +10447,16 @@
                         ? (linkedPod.notes || notes || '-')
                         : (notes || '-');
 
+                    const actionAttrib = (actionInfo && actionInfo.actioned_by)
+                        ? `<div style="font-size: 10px; color: #9ca3af; margin-top: 3px;">${actionInfo.actioned_by}${actionInfo.actioned_at ? ' · ' + new Date(actionInfo.actioned_at).toLocaleString('en-AU', { timeZone: 'Australia/Brisbane', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}</div>`
+                        : '';
+
                     const statusBadge = linkedPod
                         ? '<span style="background:#fef3c7;color:#92400e;padding:2px 6px;border-radius:8px;font-size:10px;">Ad-Hoc POD</span>'
                         : isDone
-                        ? '<span style="background:#dcfce7;color:#166534;padding:2px 6px;border-radius:8px;font-size:10px;">✅ Done</span>'
+                        ? `<span style="background:#dcfce7;color:#166534;padding:2px 6px;border-radius:8px;font-size:10px;">✅ Done</span>${actionAttrib}`
                         : isCancelled
-                        ? '<span style="background:#fee2e2;color:#991b1b;padding:2px 6px;border-radius:8px;font-size:10px;">❌ Not done</span>'
+                        ? `<span style="background:#fee2e2;color:#991b1b;padding:2px 6px;border-radius:8px;font-size:10px;">❌ Not done</span>${actionAttrib}`
                         : '<span style="color:#9ca3af;font-size:10px;">— Pending</span>';
 
                     // Invoice status for this calendar event (stored in localStorage)
