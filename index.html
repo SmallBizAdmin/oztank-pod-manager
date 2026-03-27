@@ -7440,7 +7440,7 @@
             document.getElementById('searchPodsInput').focus();
         }
 
-        function backToCustomerList() {
+        async function backToCustomerList() {
             // If this was linked to a calendar event, auto-tick it as completed
             if (currentCalendarEventId) {
                 await db.saveCalendarEventStatus(currentCalendarEventId, 'completed');
