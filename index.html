@@ -4555,12 +4555,16 @@
                 try {
                     const { data, error } = await supabase
                         .from('calendar_event_status')
-                        .select('event_id, status, notes');
+                        .select('event_id, status, notes, actioned_by, actioned_at');
                     if (error) throw error;
                     this.calendarEventStatus = {};
                     this.calendarEventNotes = {};
                     (data || []).forEach(row => {
-                        if (row.status) this.calendarEventStatus[row.event_id] = { status: row.status };
+                        if (row.status) this.calendarEventStatus[row.event_id] = {
+                            status: row.status,
+                            actioned_by: row.actioned_by || null,
+                            actioned_at: row.actioned_at || null
+                        };
                         if (row.notes) this.calendarEventNotes[row.event_id] = row.notes;
                     });
                 } catch (e) {
@@ -4573,17 +4577,19 @@
             async saveCalendarEventStatus(eventId, status) {
                 // status: 'completed', 'cancelled', or null to clear
                 try {
+                    const actionedBy = currentUser ? (currentUser.name || currentUser.email) : 'Unknown';
+                    const actionedAt = new Date().toISOString();
                     if (status) {
-                        this.calendarEventStatus[eventId] = { status };
+                        this.calendarEventStatus[eventId] = { status, actioned_by: actionedBy, actioned_at: actionedAt };
                         const { error } = await supabase
                             .from('calendar_event_status')
-                            .upsert({ event_id: eventId, status, updated_at: new Date().toISOString() }, { onConflict: 'event_id' });
+                            .upsert({ event_id: eventId, status, updated_at: new Date().toISOString(), actioned_by: actionedBy, actioned_at: actionedAt }, { onConflict: 'event_id' });
                         if (error) throw error;
                     } else {
                         delete this.calendarEventStatus[eventId];
                         const { error } = await supabase
                             .from('calendar_event_status')
-                            .update({ status: null, updated_at: new Date().toISOString() })
+                            .update({ status: null, updated_at: new Date().toISOString(), actioned_by: null, actioned_at: null })
                             .eq('event_id', eventId);
                         if (error) throw error;
                     }
@@ -4750,7 +4756,9 @@
                     is_ad_hoc: pod.isAdHoc || false,
                     source_run_day: pod.sourceRunDay || null,
                     calendar_event_id: pod.calendarEventId || null,
-                    archived: pod.archived || false
+                    archived: pod.archived || false,
+                    completed_by: pod.completedBy || null,
+                    completed_at: pod.completedAt || null
                 };
                 
                 // If offline, queue the POD for later sync
@@ -8364,7 +8372,9 @@
                     signature: null,
                     signatureName: '',
                     isQuickComplete: true,
-                    isAdHoc: false
+                    isAdHoc: false,
+                    completedBy: currentUser ? (currentUser.name || currentUser.email) : 'Unknown',
+                    completedAt: nowUTC.toISOString()
                 };
                 
                 const success = await db.savePOD(pod);
@@ -9470,7 +9480,9 @@
                 isRentalOnly: isRentalOnly, // Flag for rental-only invoicing
                 isAdHoc: isAdHocService,
                 sourceRunDay: isAdHocService ? adHocSourceRunDay : null, // Track which runsheet ad-hoc was created from
-                calendarEventId: currentCalendarEventId || null // Link back to calendar event if triggered from one
+                calendarEventId: currentCalendarEventId || null, // Link back to calendar event if triggered from one
+                completedBy: currentUser ? (currentUser.name || currentUser.email) : 'Unknown',
+                completedAt: nowUTC.toISOString()
             };
 
             console.log('Saving POD:', pod);
