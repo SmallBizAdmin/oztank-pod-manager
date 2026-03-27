@@ -12274,6 +12274,8 @@
                 renderTankMovements();
             }
         }
+
+        async function saveTankMovement() {
             const freetextName = document.getElementById('tankMovementFreetextCustomer').value.trim();
             if (!selectedTankMovementCustomer && !freetextName) {
                 showToast('Please select a customer or enter a name', 'error');
