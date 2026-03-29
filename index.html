@@ -4834,6 +4834,12 @@
                 }
                 
                 try {
+                    // Delete invoice_status row first (FK constraint)
+                    await supabase
+                        .from('invoice_status')
+                        .delete()
+                        .eq('pod_id', podId);
+
                     const { error } = await supabase
                         .from('pods')
                         .delete()
@@ -5722,6 +5728,9 @@
                     }
                     if (document.getElementById('adminRunsheetContainer')?.style.display !== 'none') {
                         loadAdminRunsheet();
+                    }
+                    if (document.getElementById('customerAdminList')) {
+                        renderCustomerAdminList();
                     }
                 })
                 .subscribe((status) => {
