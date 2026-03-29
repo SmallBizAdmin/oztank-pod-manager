@@ -10242,7 +10242,8 @@
                     if (isRentalOnly) {
                         statusBadgeHtml = '<span class="rental-only-badge">Rental Only</span>' + podAttrib;
                     } else {
-                        statusBadgeHtml = '<span style="background: #dcfce7; color: #166534; padding: 2px 8px; border-radius: 8px; font-size: 10px; font-weight: 600;">Serviced</span>' + podAttrib;
+                        const badgeLabel = (pod.serviceType === 'Delivery' || customer.serviceType === 'Delivery') ? 'Delivered' : 'Serviced';
+                        statusBadgeHtml = `<span style="background: #dcfce7; color: #166534; padding: 2px 8px; border-radius: 8px; font-size: 10px; font-weight: 600;">${badgeLabel}</span>` + podAttrib;
                     }
                 } else if (isSkipped) {
                     const isRentalSkip = skipReason && skipReason.toLowerCase().includes('no service required');
@@ -11771,7 +11772,8 @@
                     // Service status
                     let statusBadge = '';
                     if (pod.tank_serviced === 'yes') {
-                        statusBadge = '<span style="background: #dcfce7; color: #166534; padding: 2px 8px; border-radius: 12px; font-size: 11px;">✓ Serviced</span>';
+                        const label = pod.service_type === 'Delivery' ? '✓ Delivered' : '✓ Serviced';
+                        statusBadge = `<span style="background: #dcfce7; color: #166534; padding: 2px 8px; border-radius: 12px; font-size: 11px;">${label}</span>`;
                     } else if (pod.tank_serviced === 'no' && (pod.service_notes || '').toLowerCase().includes('no service required')) {
                         statusBadge = '<span style="background: #fef3c7; color: #92400e; padding: 2px 8px; border-radius: 12px; font-size: 11px;">📋 Rental Only</span>';
                     } else if (pod.tank_serviced === 'no') {
