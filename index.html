@@ -11891,12 +11891,14 @@
         
         function showMainMenuAdHocWarning(type) {
             if (confirm('⚠️ Creating an ad-hoc entry from the main menu.\n\nIf you are completing a service day, please add this from the runsheet via the ➕ button instead.\n\nContinue from main menu?')) {
+                currentServiceDate = null; // Always use today for main menu ad-hoc
                 showCustomerSearchModal(null, type); // null = main menu origin
             }
         }
         
         function showMainMenuTankWarning() {
             if (confirm('⚠️ Creating a tank movement from the main menu.\n\nIf you are completing a service day, please add the tank movement from the runsheet via the ➕ button instead.\n\nContinue from main menu?')) {
+                currentServiceDate = null; // Always use today for main menu tank movements
                 showTankMovementModal(null); // null = main menu origin
             }
         }
