@@ -2351,11 +2351,9 @@
                             <div id="podServiceTypeDisplay" style="font-size: 16px; font-weight: 600; color: #111827;">Service</div>
                         </div>
                         
-                        <!-- Tank Selector (multi-tank customers only) -->
-                        <div id="podTankSelectorContainer" style="flex: 1; min-width: 100px; display: none;">
-                            <label style="display: block; margin-bottom: 4px; font-weight: 500; color: #6b7280; font-size: 12px;">Tank</label>
-                            <select id="podTankSelector" style="width: 100%; padding: 10px; border: 2px solid #2563eb; border-radius: 6px; font-size: 15px; font-weight: 600; color: #111827; background: white;">
-                            </select>
+                        <!-- Tank Selector (multi-tank customers only) - REMOVED, replaced by podTankServicesContainer below -->
+                        <div id="podTankSelectorContainer" style="display:none;">
+                            <select id="podTankSelector"></select>
                         </div>
                         
                         <!-- Carbsolve Selector (hidden for deliveries) -->
@@ -2382,6 +2380,12 @@
                             <div id="podWasteDisplay" style="font-size: 16px; font-weight: 600; color: #92400e;">🛢️ Drum</div>
                         </div>
                     </div>
+                </div>
+
+                <!-- Per-Tank Service Section (multi-tank customers only) -->
+                <div class="card" id="podTankServicesCard" style="display:none;">
+                    <h3 style="margin-bottom: 12px;">Tank Services</h3>
+                    <div id="podTankServicesRows"></div>
                 </div>
                 
                 <!-- Products Delivered (Sale Items) -->
@@ -4397,7 +4401,8 @@
                         sourceRunDay: p.source_run_day,
                         calendarEventId: p.calendar_event_id || null,
                         archived: p.archived,
-                        tankLabel: p.tank_label || null
+                        tankLabel: p.tank_label || null,
+                        tankServices: p.tank_services || null
                     }));
                     
                     // Also load scheduled days for the month
@@ -4449,7 +4454,8 @@
                         sourceRunDay: p.source_run_day,
                         calendarEventId: p.calendar_event_id || null,
                         archived: p.archived,
-                        tankLabel: p.tank_label || null
+                        tankLabel: p.tank_label || null,
+                        tankServices: p.tank_services || null
                     }));
                     
                     console.log(`Loaded ${this.pods.length} PODs for week starting ${startStr}`);
@@ -4500,7 +4506,8 @@
                         sourceRunDay: p.source_run_day,
                         calendarEventId: p.calendar_event_id || null,
                         archived: p.archived,
-                        tankLabel: p.tank_label || null
+                        tankLabel: p.tank_label || null,
+                        tankServices: p.tank_services || null
                     }));
                 } catch (error) {
                     console.error('Error loading PODs for specific month:', error);
@@ -4784,7 +4791,8 @@
                     archived: pod.archived || false,
                     completed_by: pod.completedBy || null,
                     completed_at: pod.completedAt || null,
-                    tank_label: pod.tankLabel || null
+                    tank_label: pod.tankLabel || null,
+                    tank_services: pod.tankServices || null
                 };
                 
                 // If offline, queue the POD for later sync
@@ -5904,29 +5912,39 @@
             const displayServiceType = isAdHocService ? adHocServiceType : (currentCustomer.serviceType || 'Service');
             document.getElementById('podServiceTypeDisplay').textContent = displayServiceType;
             
-            // Tank selector for multi-tank customers
-            const tankSelectorContainer = document.getElementById('podTankSelectorContainer');
-            const tankSelector = document.getElementById('podTankSelector');
+            // Per-tank service section for multi-tank customers
+            const tankServicesCard = document.getElementById('podTankServicesCard');
+            const tankServicesRows = document.getElementById('podTankServicesRows');
+            const carbsolveContainer = document.getElementById('podCarbsolveContainer');
             if (currentCustomer.tankCount > 1) {
                 const labels = currentCustomer.tankLabels || Array.from({length: currentCustomer.tankCount}, (_, i) => `Tank ${i + 1}`);
-                tankSelector.innerHTML = labels.map(l => `<option value="${l}">${l}</option>`).join('');
-                tankSelectorContainer.style.display = 'block';
+                const customerCarbsolve = (currentCustomer.carbsolve || '').replace(/^(Carbsolve\s*[-:]\s*|Carb:\s*)/i, '').trim();
+                const carbsolveOptions = ['', '4kg', '4kg spcl', '7kg', '7kg spcl', '10kg', '11kg spcl', '14kg', '17kg', '21kg', '28kg']
+                    .map(v => `<option value="${v}" ${v === customerCarbsolve ? 'selected' : ''}>${v || 'None'}</option>`).join('');
+                tankServicesRows.innerHTML = labels.map(label => `
+                    <div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid #f3f4f6;" data-tank-label="${label}">
+                        <input type="checkbox" class="tank-service-check" data-tank="${label}" checked
+                               style="width:18px;height:18px;cursor:pointer;" title="${label} serviced">
+                        <span style="font-weight:600;font-size:14px;min-width:70px;">${label}</span>
+                        <select class="tank-carbsolve-select" data-tank="${label}"
+                                style="padding:6px 10px;border:2px solid #d1d5db;border-radius:6px;font-size:14px;font-weight:600;">
+                            ${carbsolveOptions}
+                        </select>
+                    </div>`).join('');
+                tankServicesCard.style.display = 'block';
+                if (carbsolveContainer) carbsolveContainer.style.display = 'none';
             } else {
-                tankSelectorContainer.style.display = 'none';
-                tankSelector.innerHTML = '';
+                tankServicesCard.style.display = 'none';
+                tankServicesRows.innerHTML = '';
+                // Single-tank: show/hide carbsolve normally
+                const isDelivery = displayServiceType === 'Delivery';
+                if (carbsolveContainer) carbsolveContainer.style.display = isDelivery ? 'none' : 'block';
+                const customerCarbsolve = (currentCustomer.carbsolve || '').replace(/^(Carbsolve\s*[-:]\s*|Carb:\s*)/i, '').trim();
+                const carbsolveSelect = document.getElementById('podCarbsolveDisplay');
+                carbsolveSelect.value = customerCarbsolve;
+                carbsolveSelect.style.borderColor = '#d1d5db';
+                carbsolveSelect.title = customerCarbsolve ? `Default: ${customerCarbsolve}` : 'No default set';
             }
-            
-            // Display carbsolve dropdown - default to customer's stored value, hide for deliveries
-            const isDelivery = displayServiceType === 'Delivery';
-            const carbsolveContainer = document.getElementById('podCarbsolveContainer');
-            if (carbsolveContainer) {
-                carbsolveContainer.style.display = isDelivery ? 'none' : 'block';
-            }
-            const customerCarbsolve = (currentCustomer.carbsolve || '').replace(/^(Carbsolve\s*[-:]\s*|Carb:\s*)/i, '').trim();
-            const carbsolveSelect = document.getElementById('podCarbsolveDisplay');
-            carbsolveSelect.value = customerCarbsolve;
-            carbsolveSelect.style.borderColor = '#d1d5db';
-            carbsolveSelect.title = customerCarbsolve ? `Default: ${customerCarbsolve}` : 'No default set';
             
             // Display waste if applicable
             const wasteContainer = document.getElementById('podWasteContainer');
@@ -5982,6 +6000,20 @@
                     <div style="display: flex; gap: 24px; flex-wrap: wrap;">
                         <div><span style="color: #6b7280; font-size: 12px;">Type</span><br><strong>📦 Delivery</strong></div>
                     </div>
+                `;
+            } else if (pod.tankServices && pod.tankServices.length > 0) {
+                // Multi-tank: show per-tank breakdown
+                const tankRows = pod.tankServices.map(t => `
+                    <div style="display:flex;align-items:center;gap:12px;padding:6px 0;border-bottom:1px solid #f3f4f6;">
+                        <span style="font-size:16px;">${t.serviced ? '✅' : '⬜'}</span>
+                        <span style="font-weight:600;min-width:70px;">${t.tankLabel}</span>
+                        ${t.carbsolve ? `<span style="background:#eff6ff;color:#2563eb;padding:2px 8px;border-radius:4px;font-size:13px;font-weight:600;">${t.carbsolve}</span>` : ''}
+                    </div>`).join('');
+                serviceDetailsHtml = `
+                    <div style="margin-bottom:8px;"><span style="color:#6b7280;font-size:12px;">Type</span><br><strong>${pod.serviceType || 'Service'}</strong></div>
+                    <div style="margin-top:8px;">${tankRows}</div>
+                    ${isRentalOnly ? '<div style="margin-top:8px;"><span class="rental-only-badge">Rental Only</span></div>' : ''}
+                    ${pod.serviceNotes ? `<div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e5e7eb;"><strong>Service Notes (legacy):</strong> ${pod.serviceNotes}</div>` : ''}
                 `;
             } else {
                 serviceDetailsHtml = `
@@ -6072,32 +6104,47 @@
             const isDelivery = podServiceType === 'Delivery';
             document.getElementById('podServiceTypeDisplay').textContent = podServiceType;
             
-            // Tank selector for multi-tank customers (editing)
-            const tankSelectorContainerEdit = document.getElementById('podTankSelectorContainer');
-            const tankSelectorEdit = document.getElementById('podTankSelector');
+            // Per-tank service section for multi-tank customers (editing)
+            const tankServicesCardEdit = document.getElementById('podTankServicesCard');
+            const tankServicesRowsEdit = document.getElementById('podTankServicesRows');
+            const carbsolveContainerEdit = document.getElementById('podCarbsolveContainer');
             if (currentCustomer.tankCount > 1) {
                 const labels = currentCustomer.tankLabels || Array.from({length: currentCustomer.tankCount}, (_, i) => `Tank ${i + 1}`);
-                tankSelectorEdit.innerHTML = labels.map(l => `<option value="${l}">${l}</option>`).join('');
-                if (pod.tankLabel) tankSelectorEdit.value = pod.tankLabel;
-                tankSelectorContainerEdit.style.display = 'block';
+                const customerCarbsolve = (currentCustomer.carbsolve || '').replace(/^(Carbsolve\s*[-:]\s*|Carb:\s*)/i, '').trim();
+                // Use saved tankServices if present, else default all serviced
+                const savedServices = pod.tankServices || labels.map(l => ({ tankLabel: l, serviced: true, carbsolve: customerCarbsolve }));
+                const carbsolveOptions = (sel) => ['', '4kg', '4kg spcl', '7kg', '7kg spcl', '10kg', '11kg spcl', '14kg', '17kg', '21kg', '28kg']
+                    .map(v => `<option value="${v}" ${v === sel ? 'selected' : ''}>${v || 'None'}</option>`).join('');
+                tankServicesRowsEdit.innerHTML = labels.map(label => {
+                    const saved = savedServices.find(s => s.tankLabel === label) || { serviced: true, carbsolve: customerCarbsolve };
+                    return `<div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid #f3f4f6;" data-tank-label="${label}">
+                        <input type="checkbox" class="tank-service-check" data-tank="${label}" ${saved.serviced ? 'checked' : ''}
+                               style="width:18px;height:18px;cursor:pointer;" title="${label} serviced">
+                        <span style="font-weight:600;font-size:14px;min-width:70px;">${label}</span>
+                        <select class="tank-carbsolve-select" data-tank="${label}"
+                                style="padding:6px 10px;border:2px solid #d1d5db;border-radius:6px;font-size:14px;font-weight:600;">
+                            ${carbsolveOptions(saved.carbsolve || customerCarbsolve)}
+                        </select>
+                    </div>`;
+                }).join('');
+                tankServicesCardEdit.style.display = 'block';
+                if (carbsolveContainerEdit) carbsolveContainerEdit.style.display = 'none';
             } else {
-                tankSelectorContainerEdit.style.display = 'none';
-                tankSelectorEdit.innerHTML = '';
+                tankServicesCardEdit.style.display = 'none';
+                tankServicesRowsEdit.innerHTML = '';
             }
             
-            // Hide carbsolve for deliveries; set dropdown to POD's saved value (may differ from customer default)
+            // Hide carbsolve for deliveries; set dropdown to POD's saved value (single-tank only)
             const carbsolveContainer = document.getElementById('podCarbsolveContainer');
-            if (carbsolveContainer) {
-                carbsolveContainer.style.display = isDelivery ? 'none' : 'block';
+            if (currentCustomer.tankCount <= 1) {
+                if (carbsolveContainer) carbsolveContainer.style.display = isDelivery ? 'none' : 'block';
+                const customerCarbsolve = (currentCustomer.carbsolve || '').replace(/^(Carbsolve\s*[-:]\s*|Carb:\s*)/i, '').trim();
+                const savedCarbsolve = (pod.carbsolve || customerCarbsolve).replace(/^(Carbsolve\s*[-:]\s*|Carb:\s*)/i, '').trim();
+                const carbsolveSelect = document.getElementById('podCarbsolveDisplay');
+                carbsolveSelect.value = savedCarbsolve;
+                carbsolveSelect.style.borderColor = (savedCarbsolve && savedCarbsolve !== customerCarbsolve) ? '#f97316' : '#d1d5db';
+                carbsolveSelect.title = customerCarbsolve ? `Default: ${customerCarbsolve}` : 'No default set';
             }
-            
-            const customerCarbsolve = (currentCustomer.carbsolve || '').replace(/^(Carbsolve\s*[-:]\s*|Carb:\s*)/i, '').trim();
-            const savedCarbsolve = (pod.carbsolve || customerCarbsolve).replace(/^(Carbsolve\s*[-:]\s*|Carb:\s*)/i, '').trim();
-            const carbsolveSelect = document.getElementById('podCarbsolveDisplay');
-            carbsolveSelect.value = savedCarbsolve;
-            // Highlight orange if the saved value differs from the customer default
-            carbsolveSelect.style.borderColor = (savedCarbsolve && savedCarbsolve !== customerCarbsolve) ? '#f97316' : '#d1d5db';
-            carbsolveSelect.title = customerCarbsolve ? `Default: ${customerCarbsolve}` : 'No default set';
             
             // Display waste if applicable
             const wasteContainer = document.getElementById('podWasteContainer');
@@ -7617,7 +7664,8 @@
                         signatureName: pod.signature_name, isRentalOnly: pod.is_rental_only || false,
                         isQuickComplete: pod.is_quick_complete || false, isAdHoc: pod.is_ad_hoc || false,
                         sourceRunDay: pod.source_run_day, calendarEventId: pod.calendar_event_id || null, archived: pod.archived,
-                        tankLabel: pod.tank_label || null
+                        tankLabel: pod.tank_label || null,
+                        tankServices: pod.tank_services || null
                     };
                     showExistingPod(mappedPod);
                 }
@@ -8497,20 +8545,16 @@
         }
         
         // Quick Complete Table Functions
-        async function handleQuickComplete(customerId, isCompleted, tankLabel = null) {
+        async function handleQuickComplete(customerId, isCompleted) {
             const customer = db.customers.find(c => c.id === customerId);
             if (!customer) return;
             
             if (isCompleted) {
-                // Create a quick POD (minimal data, no validation)
                 const nowUTC = new Date();
                 const podDate = currentServiceDate || formatDateLocal(new Date());
                 
-                // Check if POD already exists (for multi-tank, match on tank_label too)
                 const existingPod = db.pods.find(pod => 
-                    pod.customerId === customerId && 
-                    pod.date === podDate &&
-                    (tankLabel ? pod.tankLabel === tankLabel : !pod.tankLabel)
+                    pod.customerId === customerId && pod.date === podDate
                 );
                 
                 if (existingPod) {
@@ -8519,6 +8563,14 @@
                 }
                 
                 const serviceType = customer.serviceType || 'Service';
+                
+                // For multi-tank customers, build tankServices marking all tanks serviced
+                let tankServices = null;
+                if (customer.tankCount > 1) {
+                    const labels = customer.tankLabels || Array.from({length: customer.tankCount}, (_, i) => `Tank ${i + 1}`);
+                    const customerCarbsolve = (customer.carbsolve || '').replace(/^(Carbsolve\s*[-:]\s*|Carb:\s*)/i, '').trim();
+                    tankServices = labels.map(label => ({ tankLabel: label, serviced: true, carbsolve: customerCarbsolve }));
+                }
                 
                 const pod = {
                     id: Date.now(),
@@ -8539,7 +8591,8 @@
                     signatureName: '',
                     isQuickComplete: true,
                     isAdHoc: false,
-                    tankLabel: tankLabel || null,
+                    tankLabel: null,
+                    tankServices: tankServices,
                     completedBy: currentUser ? (currentUser.name || currentUser.email) : 'Unknown',
                     completedAt: nowUTC.toISOString()
                 };
@@ -8547,40 +8600,31 @@
                 const success = await db.savePOD(pod);
                 if (success) {
                     db.pods.push(pod);
-                    showToast(tankLabel ? `${tankLabel} marked complete!` : 'Service marked complete!', 'success');
+                    showToast('Service marked complete!', 'success');
                     renderCustomerList();
                     renderRunDays();
                 }
             } else {
-                // Unchecking - remove the POD if it was a quick complete
                 const podDate = currentServiceDate || formatDateLocal(new Date());
                 const existingPod = db.pods.find(pod => 
-                    pod.customerId === customerId && 
-                    pod.date === podDate &&
-                    (tankLabel ? pod.tankLabel === tankLabel : !pod.tankLabel)
+                    pod.customerId === customerId && pod.date === podDate
                 );
                 
                 if (existingPod) {
-                    // Only allow unchecking quick completes or PODs without additional data
                     const hasDetails = existingPod.signature || existingPod.photo || 
                                       existingPod.notes || (existingPod.products && existingPod.products.length > 0);
                     
                     if (hasDetails && !existingPod.isQuickComplete) {
                         showToast('Cannot undo - POD has details. Edit the POD to make changes.', 'warning');
-                        // Re-check the checkbox
-                        const selector = tankLabel 
-                            ? `input[data-customer-id="${customerId}"][data-tank-label="${tankLabel}"]`
-                            : `input[data-customer-id="${customerId}"]`;
-                        const checkbox = document.querySelector(selector);
+                        const checkbox = document.querySelector(`input[data-customer-id="${customerId}"]`);
                         if (checkbox) checkbox.checked = true;
                         return;
                     }
                     
-                    // Delete the POD
                     const success = await db.deletePOD(existingPod.id);
                     if (success) {
                         db.pods = db.pods.filter(p => p.id !== existingPod.id);
-                        showToast(tankLabel ? `${tankLabel} unmarked` : 'Service unmarked', 'success');
+                        showToast('Service unmarked', 'success');
                         renderCustomerList();
                         renderRunDays();
                     }
@@ -9089,33 +9133,14 @@
                         ${timestampHtml}
                     </div>
                     <div style="display: flex; align-items: center; gap: 8px;">
-                        ${!isHistorical && !effectivelySkipped ? (() => {
-                            if (customer.tankCount > 1) {
-                                // Multi-tank: render per-tank checkboxes
-                                const podDate = currentServiceDate || formatDateLocal(new Date());
-                                const labels = customer.tankLabels || Array.from({length: customer.tankCount}, (_, i) => `Tank ${i + 1}`);
-                                return labels.map(label => {
-                                    const tankPod = db.pods.find(p => p.customerId === customer.id && p.date === podDate && p.tankLabel === label);
-                                    return `<label style="display:flex;align-items:center;gap:3px;font-size:12px;font-weight:500;color:#374151;">
-                                        <input type="checkbox" class="done-checkbox"
-                                               data-customer-id="${customer.id}"
-                                               data-tank-label="${label}"
-                                               ${tankPod ? 'checked' : ''}
-                                               onclick="event.stopPropagation();"
-                                               onchange="handleQuickComplete(${customer.id}, this.checked, '${label}')"
-                                               title="Mark ${label} done">
-                                        ${label}
-                                    </label>`;
-                                }).join('');
-                            } else {
-                                return `<input type="checkbox" class="done-checkbox"
-                                           data-customer-id="${customer.id}"
-                                           ${completedPod ? 'checked' : ''}
-                                           onclick="event.stopPropagation();"
-                                           onchange="handleQuickComplete(${customer.id}, this.checked)"
-                                           title="Mark as done">`;
-                            }
-                        })() : ''}
+                        ${!isHistorical && !effectivelySkipped ? `
+                            <input type="checkbox" class="done-checkbox"
+                                   data-customer-id="${customer.id}"
+                                   ${completedPod ? 'checked' : ''}
+                                   onclick="event.stopPropagation();"
+                                   onchange="handleQuickComplete(${customer.id}, this.checked)"
+                                   title="Mark as done">
+                        ` : ''}
                         ${!isHistorical && !customerIsOffMonth ? `
                             <button class="skip-btn ${isSkipped ? 'active' : ''}" 
                                     onclick="event.stopPropagation(); toggleCustomerSkip(${customer.id}, ${isSkipped})" 
@@ -9489,8 +9514,16 @@
             // Render repair items section
             const repairContainer = document.getElementById('repairLines');
             if (repairContainer) {
+                const isMultiTank = currentCustomer && currentCustomer.tankCount > 1;
+                const tankSelectorHtml = isMultiTank ? (() => {
+                    const labels = currentCustomer.tankLabels || Array.from({length: currentCustomer.tankCount}, (_, i) => `Tank ${i + 1}`);
+                    return `<select class="repair-tank-select" style="padding:6px;border:2px solid #2563eb;border-radius:6px;font-size:13px;font-weight:600;color:#1d4ed8;background:white;" title="Which tank?">
+                        ${labels.map(l => `<option value="${l}">${l}</option>`).join('')}
+                    </select>`;
+                })() : '';
                 repairContainer.innerHTML = `
                     <div class="product-line" data-type="repair">
+                        ${tankSelectorHtml}
                         <select class="product-select" onchange="checkProductLineComplete(this)">
                             ${getProductOptionsHtml('repair')}
                         </select>
@@ -9657,12 +9690,19 @@
             // Use the service date if set (when working from calendar), otherwise today
             const podDate = currentServiceDate || formatDateLocal(nowAEST);
             
-            // Get carbsolve from dropdown (worker may have changed it from customer default)
+            // Get carbsolve from dropdown (single-tank only)
             const carbsolve = document.getElementById('podCarbsolveDisplay') ? document.getElementById('podCarbsolveDisplay').value : (currentCustomer.carbsolve || '');
             
-            // Get tank label for multi-tank customers
-            const tankSelectorEl = document.getElementById('podTankSelector');
-            const tankLabel = (currentCustomer.tankCount > 1 && tankSelectorEl && tankSelectorEl.value) ? tankSelectorEl.value : null;
+            // Build tankServices for multi-tank customers from per-tank rows
+            let tankServices = null;
+            if (currentCustomer.tankCount > 1) {
+                const rows = document.querySelectorAll('#podTankServicesRows [data-tank-label]');
+                tankServices = Array.from(rows).map(row => ({
+                    tankLabel: row.dataset.tankLabel,
+                    serviced: row.querySelector('.tank-service-check').checked,
+                    carbsolve: row.querySelector('.tank-carbsolve-select').value
+                }));
+            }
             
             // Check if this is a "no service required" (rental only) situation — based on notes
             const notesValue = document.getElementById('notes').value.trim();
@@ -9692,7 +9732,8 @@
                 calendarEventId: currentCalendarEventId || null, // Link back to calendar event if triggered from one
                 completedBy: currentUser ? (currentUser.name || currentUser.email) : 'Unknown',
                 completedAt: nowUTC.toISOString(),
-                tankLabel: tankLabel
+                tankLabel: null,
+                tankServices: tankServices
             };
 
             console.log('Saving POD:', pod);
@@ -12032,7 +12073,8 @@
                         isAdHoc: pod.is_ad_hoc || false,
                         sourceRunDay: pod.source_run_day,
                         archived: pod.archived,
-                        tankLabel: pod.tank_label || null
+                        tankLabel: pod.tank_label || null,
+                        tankServices: pod.tank_services || null
                     };
                     showExistingPod(mappedPod);
                 }
