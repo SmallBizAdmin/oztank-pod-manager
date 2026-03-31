@@ -10381,12 +10381,17 @@
                     : '-';
                 
                 // Get service type and carbsolve from POD if available, otherwise show customer's values
-                // Default to 'Service' if not set (most common type)
                 const serviceType = pod ? (pod.serviceType || customer.serviceType || 'Service') : (customer.serviceType || 'Service');
-                let carbsolve = pod ? (pod.carbsolve || customer.carbsolve || '-') : (customer.carbsolve || '-');
-                // Clean up carbsolve display - strip any "Carbsolve - " or "Carb: " prefixes from old data
-                if (carbsolve && carbsolve !== '-') {
-                    carbsolve = carbsolve.replace(/^(Carbsolve\s*[-:]\s*|Carb:\s*)/i, '');
+                let carbsolve;
+                if (pod && pod.tankServices && pod.tankServices.length > 0) {
+                    carbsolve = pod.tankServices.map(t =>
+                        `<span style="white-space:nowrap;">${t.serviced ? '✅' : '⬜'} ${t.tankLabel}${t.carbsolve ? ` · ${t.carbsolve}` : ''}</span>`
+                    ).join('<br>');
+                } else {
+                    carbsolve = pod ? (pod.carbsolve || customer.carbsolve || '-') : (customer.carbsolve || '-');
+                    if (carbsolve && carbsolve !== '-') {
+                        carbsolve = carbsolve.replace(/^(Carbsolve\s*[-:]\s*|Carb:\s*)/i, '');
+                    }
                 }
                 
                 // Build schedule badge for bi-monthly customers
@@ -10589,7 +10594,16 @@
                     : '-';
                 const isDelivery = pod.serviceType === 'Delivery';
                 const typeIcon = isDelivery ? '📦' : '🔧';
-                const carbsolve = isDelivery ? '-' : (pod.carbsolve || '-');
+                let carbsolve;
+                if (isDelivery) {
+                    carbsolve = '-';
+                } else if (pod.tankServices && pod.tankServices.length > 0) {
+                    carbsolve = pod.tankServices.map(t =>
+                        `<span style="white-space:nowrap;">${t.serviced ? '✅' : '⬜'} ${t.tankLabel}${t.carbsolve ? ` · ${t.carbsolve}` : ''}</span>`
+                    ).join('<br>');
+                } else {
+                    carbsolve = (pod.carbsolve || '-').replace(/^(Carbsolve\s*[-:]\s*|Carb:\s*)/i, '');
+                }
                 
                 const tr = document.createElement('tr');
                 tr.style.borderBottom = '1px solid #e5e7eb';
@@ -10827,9 +10841,15 @@
                     : '-';
                 const isDelivery = pod.serviceType === 'Delivery';
                 const typeIcon = isDelivery ? '📦' : '🔧';
-                let carbsolve = isDelivery ? '-' : (pod.carbsolve || '-');
-                if (carbsolve && carbsolve !== '-') {
-                    carbsolve = carbsolve.replace(/^(Carbsolve\s*[-:]\s*|Carb:\s*)/i, '');
+                let carbsolve;
+                if (isDelivery) {
+                    carbsolve = '-';
+                } else if (pod.tankServices && pod.tankServices.length > 0) {
+                    carbsolve = pod.tankServices.map(t =>
+                        `<span style="white-space:nowrap;">${t.serviced ? '✅' : '⬜'} ${t.tankLabel}${t.carbsolve ? ` · ${t.carbsolve}` : ''}</span>`
+                    ).join('<br>');
+                } else {
+                    carbsolve = (pod.carbsolve || '-').replace(/^(Carbsolve\s*[-:]\s*|Carb:\s*)/i, '');
                 }
                 
                 const tr = document.createElement('tr');
