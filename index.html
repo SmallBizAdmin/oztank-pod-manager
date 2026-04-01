@@ -4897,7 +4897,7 @@
                             pod_id: podId,
                             invoiced: invoiced,
                             checked_sent: checkedSent || false
-                        });
+                        }, { onConflict: 'pod_id' });
                     if (error) throw error;
                     return true;
                 } catch (error) {
@@ -4936,7 +4936,7 @@
                             service_date: serviceDate,
                             invoiced: invoiced,
                             checked_sent: checkedSent || false
-                        });
+                        }, { onConflict: 'customer_id,service_date' });
                     if (error) throw error;
                     const key = `${customerId}|${serviceDate}`;
                     this.skippedInvoiceStatus[key] = { invoiced, checkedSent: checkedSent || false };
@@ -4979,7 +4979,7 @@
                             service_date: serviceDate,
                             invoiced: invoiced,
                             invoiced_at: invoiced ? new Date().toISOString() : null
-                        });
+                        }, { onConflict: 'service_day_name,service_date' });
                     
                     if (error) throw error;
                     
