@@ -10361,11 +10361,9 @@
                 
                 const tr = document.createElement('tr');
                 tr.style.borderBottom = '1px solid #e5e7eb';
+                tr.style.verticalAlign = 'top';
                 
                 if (isSkipped) {
-                    tr.style.background = '#f9fafb';
-                    tr.style.opacity = '0.7';
-                } else if (customerIsOffMonth) {
                     tr.style.background = '#fffbeb';
                 }
                 
@@ -10376,9 +10374,30 @@
                     tr.onmouseout = () => tr.style.background = isSkipped ? '#f9fafb' : (customerIsOffMonth ? '#fffbeb' : '');
                 }
                 
-                const productsStr = pod && pod.products && pod.products.length > 0 
-                    ? pod.products.map(p => `${p.product} x${p.quantity}`).join(', ')
-                    : '-';
+                const productsStr = (() => {
+                    if (!pod || !pod.products || pod.products.length === 0) return '-';
+                    const saleItems = pod.products.filter(p => p.type !== 'repair');
+                    const repairItems = pod.products.filter(p => p.type === 'repair');
+                    const parts = [];
+                    if (saleItems.length > 0) parts.push(saleItems.map(p => `${p.product} x${p.quantity}`).join(', '));
+                    if (repairItems.length > 0) {
+                        const hasTaggedTanks = repairItems.some(p => p.tankLabel);
+                        if (hasTaggedTanks) {
+                            const grouped = {};
+                            repairItems.forEach(p => {
+                                const key = p.tankLabel || 'General';
+                                if (!grouped[key]) grouped[key] = [];
+                                grouped[key].push(`${p.product} x${p.quantity}`);
+                            });
+                            parts.push(Object.entries(grouped).map(([tank, items]) =>
+                                `<span style="color:#1d4ed8;font-weight:600;">${tank}:</span> ${items.join(', ')}`
+                            ).join('<br>'));
+                        } else {
+                            parts.push(repairItems.map(p => `${p.product} x${p.quantity}`).join(', '));
+                        }
+                    }
+                    return parts.join('<br>');
+                })();
                 
                 // Get service type and carbsolve from POD if available, otherwise show customer's values
                 const serviceType = pod ? (pod.serviceType || customer.serviceType || 'Service') : (customer.serviceType || 'Service');
@@ -10589,9 +10608,30 @@
             adHocPods.forEach(pod => {
                 const customer = db.customers.find(c => c.id === pod.customerId);
                 const customerName = customer ? customer.name : (pod.customerName || 'Unknown');
-                const productsStr = pod.products && pod.products.length > 0 
-                    ? pod.products.map(p => `${p.product} x${p.quantity}`).join(', ')
-                    : '-';
+                const productsStr = (() => {
+                    if (!pod.products || pod.products.length === 0) return '-';
+                    const saleItems = pod.products.filter(p => p.type !== 'repair');
+                    const repairItems = pod.products.filter(p => p.type === 'repair');
+                    const parts = [];
+                    if (saleItems.length > 0) parts.push(saleItems.map(p => `${p.product} x${p.quantity}`).join(', '));
+                    if (repairItems.length > 0) {
+                        const hasTaggedTanks = repairItems.some(p => p.tankLabel);
+                        if (hasTaggedTanks) {
+                            const grouped = {};
+                            repairItems.forEach(p => {
+                                const key = p.tankLabel || 'General';
+                                if (!grouped[key]) grouped[key] = [];
+                                grouped[key].push(`${p.product} x${p.quantity}`);
+                            });
+                            parts.push(Object.entries(grouped).map(([tank, items]) =>
+                                `<span style="color:#1d4ed8;font-weight:600;">${tank}:</span> ${items.join(', ')}`
+                            ).join('<br>'));
+                        } else {
+                            parts.push(repairItems.map(p => `${p.product} x${p.quantity}`).join(', '));
+                        }
+                    }
+                    return parts.join('<br>');
+                })();
                 const isDelivery = pod.serviceType === 'Delivery';
                 const typeIcon = isDelivery ? '📦' : '🔧';
                 let carbsolve;
@@ -10836,9 +10876,30 @@
             adHocPods.forEach(pod => {
                 const customer = db.customers.find(c => c.id === pod.customerId);
                 const customerName = customer ? customer.name : (pod.customerName || 'Unknown Customer');
-                const productsStr = pod.products && pod.products.length > 0 
-                    ? pod.products.map(p => `${p.product} x${p.quantity}`).join(', ')
-                    : '-';
+                const productsStr = (() => {
+                    if (!pod.products || pod.products.length === 0) return '-';
+                    const saleItems = pod.products.filter(p => p.type !== 'repair');
+                    const repairItems = pod.products.filter(p => p.type === 'repair');
+                    const parts = [];
+                    if (saleItems.length > 0) parts.push(saleItems.map(p => `${p.product} x${p.quantity}`).join(', '));
+                    if (repairItems.length > 0) {
+                        const hasTaggedTanks = repairItems.some(p => p.tankLabel);
+                        if (hasTaggedTanks) {
+                            const grouped = {};
+                            repairItems.forEach(p => {
+                                const key = p.tankLabel || 'General';
+                                if (!grouped[key]) grouped[key] = [];
+                                grouped[key].push(`${p.product} x${p.quantity}`);
+                            });
+                            parts.push(Object.entries(grouped).map(([tank, items]) =>
+                                `<span style="color:#1d4ed8;font-weight:600;">${tank}:</span> ${items.join(', ')}`
+                            ).join('<br>'));
+                        } else {
+                            parts.push(repairItems.map(p => `${p.product} x${p.quantity}`).join(', '));
+                        }
+                    }
+                    return parts.join('<br>');
+                })();
                 const isDelivery = pod.serviceType === 'Delivery';
                 const typeIcon = isDelivery ? '📦' : '🔧';
                 let carbsolve;
@@ -10853,7 +10914,7 @@
                 }
                 
                 const tr = document.createElement('tr');
-                tr.style.cssText = 'border-bottom: 1px solid #fde68a; cursor: pointer; background: #fffbeb;';
+                tr.style.cssText = 'border-bottom: 1px solid #fde68a; cursor: pointer; background: #fffbeb; vertical-align: top;';
                 tr.onclick = () => viewPODFromOverview(pod.id);
                 tr.onmouseover = () => tr.style.background = '#fef3c7';
                 tr.onmouseout = () => tr.style.background = '#fffbeb';
