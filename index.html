@@ -10497,7 +10497,7 @@
                     checkedSent = status.checkedSent;
                     invoiceCheckboxHtml = `<input type="checkbox" class="invoice-checkbox" data-pod-id="${pod.id}"
                         ${invoiced ? 'checked' : ''}
-                        onchange="toggleInvoice(${pod.id}, null, null)">`;
+                        onchange="toggleInvoice(${pod.id}, null, null, this.checked)">`;
                     checkedSentHtml = `<input type="checkbox" class="checked-sent-checkbox" data-pod-id="${pod.id}"
                         ${checkedSent ? 'checked' : ''} ${!invoiced ? 'disabled' : ''}
                         onchange="toggleCheckedSent(${pod.id}, null, null)" title="Checked & Sent">`;
@@ -10509,7 +10509,7 @@
                     checkedSent = status.checkedSent;
                     invoiceCheckboxHtml = `<input type="checkbox" class="invoice-checkbox" data-customer-id="${customer.id}" data-date="${selectedDate}"
                         ${invoiced ? 'checked' : ''}
-                        onchange="toggleInvoice(null, ${customer.id}, '${selectedDate}')">`;
+                        onchange="toggleInvoice(null, ${customer.id}, '${selectedDate}', this.checked)">`;
                     checkedSentHtml = `<input type="checkbox" class="checked-sent-checkbox" data-customer-id="${customer.id}" data-date="${selectedDate}"
                         ${checkedSent ? 'checked' : ''} ${!invoiced ? 'disabled' : ''}
                         onchange="toggleCheckedSent(null, ${customer.id}, '${selectedDate}')" title="Checked & Sent">`;
@@ -10947,7 +10947,7 @@
                     </td>
                     <td style="padding: 12px; text-align: center;" onclick="event.stopPropagation();">
                         <input type="checkbox" class="invoice-checkbox" data-pod-id="${pod.id}" ${adHocInvStatus.invoiced ? 'checked' : ''} 
-                           onchange="toggleInvoice(${pod.id}, null, null)">
+                           onchange="toggleInvoice(${pod.id}, null, null, this.checked)">
                     </td>
                     <td style="padding: 12px; text-align: center;" onclick="event.stopPropagation();">
                         <input type="checkbox" class="checked-sent-checkbox" data-pod-id="${pod.id}" ${adHocInvStatus.checkedSent ? 'checked' : ''} ${!adHocInvStatus.invoiced ? 'disabled' : ''}
@@ -11090,10 +11090,10 @@
             loadAdminAdHocRunsheet(serviceDate);
         }
 
-        async function toggleInvoice(podId, customerId, serviceDate) {
+        async function toggleInvoice(podId, customerId, serviceDate, newInvoiced) {
             if (podId) {
                 const current = getInvoiceStatus(podId);
-                const newInvoiced = !current.invoiced;
+                if (newInvoiced === undefined) newInvoiced = !current.invoiced;
                 // If uninvoicing, also clear checked_sent
                 const newCheckedSent = newInvoiced ? current.checkedSent : false;
                 db.invoiceStatus[podId] = { invoiced: newInvoiced, checkedSent: newCheckedSent };
@@ -11105,7 +11105,7 @@
                 // Skipped customer record
                 const key = `${customerId}|${serviceDate}`;
                 const current = db.skippedInvoiceStatus[key] || { invoiced: false, checkedSent: false };
-                const newInvoiced = !current.invoiced;
+                if (newInvoiced === undefined) newInvoiced = !current.invoiced;
                 const newCheckedSent = newInvoiced ? current.checkedSent : false;
                 db.skippedInvoiceStatus[key] = { invoiced: newInvoiced, checkedSent: newCheckedSent };
                 await db.saveSkippedInvoiceStatus(customerId, serviceDate, newInvoiced, newCheckedSent);
