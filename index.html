@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oz Tank - Service POD Manager v11.11dev</title>
+    <title>Oz Tank - Service POD Manager v11.11</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -5609,6 +5609,7 @@
             setupInvoiceStatusRealtime();
             setupCustomersRealtime();
             setupWorkerCalendarEventsRealtime();
+            setupWorkerCalendarVisibilityRefresh();
         }
         
         // Realtime subscription so status/notes changes on any device instantly reflect everywhere
@@ -5787,6 +5788,26 @@
                     if (status === 'SUBSCRIBED') console.log('✅ Realtime: worker_calendar_events subscribed');
                     if (status === 'CHANNEL_ERROR') console.warn('⚠️ Realtime: worker_calendar_events subscription error');
                 });
+        }
+
+        // ─── Mobile visibility refresh for worker calendar ─────────────────────────
+        // On mobile, WebSocket connections drop when the screen sleeps or the user
+        // switches apps. This handler re-fetches calendar events the moment the app
+        // comes back into focus, so workers always see current data without a manual refresh.
+        // A 2-hour periodic poll acts as an additional safety net.
+        function setupWorkerCalendarVisibilityRefresh() {
+            // Re-fetch when the tab/app becomes visible again
+            document.addEventListener('visibilitychange', async () => {
+                if (document.visibilityState === 'visible') {
+                    console.log('App resumed — refreshing worker calendar events');
+                    await loadWorkerCalendarEvents();
+                }
+            });
+
+            // Periodic safety-net poll every 2 hours (matches Apps Script sync interval)
+            setInterval(async () => {
+                await loadWorkerCalendarEvents();
+            }, 2 * 60 * 60 * 1000);
         }
 
         // initializeApp is now called from the Supabase loader above
