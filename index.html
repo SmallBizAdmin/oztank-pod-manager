@@ -10773,7 +10773,10 @@
                 .filter(ev => {
                     if (ev.eventDate !== selectedDate) return false;
                     const status = db.getCalendarEventStatus(ev.id);
-                    return status === 'completed' || status === 'cancelled';
+                    if (status !== 'completed' && status !== 'cancelled') return false;
+                    // If a POD already exists for this event it's shown in the Ad-Hoc section above
+                    const hasLinkedPod = db.pods.some(p => p.calendarEventId == ev.id && p.date === selectedDate);
+                    return !hasLinkedPod;
                 })
                 .sort((a, b) => workerRank(a.calendarOwner) - workerRank(b.calendarOwner));
 
