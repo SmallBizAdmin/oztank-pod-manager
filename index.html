@@ -6890,10 +6890,8 @@
         
         // ==================== INVOICE NOTES ====================
         function openInvoiceNoteEditor(type, id) {
-            const tr = document.getElementById(`invnote_tr_${type}_${id}`);
             const ta = document.getElementById(`invnote_ta_${type}_${id}`);
-            if (!tr || !ta) return;
-            tr.style.display = 'table-row';
+            if (!ta) return;
             ta.style.display = 'block';
             ta.focus();
         }
@@ -6902,18 +6900,16 @@
             const note = value.trim();
             const ta = document.getElementById(`invnote_ta_${type}_${id}`);
             const displayEl = document.getElementById(`invnote_display_${type}_${id}`);
-            const tr = document.getElementById(`invnote_tr_${type}_${id}`);
 
             if (ta) ta.style.display = 'none';
 
             if (displayEl) {
                 if (note) {
-                    displayEl.innerHTML = `<span style="font-size:11px;color:#6b7280;font-style:italic;">📝 ${note.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</span>`;
+                    displayEl.innerHTML = `📝 ${note.replace(/</g,'&lt;').replace(/>/g,'&gt;')}`;
                     displayEl.style.display = 'block';
-                    if (tr) tr.style.display = 'table-row';
                 } else {
+                    displayEl.innerHTML = '';
                     displayEl.style.display = 'none';
-                    if (tr) tr.style.display = 'none';
                 }
             }
 
@@ -6949,20 +6945,16 @@
             return `<button onclick="event.stopPropagation();openInvoiceNoteEditor('${type}',${id})" style="background:none;border:none;cursor:pointer;color:#d1d5db;font-size:13px;padding:2px 4px;line-height:1;" title="Add invoice note">✏️</button>`;
         }
 
-        function invoiceNoteRowHtml(type, id, note, colspan) {
+        function invoiceNoteInlineHtml(type, id, note) {
             const hasNote = !!(note && note.trim());
             const safeNote = hasNote ? note.replace(/</g,'&lt;').replace(/>/g,'&gt;') : '';
-            return `<tr id="invnote_tr_${type}_${id}" style="display:${hasNote ? 'table-row' : 'none'};">
-                <td colspan="${colspan}" style="padding:0 12px 6px 52px;border-bottom:1px solid #e5e7eb;">
-                    <div id="invnote_display_${type}_${id}" style="${hasNote ? '' : 'display:none;'}">
-                        <span style="font-size:11px;color:#6b7280;font-style:italic;">📝 ${safeNote}</span>
-                    </div>
-                    <textarea id="invnote_ta_${type}_${id}" rows="2"
-                        style="display:none;width:100%;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px;resize:vertical;margin-top:4px;"
-                        placeholder="Invoice note..."
-                        onblur="saveInvoiceNote('${type}',${id},this.value)">${safeNote}</textarea>
-                </td>
-            </tr>`;
+            return `<div style="margin-top:5px;">
+                <div id="invnote_display_${type}_${id}" style="${hasNote ? '' : 'display:none;'}font-size:11px;color:#d97706;font-weight:600;font-style:italic;">📝 ${safeNote}</div>
+                <textarea id="invnote_ta_${type}_${id}" rows="2"
+                    style="display:none;width:100%;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px;resize:vertical;margin-top:4px;"
+                    placeholder="Invoice note..."
+                    onblur="saveInvoiceNote('${type}',${id},this.value)">${safeNote}</textarea>
+            </div>`;
         }
         // ==================== END INVOICE NOTES ====================
 
@@ -10663,7 +10655,10 @@
                     <td style="padding: 12px; text-align: center;" onclick="event.stopPropagation();">
                         ${checkedSentHtml}
                     </td>
-                    <td style="padding: 12px;">${customerNameDisplay}</td>
+                    <td style="padding: 12px;">
+                        ${customerNameDisplay}
+                        ${pod ? invoiceNoteInlineHtml('pod', pod.id, podInvNote) : ''}
+                    </td>
                     <td style="padding: 12px;">${serviceType}</td>
                     <td style="padding: 12px;">${carbsolveDisplay}</td>
                     <td style="padding: 12px;">${productsStr}</td>
@@ -10674,9 +10669,6 @@
                     </td>
                 `;
                 tbody.appendChild(tr);
-                if (pod) {
-                    tbody.insertAdjacentHTML('beforeend', invoiceNoteRowHtml('pod', pod.id, podInvNote, 9));
-                }
             });
             
             // Update select all checkbox state
@@ -10823,6 +10815,7 @@
                             <span style="background:#f59e0b;color:white;padding:2px 6px;border-radius:8px;font-size:10px;margin-left:8px;">Ad-Hoc</span>
                             ${calBadge}
                             ${podWorkerBadge}
+                            ${invoiceNoteInlineHtml('pod', pod.id, pod.invoiceNotes || null)}
                         </td>
                         <td style="padding: 12px;">${typeIcon} ${pod.serviceType || 'Service'}</td>
                         <td style="padding: 12px;">${carbsolve}</td>
@@ -10833,7 +10826,6 @@
                         </td>
                     `;
                     adHocTbody.appendChild(tr);
-                    adHocTbody.insertAdjacentHTML('beforeend', invoiceNoteRowHtml('pod', pod.id, pod.invoiceNotes || null, 8));
                 });
             } else {
                 adHocSection.style.display = 'none';
@@ -10859,6 +10851,7 @@
                                 <span style="background:#3b82f6;color:white;padding:2px 6px;border-radius:8px;font-size:10px;">Ad-Hoc</span>
                                 ${tm.completedBy ? `<span style="display:inline-block;margin-left:4px;background:${getWorkerColor(tm.completedBy)};color:white;padding:1px 6px;border-radius:8px;font-size:10px;">👤 ${tm.completedBy}</span>` : ''}
                             </div>
+                            ${invoiceNoteInlineHtml('tm', tm.id, tm.invoiceNotes || null)}
                         </td>
                         <td style="padding: 10px;">
                             <span style="padding:4px 8px;border-radius:4px;font-size:12px;font-weight:500;
@@ -10877,7 +10870,6 @@
                         </td>
                     `;
                     tankTbody.appendChild(tr);
-                    tankTbody.insertAdjacentHTML('beforeend', invoiceNoteRowHtml('tm', tm.id, tm.invoiceNotes || null, 8));
                 });
             } else {
                 tankSection.style.display = 'none';
@@ -10986,7 +10978,10 @@
                                 onchange="toggleCalEventInvoice('${ev.id}','${selectedDate}','checkedSent',this.checked)"
                                 style="width:16px;height:16px;cursor:pointer;${!isInvoiced ? 'opacity:0.4;' : ''}">
                         </td>
-                        <td style="padding:12px;">${companyCell}</td>
+                        <td style="padding:12px;">
+                            ${companyCell}
+                            ${invoiceNoteInlineHtml('cal', ev.id, calInvNote)}
+                        </td>
                         <td style="padding:12px;color:#6b7280;font-size:12px;">${typeCell}</td>
                         <td style="padding:12px;">${carbCell}</td>
                         <td style="padding:12px;">${productsCell}</td>
@@ -10997,7 +10992,6 @@
                         </td>
                     `;
                     calTbody.appendChild(tr);
-                    calTbody.insertAdjacentHTML('beforeend', invoiceNoteRowHtml('cal', ev.id, calInvNote, 9));
                 });
             } else {
                 calSection.style.display = 'none';
@@ -11128,6 +11122,7 @@
                     <td style="padding: 12px;">
                         ${customerName}
                         <span style="background: #f59e0b; color: white; padding: 2px 6px; border-radius: 8px; font-size: 10px; margin-left: 8px;">Ad-Hoc</span>
+                        ${invoiceNoteInlineHtml('pod', pod.id, pod.invoiceNotes || null)}
                     </td>
                     <td style="padding: 12px;">${typeIcon} ${pod.serviceType || 'Service'}</td>
                     <td style="padding: 12px;">${carbsolve}</td>
@@ -11138,7 +11133,6 @@
                     </td>
                 `;
                 tbody.appendChild(tr);
-                tbody.insertAdjacentHTML('beforeend', invoiceNoteRowHtml('pod', pod.id, pod.invoiceNotes || null, 8));
             });
         }
         
@@ -11184,6 +11178,7 @@
                     <td style="padding: 10px;">
                         ${tm.customerName}
                         ${adHocBadge ? `<div style="margin-top: 4px;">${adHocBadge}</div>` : ''}
+                        ${invoiceNoteInlineHtml('tm', tm.id, tm.invoiceNotes || null)}
                     </td>
                     <td style="padding: 10px;">
                         <span style="padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 500; 
@@ -11202,7 +11197,6 @@
                     </td>
                 `;
                 tbody.appendChild(tr);
-                tbody.insertAdjacentHTML('beforeend', invoiceNoteRowHtml('tm', tm.id, tm.invoiceNotes || null, 8));
             });
         }
         
