@@ -6906,6 +6906,7 @@
             if (displayEl) {
                 if (note) {
                     displayEl.innerHTML = `📝 ${note.replace(/</g,'&lt;').replace(/>/g,'&gt;')}`;
+                    displayEl.style.cssText = 'font-size:13px;color:#d97706;font-weight:600;font-style:italic;';
                     displayEl.style.display = 'block';
                 } else {
                     displayEl.innerHTML = '';
@@ -6949,7 +6950,7 @@
             const hasNote = !!(note && note.trim());
             const safeNote = hasNote ? note.replace(/</g,'&lt;').replace(/>/g,'&gt;') : '';
             return `<div style="margin-top:5px;">
-                <div id="invnote_display_${type}_${id}" style="${hasNote ? '' : 'display:none;'}font-size:11px;color:#d97706;font-weight:600;font-style:italic;">📝 ${safeNote}</div>
+                <div id="invnote_display_${type}_${id}" style="${hasNote ? '' : 'display:none;'}font-size:13px;color:#d97706;font-weight:600;font-style:italic;">📝 ${safeNote}</div>
                 <textarea id="invnote_ta_${type}_${id}" rows="2"
                     style="display:none;width:100%;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px;resize:vertical;margin-top:4px;"
                     placeholder="Invoice note..."
