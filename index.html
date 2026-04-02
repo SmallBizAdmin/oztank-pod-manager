@@ -4402,7 +4402,9 @@
                         calendarEventId: p.calendar_event_id || null,
                         archived: p.archived,
                         tankLabel: p.tank_label || null,
-                        tankServices: p.tank_services || null
+                        tankServices: p.tank_services || null,
+                        completedBy: p.completed_by || null,
+                        completedAt: p.completed_at || null
                     }));
                     
                     // Also load scheduled days for the month
@@ -4455,7 +4457,9 @@
                         calendarEventId: p.calendar_event_id || null,
                         archived: p.archived,
                         tankLabel: p.tank_label || null,
-                        tankServices: p.tank_services || null
+                        tankServices: p.tank_services || null,
+                        completedBy: p.completed_by || null,
+                        completedAt: p.completed_at || null
                     }));
                     
                     console.log(`Loaded ${this.pods.length} PODs for week starting ${startStr}`);
@@ -4507,7 +4511,9 @@
                         calendarEventId: p.calendar_event_id || null,
                         archived: p.archived,
                         tankLabel: p.tank_label || null,
-                        tankServices: p.tank_services || null
+                        tankServices: p.tank_services || null,
+                        completedBy: p.completed_by || null,
+                        completedAt: p.completed_at || null
                     }));
                 } catch (error) {
                     console.error('Error loading PODs for specific month:', error);
@@ -5038,7 +5044,9 @@
                         tankNoPulled: tm.tank_no_pulled,
                         carbsolve: tm.carbsolve,
                         reason: tm.reason,
-                        sourceRunDay: tm.source_run_day
+                        sourceRunDay: tm.source_run_day,
+                        calendarEventId: tm.calendar_event_id || null,
+                        completedBy: tm.completed_by || null
                     }));
                     
                     console.log(`Loaded ${this.tankMovements.length} tank movements`);
@@ -5062,7 +5070,9 @@
                     tank_no_pulled: movement.tankNoPulled,
                     carbsolve: movement.carbsolve,
                     reason: movement.reason,
-                    source_run_day: movement.sourceRunDay || null
+                    source_run_day: movement.sourceRunDay || null,
+                    calendar_event_id: movement.calendarEventId || null,
+                    completed_by: movement.completedBy || null
                 };
                 
                 // If offline, queue for later sync
