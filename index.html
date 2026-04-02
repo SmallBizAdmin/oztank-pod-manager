@@ -10347,6 +10347,14 @@
             if (dayInvoicedContainer) {
                 dayInvoicedContainer.style.display = 'flex';
             }
+
+            // Restore main table thead (may have been hidden by ad-hoc view)
+            const mainTableThead = document.querySelector('#adminRunsheetTable thead');
+            if (mainTableThead) mainTableThead.style.display = '';
+
+            // Hide ad-hoc calendar section if it exists (belongs to standalone ad-hoc view)
+            const adHocCalSection = document.getElementById('adHocCalendarSection');
+            if (adHocCalSection) adHocCalSection.style.display = 'none';
             
             // Update day invoiced checkbox
             updateDayInvoicedUI(serviceDayName, selectedDate);
@@ -10582,214 +10590,256 @@
         }
         
         function loadAdminAdHocRunsheet(selectedDate) {
-            // Special view for truly ad-hoc items (from main menu, not from a runsheet)
+            // Standalone ad-hoc view: three stacked sections
+            // 1. Ad-Hoc Services & Deliveries (amber) — all runDay='Ad-Hoc' PODs, no sourceRunDay
+            // 2. Tank Movements (blue) — all runDay='Ad-Hoc' tank movements
+            // 3. Calendar Events (green) — ticked/crossed events only
             currentAdminServiceDay = 'Ad-Hoc';
             currentAdminDateFilter = selectedDate;
-            
-            // Get truly ad-hoc PODs (runDay = 'Ad-Hoc', no sourceRunDay, not linked to a calendar event)
-            const adHocPods = db.pods.filter(pod => 
-                pod.date === selectedDate && 
-                pod.runDay === 'Ad-Hoc' && 
-                !pod.sourceRunDay &&
-                !pod.calendarEventId
-            );
-            
-            // Get truly ad-hoc tank movements
-            const adHocTankMoves = db.tankMovements.filter(tm => 
-                tm.date === selectedDate && 
-                tm.runDay === 'Ad-Hoc' && 
-                !tm.sourceRunDay
-            );
-            
+
             // Update header
-            document.getElementById('adminRunsheetTitle').textContent = `Ad-Hoc Services & Deliveries - ${formatDisplayDate(selectedDate)}`;
-            document.getElementById('adminRunsheetEmployee').textContent = 'Standalone ad-hoc services, deliveries & tank movements (not from a runsheet)';
+            document.getElementById('adminRunsheetTitle').textContent = `Ad-Hoc Services & Deliveries — ${formatDisplayDate(selectedDate)}`;
+            document.getElementById('adminRunsheetEmployee').textContent = 'Standalone ad-hoc services, deliveries & tank movements';
             document.getElementById('adminRunsheetDate').textContent = '';
-            
-            // Hide day invoiced checkbox for ad-hoc
+
+            // Hide day invoiced checkbox
             const dayInvoicedContainer = document.getElementById('dayInvoicedContainer');
-            if (dayInvoicedContainer) {
-                dayInvoicedContainer.style.display = 'none';
-            }
-            
-            // Build table
+            if (dayInvoicedContainer) dayInvoicedContainer.style.display = 'none';
+
+            // Hide main table thead — only use tbody for the Back button
+            const mainTable = document.getElementById('adminRunsheetTable');
+            if (mainTable) mainTable.querySelector('thead').style.display = 'none';
             const tbody = document.getElementById('adminRunsheetTableBody');
-            tbody.innerHTML = '';
-            
-            // Add back to calendar button row
-            const backRow = document.createElement('tr');
-            backRow.innerHTML = `
-                <td colspan="9" style="padding: 8px; background: #f3f4f6;">
-                    <button class="btn" onclick="history.back()" style="padding: 8px 16px;">
-                        ← Back to Calendar
-                    </button>
-                </td>
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="9" style="padding: 8px; background: #f3f4f6;">
+                        <button class="btn" onclick="history.back()" style="padding: 8px 16px;">← Back to Calendar</button>
+                    </td>
+                </tr>
             `;
-            tbody.appendChild(backRow);
-            
-            // Add PODs
-            adHocPods.forEach(pod => {
-                const customer = db.customers.find(c => c.id === pod.customerId);
-                const customerName = customer ? customer.name : (pod.customerName || 'Unknown');
-                const productsStr = (() => {
-                    if (!pod.products || pod.products.length === 0) return '-';
-                    const saleItems = pod.products.filter(p => p.type !== 'repair');
-                    const repairItems = pod.products.filter(p => p.type === 'repair');
-                    const parts = [];
-                    if (saleItems.length > 0) parts.push(saleItems.map(p => `${p.product} x${p.quantity}`).join(', '));
-                    if (repairItems.length > 0) {
-                        const hasTaggedTanks = repairItems.some(p => p.tankLabel);
-                        if (hasTaggedTanks) {
-                            const grouped = {};
-                            repairItems.forEach(p => {
-                                const key = p.tankLabel || 'General';
-                                if (!grouped[key]) grouped[key] = [];
-                                grouped[key].push(`${p.product} x${p.quantity}`);
-                            });
-                            parts.push(Object.entries(grouped).map(([tank, items]) =>
-                                `<span style="color:#1d4ed8;font-weight:600;">${tank}:</span> ${items.join(', ')}`
-                            ).join('<br>'));
-                        } else {
-                            parts.push(repairItems.map(p => `${p.product} x${p.quantity}`).join(', '));
-                        }
-                    }
-                    return parts.join('<br>');
-                })();
-                const isDelivery = pod.serviceType === 'Delivery';
-                const typeIcon = isDelivery ? '📦' : '🔧';
-                let carbsolve;
-                if (isDelivery) {
-                    carbsolve = '-';
-                } else if (pod.tankServices && pod.tankServices.length > 0) {
-                    carbsolve = pod.tankServices.map(t =>
-                        `<span style="white-space:nowrap;">${t.serviced ? '✅' : '⬜'} ${t.tankLabel}${t.carbsolve ? ` · ${t.carbsolve}` : ''}</span>`
-                    ).join('<br>');
-                } else {
-                    carbsolve = (pod.carbsolve || '-').replace(/^(Carbsolve\s*[-:]\s*|Carb:\s*)/i, '');
-                }
-                
-                const tr = document.createElement('tr');
-                tr.style.borderBottom = '1px solid #e5e7eb';
-                tr.style.background = '#fffbeb';
-                tr.style.cursor = 'pointer';
-                tr.title = 'Click to view/edit POD';
-                tr.onclick = () => viewPODFromOverview(pod.id);
-                tr.innerHTML = `
-                    <td style="padding: 12px; text-align: center;">
-                        <span style="color: #16a34a; font-size: 18px;">✓</span>
-                    </td>
-                    <td style="padding: 12px; text-align: center;">-</td>
-                    <td style="padding: 12px; text-align: center;">-</td>
-                    <td style="padding: 12px;">${customerName}</td>
-                    <td style="padding: 12px;">${typeIcon} ${pod.serviceType || 'Service'}</td>
-                    <td style="padding: 12px;">${carbsolve}</td>
-                    <td style="padding: 12px;">${productsStr}</td>
-                    <td style="padding: 12px; font-size: 12px; font-style: italic;">${pod.notes || '-'}</td>
-                    <td style="padding: 12px; text-align: center;">
-                        <span style="background: #fef3c7; color: #92400e; padding: 2px 6px; border-radius: 8px; font-size: 10px;">Ad-Hoc</span>
-                    </td>
-                `;
-                tbody.appendChild(tr);
-            });
-            
-            // Add tank movements
-            adHocTankMoves.forEach(tm => {
-                const tr = document.createElement('tr');
-                tr.style.borderBottom = '1px solid #e5e7eb';
-                tr.style.background = '#eff6ff';
-                tr.innerHTML = `
-                    <td style="padding: 12px; text-align: center;">
-                        <span style="color: #16a34a; font-size: 18px;">✓</span>
-                    </td>
-                    <td style="padding: 12px; text-align: center;">-</td>
-                    <td style="padding: 12px;">
-                        ${tm.customerName}
-                        <div style="margin-top: 4px;"><span style="background: #3b82f6; color: white; padding: 2px 6px; border-radius: 8px; font-size: 10px;">Tank ${tm.movementType}</span></div>
-                    </td>
-                    <td style="padding: 12px;">🔄 Tank ${tm.movementType}</td>
-                    <td style="padding: 12px;">${tm.carbsolve || '-'}</td>
-                    <td style="padding: 12px;">Placed: ${tm.tankNoPlaced || '-'} / Pulled: ${tm.tankNoPulled || '-'}</td>
-                    <td style="padding: 12px; font-size: 12px; font-style: italic;">${tm.reason || '-'}</td>
-                    <td style="padding: 12px; text-align: center;">
-                        <span style="background: #dbeafe; color: #1e40af; padding: 2px 6px; border-radius: 8px; font-size: 10px;">Tank</span>
-                    </td>
-                    <td style="padding: 8px; text-align: center;">
-                        <button onclick="deleteTankMovement(${tm.id}, '${(tm.customerName || '').replace(/'/g, "\\'")}')" style="background: none; border: none; cursor: pointer; color: #dc2626; font-size: 16px;" title="Delete tank movement">🗑️</button>
-                    </td>
-                `;
-                tbody.appendChild(tr);
-            });
-            
-            if (adHocPods.length === 0 && adHocTankMoves.length === 0) {
-                const emptyRow = document.createElement('tr');
-                emptyRow.innerHTML = `
-                    <td colspan="9" style="padding: 16px; text-align: center; color: #9ca3af; font-size: 13px; font-style: italic;">
-                        No ad-hoc PODs or tank movements for this date
-                    </td>
-                `;
-                tbody.appendChild(emptyRow);
+
+            // ── SECTION 1: AD-HOC PODS ──────────────────────────────────────────
+            // Include pathway 1 (standalone, no calendarEventId) AND pathway 3 (calendar-linked)
+            const adHocPods = db.pods.filter(pod =>
+                pod.date === selectedDate &&
+                pod.runDay === 'Ad-Hoc' &&
+                !pod.sourceRunDay
+            );
+
+            let adHocSection = document.getElementById('adHocPodsSection');
+            if (!adHocSection) {
+                adHocSection = document.createElement('div');
+                adHocSection.id = 'adHocPodsSection';
+                const tankSec = document.getElementById('tankMovementsSection');
+                if (tankSec) tankSec.parentNode.insertBefore(adHocSection, tankSec);
+                else document.getElementById('adminRunsheetContainer').appendChild(adHocSection);
             }
 
-            // Add ALL calendar events for this date (ticked, crossed, or pending)
-            // PODs linked to a calendar event show inline on the event row
-            const linkedPodEventIds = new Set();
-            const allEvents = (db.calendarEvents || []).filter(ev => ev.eventDate === selectedDate)
+            if (adHocPods.length > 0) {
+                adHocSection.style.display = 'block';
+                adHocSection.innerHTML = `
+                    <h3 style="margin: 24px 0 12px; color: #92400e;">📋 Ad-Hoc Services & Deliveries</h3>
+                    <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+                        <thead>
+                            <tr style="background: #fef3c7;">
+                                <th style="padding: 10px; text-align: center; border-bottom: 2px solid #f59e0b; width: 40px;">✓</th>
+                                <th style="padding: 10px; text-align: center; border-bottom: 2px solid #f59e0b; width: 40px;">Inv</th>
+                                <th style="padding: 10px; text-align: center; border-bottom: 2px solid #f59e0b; width: 50px;">Chk'd</th>
+                                <th style="padding: 10px; text-align: left; border-bottom: 2px solid #f59e0b;">Customer</th>
+                                <th style="padding: 10px; text-align: left; border-bottom: 2px solid #f59e0b;">Type</th>
+                                <th style="padding: 10px; text-align: left; border-bottom: 2px solid #f59e0b;">Carbsolve</th>
+                                <th style="padding: 10px; text-align: left; border-bottom: 2px solid #f59e0b;">Products</th>
+                                <th style="padding: 10px; text-align: left; border-bottom: 2px solid #f59e0b;">Notes</th>
+                            </tr>
+                        </thead>
+                        <tbody id="adHocPodsTableBody"></tbody>
+                    </table>
+                `;
+                const adHocTbody = document.getElementById('adHocPodsTableBody');
+                adHocPods.forEach(pod => {
+                    const customer = db.customers.find(c => c.id === pod.customerId);
+                    const customerName = customer ? customer.name : (pod.customerName || 'Unknown Customer');
+                    const productsStr = (() => {
+                        if (!pod.products || pod.products.length === 0) return '-';
+                        const saleItems = pod.products.filter(p => p.type !== 'repair');
+                        const repairItems = pod.products.filter(p => p.type === 'repair');
+                        const parts = [];
+                        if (saleItems.length > 0) parts.push(saleItems.map(p => `${p.product} x${p.quantity}`).join(', '));
+                        if (repairItems.length > 0) {
+                            const hasTaggedTanks = repairItems.some(p => p.tankLabel);
+                            if (hasTaggedTanks) {
+                                const grouped = {};
+                                repairItems.forEach(p => {
+                                    const key = p.tankLabel || 'General';
+                                    if (!grouped[key]) grouped[key] = [];
+                                    grouped[key].push(`${p.product} x${p.quantity}`);
+                                });
+                                parts.push(Object.entries(grouped).map(([tank, items]) =>
+                                    `<span style="color:#1d4ed8;font-weight:600;">${tank}:</span> ${items.join(', ')}`
+                                ).join('<br>'));
+                            } else {
+                                parts.push(repairItems.map(p => `${p.product} x${p.quantity}`).join(', '));
+                            }
+                        }
+                        return parts.join('<br>');
+                    })();
+                    const typeIcon = pod.serviceType === 'Delivery' ? '📦' : pod.serviceType === 'Repairs' ? '🔨' : '🔧';
+                    let carbsolve;
+                    if (pod.serviceType === 'Delivery') {
+                        carbsolve = '-';
+                    } else if (pod.tankServices && pod.tankServices.length > 0) {
+                        carbsolve = pod.tankServices.map(t =>
+                            `<span style="white-space:nowrap;">${t.serviced ? '✅' : '⬜'} ${t.tankLabel}${t.carbsolve ? ` · ${t.carbsolve}` : ''}</span>`
+                        ).join('<br>');
+                    } else {
+                        carbsolve = (pod.carbsolve || '-').replace(/^(Carbsolve\s*[-:]\s*|Carb:\s*)/i, '');
+                    }
+                    const invStatus = getInvoiceStatus(pod.id);
+                    const calBadge = pod.calendarEventId
+                        ? '<span style="background:#8b5cf6;color:white;padding:2px 6px;border-radius:8px;font-size:10px;margin-left:4px;">Cal</span>'
+                        : '';
+                    const tr = document.createElement('tr');
+                    tr.style.cssText = 'border-bottom: 1px solid #fde68a; cursor: pointer; background: #fffbeb; vertical-align: top;';
+                    tr.onclick = () => viewPODFromOverview(pod.id);
+                    tr.onmouseover = () => tr.style.background = '#fef3c7';
+                    tr.onmouseout = () => tr.style.background = '#fffbeb';
+                    tr.innerHTML = `
+                        <td style="padding: 12px; text-align: center;"><span style="color: #16a34a; font-size: 18px;">✓</span></td>
+                        <td style="padding: 12px; text-align: center;" onclick="event.stopPropagation();">
+                            <input type="checkbox" class="invoice-checkbox" data-pod-id="${pod.id}" ${invStatus.invoiced ? 'checked' : ''}
+                               onchange="toggleInvoice(${pod.id}, null, null, this.checked)">
+                        </td>
+                        <td style="padding: 12px; text-align: center;" onclick="event.stopPropagation();">
+                            <input type="checkbox" class="checked-sent-checkbox" data-pod-id="${pod.id}" ${invStatus.checkedSent ? 'checked' : ''} ${!invStatus.invoiced ? 'disabled' : ''}
+                               onchange="toggleCheckedSent(${pod.id}, null, null)" title="Checked & Sent">
+                        </td>
+                        <td style="padding: 12px;">
+                            ${customerName}
+                            <span style="background:#f59e0b;color:white;padding:2px 6px;border-radius:8px;font-size:10px;margin-left:8px;">Ad-Hoc</span>
+                            ${calBadge}
+                        </td>
+                        <td style="padding: 12px;">${typeIcon} ${pod.serviceType || 'Service'}</td>
+                        <td style="padding: 12px;">${carbsolve}</td>
+                        <td style="padding: 12px;">${productsStr}</td>
+                        <td style="padding: 12px; font-size: 12px; font-style: italic;">${pod.notes || '-'}</td>
+                    `;
+                    adHocTbody.appendChild(tr);
+                });
+            } else {
+                adHocSection.style.display = 'none';
+            }
+
+            // ── SECTION 2: TANK MOVEMENTS ───────────────────────────────────────
+            const adHocTankMoves = db.tankMovements.filter(tm =>
+                tm.date === selectedDate && tm.runDay === 'Ad-Hoc'
+            );
+            const tankSection = document.getElementById('tankMovementsSection');
+            const tankTbody = document.getElementById('tankMovementsTableBody');
+            if (adHocTankMoves.length > 0) {
+                tankSection.style.display = 'block';
+                tankTbody.innerHTML = '';
+                adHocTankMoves.forEach(tm => {
+                    const tr = document.createElement('tr');
+                    tr.style.cssText = 'border-bottom: 1px solid #e5e7eb; background: #eff6ff;';
+                    tr.innerHTML = `
+                        <td style="padding: 10px; text-align: center;"><span style="color: #16a34a; font-size: 18px;">✓</span></td>
+                        <td style="padding: 10px;">
+                            ${tm.customerName}
+                            <div style="margin-top:4px;"><span style="background:#3b82f6;color:white;padding:2px 6px;border-radius:8px;font-size:10px;">Ad-Hoc</span></div>
+                        </td>
+                        <td style="padding: 10px;">
+                            <span style="padding:4px 8px;border-radius:4px;font-size:12px;font-weight:500;
+                                background:${tm.movementType==='Swap'?'#fef3c7':tm.movementType==='Pull'?'#fee2e2':'#dcfce7'};
+                                color:${tm.movementType==='Swap'?'#92400e':tm.movementType==='Pull'?'#991b1b':'#166534'};">
+                                ${tm.movementType}
+                            </span>
+                        </td>
+                        <td style="padding: 10px;">${tm.tankNoPlaced || '-'}</td>
+                        <td style="padding: 10px;">${tm.tankNoPulled || '-'}</td>
+                        <td style="padding: 10px;">${tm.carbsolve || '-'}</td>
+                        <td style="padding: 10px; font-size: 12px; font-style: italic;">${tm.reason || '-'}</td>
+                        <td style="padding: 8px; text-align: center;">
+                            <button onclick="deleteTankMovement(${tm.id}, '${(tm.customerName||'').replace(/'/g,"\\'")}')" style="background:none;border:none;cursor:pointer;color:#dc2626;font-size:16px;" title="Delete">🗑️</button>
+                        </td>
+                    `;
+                    tankTbody.appendChild(tr);
+                });
+            } else {
+                tankSection.style.display = 'none';
+            }
+
+            // ── SECTION 3: CALENDAR EVENTS (ticked/crossed only) ───────────────
+            const actionedEvents = (db.calendarEvents || [])
+                .filter(ev => {
+                    if (ev.eventDate !== selectedDate) return false;
+                    const status = db.getCalendarEventStatus(ev.id);
+                    return status === 'completed' || status === 'cancelled';
+                })
                 .sort((a, b) => workerRank(a.calendarOwner) - workerRank(b.calendarOwner));
 
-            if (allEvents.length > 0) {
-                // Section header row
-                const headerRow = document.createElement('tr');
-                headerRow.innerHTML = `
-                    <td colspan="9" style="padding: 10px 12px; background: #f0fdf4; border-top: 2px solid #86efac;">
-                        <strong style="color: #166534;">📋 Calendar Events (${allEvents.length})</strong>
-                    </td>
-                `;
-                tbody.appendChild(headerRow);
+            let calSection = document.getElementById('adHocCalendarSection');
+            if (!calSection) {
+                calSection = document.createElement('div');
+                calSection.id = 'adHocCalendarSection';
+                calSection.className = 'card';
+                calSection.style.marginTop = '16px';
+                document.getElementById('adminRunsheetContainer').appendChild(calSection);
+            }
 
-                allEvents.forEach(ev => {
+            if (actionedEvents.length > 0) {
+                calSection.style.display = 'block';
+                calSection.innerHTML = `
+                    <h3 style="margin-bottom: 12px; color: #166534;">📋 Calendar Events (${actionedEvents.length})</h3>
+                    <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+                        <thead>
+                            <tr style="background: #f0fdf4; text-align: left;">
+                                <th style="padding: 10px; border-bottom: 2px solid #86efac; width: 40px;">Done</th>
+                                <th style="padding: 10px; border-bottom: 2px solid #86efac; width: 40px;">Inv</th>
+                                <th style="padding: 10px; border-bottom: 2px solid #86efac; width: 50px;">Chk'd</th>
+                                <th style="padding: 10px; border-bottom: 2px solid #86efac;">Event / Company</th>
+                                <th style="padding: 10px; border-bottom: 2px solid #86efac;">Type</th>
+                                <th style="padding: 10px; border-bottom: 2px solid #86efac;">Carbsolve</th>
+                                <th style="padding: 10px; border-bottom: 2px solid #86efac;">Products</th>
+                                <th style="padding: 10px; border-bottom: 2px solid #86efac;">Notes</th>
+                                <th style="padding: 10px; border-bottom: 2px solid #86efac;">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="adHocCalendarEventsTbody"></tbody>
+                    </table>
+                `;
+                const calTbody = document.getElementById('adHocCalendarEventsTbody');
+                actionedEvents.forEach(ev => {
                     const status = db.getCalendarEventStatus(ev.id);
                     const notes = db.getCalendarEventNotes(ev.id);
                     const actionInfo = db.getCalendarEventActionInfo(ev.id);
                     const isDone = status === 'completed';
-                    const isCancelled = status === 'cancelled';
                     const workerColor = getWorkerColor(ev.calendarOwner);
 
-                    // Find a POD linked to this calendar event
-                    const linkedPod = db.pods.find(p =>
-                        p.calendarEventId == ev.id && p.date === selectedDate
-                    );
-                    if (linkedPod) linkedPodEventIds.add(ev.id);
+                    const linkedPod = db.pods.find(p => p.calendarEventId == ev.id && p.date === selectedDate);
+                    const rowBg = linkedPod ? '#fffbeb' : isDone ? '#f0fdf4' : '#fef2f2';
 
-                    const rowBg = linkedPod ? '#fffbeb' : isDone ? '#f0fdf4' : isCancelled ? '#fef2f2' : '#ffffff';
-                    const companyCell = linkedPod
-                        ? `<span style="font-weight: 500;">${ev.eventTitle}</span>
-                           ${ev.calendarOwner ? `<span style="display:inline-block;margin-left:8px;background:${workerColor};color:white;padding:1px 6px;border-radius:8px;font-size:10px;">👤 ${ev.calendarOwner}</span>` : ''}
-                           <div style="font-size:11px;color:#92400e;margin-top:4px;">📋 POD: ${linkedPod.customerName || ''}${linkedPod.notes ? ' — ' + linkedPod.notes : ''}</div>`
-                        : `<span style="font-weight: 500;">${ev.eventTitle}</span>
-                           ${ev.calendarOwner ? `<span style="display:inline-block;margin-left:8px;background:${workerColor};color:white;padding:1px 6px;border-radius:8px;font-size:10px;">👤 ${ev.calendarOwner}</span>` : ''}`;
+                    const workerBadge = ev.calendarOwner
+                        ? `<span style="display:inline-block;margin-left:8px;background:${workerColor};color:white;padding:1px 6px;border-radius:8px;font-size:10px;">👤 ${ev.calendarOwner}</span>`
+                        : '';
+                    const companyCell = `<span style="font-weight:500;">${ev.eventTitle}</span>${workerBadge}
+                        ${linkedPod ? `<div style="font-size:11px;color:#92400e;margin-top:4px;">📋 POD: ${linkedPod.customerName || ''}${linkedPod.notes ? ' — ' + linkedPod.notes : ''}</div>` : ''}`;
 
-                    const typeCell = linkedPod ? `${linkedPod.serviceType || 'Service'}` : 'Free text';
+                    const typeCell = linkedPod ? (linkedPod.serviceType || 'Service') : 'Free text';
                     const carbCell = linkedPod ? (linkedPod.carbsolve || '-') : '-';
                     const productsCell = linkedPod && linkedPod.products && linkedPod.products.length > 0
-                        ? linkedPod.products.map(p => `${p.product} x${p.quantity}`).join(', ')
-                        : '-';
-                    const notesCell = linkedPod
-                        ? (linkedPod.notes || notes || '-')
-                        : (notes || '-');
+                        ? linkedPod.products.map(p => `${p.product} x${p.quantity}`).join(', ') : '-';
+                    const notesCell = linkedPod ? (linkedPod.notes || notes || '-') : (notes || '-');
 
                     const actionAttrib = (actionInfo && actionInfo.actioned_by)
-                        ? `<div style="font-size: 10px; color: #9ca3af; margin-top: 3px;">${actionInfo.actioned_by}${actionInfo.actioned_at ? ' · ' + new Date(actionInfo.actioned_at).toLocaleString('en-AU', { timeZone: 'Australia/Brisbane', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}</div>`
+                        ? `<div style="font-size:10px;color:#9ca3af;margin-top:3px;">${actionInfo.actioned_by}${actionInfo.actioned_at ? ' · ' + new Date(actionInfo.actioned_at).toLocaleString('en-AU', { timeZone: 'Australia/Brisbane', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}</div>`
                         : '';
 
                     const statusBadge = linkedPod
                         ? '<span style="background:#fef3c7;color:#92400e;padding:2px 6px;border-radius:8px;font-size:10px;">Ad-Hoc POD</span>'
                         : isDone
                         ? `<span style="background:#dcfce7;color:#166534;padding:2px 6px;border-radius:8px;font-size:10px;">✅ Done</span>${actionAttrib}`
-                        : isCancelled
-                        ? `<span style="background:#fee2e2;color:#991b1b;padding:2px 6px;border-radius:8px;font-size:10px;">❌ Not done</span>${actionAttrib}`
-                        : '<span style="color:#9ca3af;font-size:10px;">— Pending</span>';
+                        : `<span style="background:#fee2e2;color:#991b1b;padding:2px 6px;border-radius:8px;font-size:10px;">❌ Not done</span>${actionAttrib}`;
 
-                    // Invoice status for this calendar event (stored in localStorage)
                     const invStatus = getCalEventInvoiceStatus(ev.id, selectedDate);
                     const isInvoiced = invStatus.invoiced || false;
                     const isCheckedSent = invStatus.checkedSent || false;
@@ -10803,36 +10853,30 @@
                         tr.onclick = () => viewPODFromOverview(linkedPod.id);
                     }
                     tr.innerHTML = `
-                        <td style="padding: 12px; text-align: center; font-size: 16px;">
-                            ${linkedPod ? '✓' : isDone ? '✅' : isCancelled ? '❌' : '—'}
-                        </td>
-                        <td style="padding: 12px; text-align: center;" onclick="event.stopPropagation();">
+                        <td style="padding:12px;text-align:center;font-size:16px;">${isDone ? '✅' : '❌'}</td>
+                        <td style="padding:12px;text-align:center;" onclick="event.stopPropagation();">
                             <input type="checkbox" ${isInvoiced ? 'checked' : ''}
-                                onchange="toggleCalEventInvoice('${ev.id}', '${selectedDate}', 'invoiced', this.checked)"
+                                onchange="toggleCalEventInvoice('${ev.id}','${selectedDate}','invoiced',this.checked)"
                                 style="width:16px;height:16px;cursor:pointer;">
                         </td>
-                        <td style="padding: 12px; text-align: center;" onclick="event.stopPropagation();">
+                        <td style="padding:12px;text-align:center;" onclick="event.stopPropagation();">
                             <input type="checkbox" ${isCheckedSent ? 'checked' : ''} ${!isInvoiced ? 'disabled' : ''}
-                                onchange="toggleCalEventInvoice('${ev.id}', '${selectedDate}', 'checkedSent', this.checked)"
+                                onchange="toggleCalEventInvoice('${ev.id}','${selectedDate}','checkedSent',this.checked)"
                                 style="width:16px;height:16px;cursor:pointer;${!isInvoiced ? 'opacity:0.4;' : ''}">
                         </td>
-                        <td style="padding: 12px;">${companyCell}</td>
-                        <td style="padding: 12px; color: #6b7280; font-size: 12px;">${typeCell}</td>
-                        <td style="padding: 12px;">${carbCell}</td>
-                        <td style="padding: 12px;">${productsCell}</td>
-                        <td style="padding: 12px; font-size: 12px; font-style: italic;">${notesCell}</td>
-                        <td style="padding: 12px; text-align: center;">${statusBadge}</td>
+                        <td style="padding:12px;">${companyCell}</td>
+                        <td style="padding:12px;color:#6b7280;font-size:12px;">${typeCell}</td>
+                        <td style="padding:12px;">${carbCell}</td>
+                        <td style="padding:12px;">${productsCell}</td>
+                        <td style="padding:12px;font-size:12px;font-style:italic;">${notesCell}</td>
+                        <td style="padding:12px;text-align:center;">${statusBadge}</td>
                     `;
-                    tbody.appendChild(tr);
+                    calTbody.appendChild(tr);
                 });
+            } else {
+                calSection.style.display = 'none';
             }
-            
-            // Hide the regular ad-hoc and tank movement sections
-            const adHocSection = document.getElementById('adHocPodsSection');
-            if (adHocSection) adHocSection.style.display = 'none';
-            const tankSection = document.getElementById('tankMovementsSection');
-            if (tankSection) tankSection.style.display = 'none';
-            
+
             document.getElementById('adminRunsheetContainer').style.display = 'block';
         }
         
