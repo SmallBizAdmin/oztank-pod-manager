@@ -9875,7 +9875,7 @@
                 address: document.getElementById('newCustomerAddress').value,
                 phone: document.getElementById('newCustomerPhone').value,
                 serviceType: document.getElementById('newCustomerServiceType').value,
-                carbsolve: document.getElementById('newCustomerCarbsolve').value,
+                carbsolve: (() => { const v = document.getElementById('newCustomerCarbsolve').value; return v ? `Carbsolve - ${v}` : ''; })(),
                 waste: document.getElementById('newCustomerWaste').value,
                 code: document.getElementById('newCustomerCode').value,
                 notes: document.getElementById('newCustomerNotes').value,
@@ -10074,7 +10074,8 @@
             customer.address = document.getElementById(`edit-address-${id}`).value;
             customer.phone = document.getElementById(`edit-phone-${id}`).value;
             customer.serviceType = document.getElementById(`edit-servicetype-${id}`).value;
-            customer.carbsolve = document.getElementById(`edit-carbsolve-${id}`).value;
+            const rawCarbsolve = document.getElementById(`edit-carbsolve-${id}`).value;
+            customer.carbsolve = rawCarbsolve ? `Carbsolve - ${rawCarbsolve}` : '';
             customer.waste = document.getElementById(`edit-waste-${id}`).value;
             customer.invoiceType = document.getElementById(`edit-invoicetype-${id}`).value;
             customer.code = document.getElementById(`edit-code-${id}`).value;
