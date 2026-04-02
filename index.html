@@ -4228,6 +4228,7 @@
             calendarEvents: [],
             calendarEventStatus: {},
                 calendarEventNotes: {},
+                calendarEventInvoiceNotes: {},
             calendarSyncSettings: null,
             invoiceEntries: [],
             
@@ -4404,7 +4405,8 @@
                         tankLabel: p.tank_label || null,
                         tankServices: p.tank_services || null,
                         completedBy: p.completed_by || null,
-                        completedAt: p.completed_at || null
+                        completedAt: p.completed_at || null,
+                        invoiceNotes: p.invoice_notes || null
                     }));
                     
                     // Also load scheduled days for the month
@@ -4513,7 +4515,8 @@
                         tankLabel: p.tank_label || null,
                         tankServices: p.tank_services || null,
                         completedBy: p.completed_by || null,
-                        completedAt: p.completed_at || null
+                        completedAt: p.completed_at || null,
+                        invoiceNotes: p.invoice_notes || null
                     }));
                 } catch (error) {
                     console.error('Error loading PODs for specific month:', error);
@@ -4584,10 +4587,11 @@
                 try {
                     const { data, error } = await supabase
                         .from('calendar_event_status')
-                        .select('event_id, status, notes, actioned_by, actioned_at');
+                        .select('event_id, status, notes, actioned_by, actioned_at, invoice_notes');
                     if (error) throw error;
                     this.calendarEventStatus = {};
                     this.calendarEventNotes = {};
+                    this.calendarEventInvoiceNotes = {};
                     (data || []).forEach(row => {
                         if (row.status) this.calendarEventStatus[row.event_id] = {
                             status: row.status,
@@ -4595,6 +4599,7 @@
                             actioned_at: row.actioned_at || null
                         };
                         if (row.notes) this.calendarEventNotes[row.event_id] = row.notes;
+                        if (row.invoice_notes) this.calendarEventInvoiceNotes[row.event_id] = row.invoice_notes;
                     });
                 } catch (e) {
                     console.warn('loadCalendarEventStatus error:', e);
@@ -5046,7 +5051,8 @@
                         reason: tm.reason,
                         sourceRunDay: tm.source_run_day,
                         calendarEventId: tm.calendar_event_id || null,
-                        completedBy: tm.completed_by || null
+                        completedBy: tm.completed_by || null,
+                        invoiceNotes: tm.invoice_notes || null
                     }));
                     
                     console.log(`Loaded ${this.tankMovements.length} tank movements`);
@@ -6881,6 +6887,81 @@
         }
         // ==================== END MONTHLY INVOICES ====================
         
+        // ==================== INVOICE NOTES ====================
+        function openInvoiceNoteEditor(type, id) {
+            const tr = document.getElementById(`invnote_tr_${type}_${id}`);
+            const ta = document.getElementById(`invnote_ta_${type}_${id}`);
+            if (!tr || !ta) return;
+            tr.style.display = 'table-row';
+            ta.style.display = 'block';
+            ta.focus();
+        }
+
+        async function saveInvoiceNote(type, id, value) {
+            const note = value.trim();
+            const ta = document.getElementById(`invnote_ta_${type}_${id}`);
+            const displayEl = document.getElementById(`invnote_display_${type}_${id}`);
+            const tr = document.getElementById(`invnote_tr_${type}_${id}`);
+
+            if (ta) ta.style.display = 'none';
+
+            if (displayEl) {
+                if (note) {
+                    displayEl.innerHTML = `<span style="font-size:11px;color:#6b7280;font-style:italic;">📝 ${note.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</span>`;
+                    displayEl.style.display = 'block';
+                    if (tr) tr.style.display = 'table-row';
+                } else {
+                    displayEl.style.display = 'none';
+                    if (tr) tr.style.display = 'none';
+                }
+            }
+
+            let table, pkCol;
+            if (type === 'pod') { table = 'pods'; pkCol = 'id'; }
+            else if (type === 'cal') { table = 'calendar_event_status'; pkCol = 'event_id'; }
+            else if (type === 'tm') { table = 'tank_movements'; pkCol = 'id'; }
+
+            try {
+                const { error } = await supabase.from(table).update({ invoice_notes: note || null }).eq(pkCol, id);
+                if (error) throw error;
+                if (type === 'pod') {
+                    const pod = db.pods.find(p => p.id == id);
+                    if (pod) pod.invoiceNotes = note || null;
+                } else if (type === 'tm') {
+                    const tm = db.tankMovements.find(t => t.id == id);
+                    if (tm) tm.invoiceNotes = note || null;
+                } else if (type === 'cal') {
+                    if (!db.calendarEventInvoiceNotes) db.calendarEventInvoiceNotes = {};
+                    db.calendarEventInvoiceNotes[id] = note || null;
+                }
+                showToast('✓ Note saved', 'success');
+            } catch (e) {
+                console.error('Error saving invoice note:', e);
+                showToast('Error saving note: ' + e.message, 'error');
+            }
+        }
+
+        function invoicePencilBtn(type, id) {
+            return `<button onclick="event.stopPropagation();openInvoiceNoteEditor('${type}',${id})" style="background:none;border:none;cursor:pointer;color:#d1d5db;font-size:13px;padding:2px 4px;line-height:1;" title="Add invoice note">✏️</button>`;
+        }
+
+        function invoiceNoteRowHtml(type, id, note, colspan) {
+            const hasNote = !!(note && note.trim());
+            const safeNote = hasNote ? note.replace(/</g,'&lt;').replace(/>/g,'&gt;') : '';
+            return `<tr id="invnote_tr_${type}_${id}" style="display:${hasNote ? 'table-row' : 'none'};">
+                <td colspan="${colspan}" style="padding:0 12px 6px 52px;border-bottom:1px solid #e5e7eb;">
+                    <div id="invnote_display_${type}_${id}" style="${hasNote ? '' : 'display:none;'}">
+                        <span style="font-size:11px;color:#6b7280;font-style:italic;">📝 ${safeNote}</span>
+                    </div>
+                    <textarea id="invnote_ta_${type}_${id}" rows="2"
+                        style="display:none;width:100%;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px;resize:vertical;margin-top:4px;"
+                        placeholder="Invoice note..."
+                        onblur="saveInvoiceNote('${type}',${id},this.value)">${safeNote}</textarea>
+                </td>
+            </tr>`;
+        }
+        // ==================== END INVOICE NOTES ====================
+
         function renderAdminCalendar() {
             const grid = document.getElementById('adminCalendarGrid');
             if (!grid) return;
@@ -10567,6 +10648,7 @@
                     ? `<span style="background: #fff7ed; color: #c2410c; border: 2px solid #f97316; padding: 3px 8px; border-radius: 6px; font-weight: 700; white-space: nowrap;">⚠️ ${carbsolve}</span><br><span style="font-size: 10px; color: #9ca3af;">default: ${customerDefaultCarbsolve}</span>`
                     : carbsolve;
 
+                const podInvNote = pod ? (pod.invoiceNotes || null) : null;
                 tr.innerHTML = `
                     <td style="padding: 12px; text-align: center;">
                         ${statusDisplay}
@@ -10582,9 +10664,15 @@
                     <td style="padding: 12px;">${carbsolveDisplay}</td>
                     <td style="padding: 12px;">${productsStr}</td>
                     <td style="padding: 12px; font-size: 12px; font-style: italic;">${notesHtml}</td>
-                    <td style="padding: 12px; text-align: center;">${statusBadgeHtml}</td>
+                    <td style="padding: 12px; text-align: center;">
+                        ${statusBadgeHtml}
+                        ${pod ? invoicePencilBtn('pod', pod.id) : ''}
+                    </td>
                 `;
                 tbody.appendChild(tr);
+                if (pod) {
+                    tbody.insertAdjacentHTML('beforeend', invoiceNoteRowHtml('pod', pod.id, podInvNote, 9));
+                }
             });
             
             // Update select all checkbox state
@@ -10735,9 +10823,13 @@
                         <td style="padding: 12px;">${typeIcon} ${pod.serviceType || 'Service'}</td>
                         <td style="padding: 12px;">${carbsolve}</td>
                         <td style="padding: 12px;">${productsStr}</td>
-                        <td style="padding: 12px; font-size: 12px; font-style: italic;">${pod.notes || '-'}</td>
+                        <td style="padding: 12px; font-size: 12px; font-style: italic;">
+                            ${pod.notes || '-'}
+                            ${invoicePencilBtn('pod', pod.id)}
+                        </td>
                     `;
                     adHocTbody.appendChild(tr);
+                    adHocTbody.insertAdjacentHTML('beforeend', invoiceNoteRowHtml('pod', pod.id, pod.invoiceNotes || null, 8));
                 });
             } else {
                 adHocSection.style.display = 'none';
@@ -10776,10 +10868,12 @@
                         <td style="padding: 10px;">${tm.carbsolve || '-'}</td>
                         <td style="padding: 10px; font-size: 12px; font-style: italic;">${tm.reason || '-'}</td>
                         <td style="padding: 8px; text-align: center;">
+                            ${invoicePencilBtn('tm', tm.id)}
                             <button onclick="deleteTankMovement(${tm.id}, '${(tm.customerName||'').replace(/'/g,"\\'")}')" style="background:none;border:none;cursor:pointer;color:#dc2626;font-size:16px;" title="Delete">🗑️</button>
                         </td>
                     `;
                     tankTbody.appendChild(tr);
+                    tankTbody.insertAdjacentHTML('beforeend', invoiceNoteRowHtml('tm', tm.id, tm.invoiceNotes || null, 8));
                 });
             } else {
                 tankSection.style.display = 'none';
@@ -10875,6 +10969,7 @@
                         tr.title = 'Click to view/edit POD';
                         tr.onclick = () => viewPODFromOverview(linkedPod.id);
                     }
+                    const calInvNote = (db.calendarEventInvoiceNotes || {})[ev.id] || null;
                     tr.innerHTML = `
                         <td style="padding:12px;text-align:center;font-size:16px;">${isDone ? '✅' : '❌'}</td>
                         <td style="padding:12px;text-align:center;" onclick="event.stopPropagation();">
@@ -10892,9 +10987,13 @@
                         <td style="padding:12px;">${carbCell}</td>
                         <td style="padding:12px;">${productsCell}</td>
                         <td style="padding:12px;font-size:12px;font-style:italic;">${notesCell}</td>
-                        <td style="padding:12px;text-align:center;">${statusBadge}</td>
+                        <td style="padding:12px;text-align:center;">
+                            ${statusBadge}
+                            ${invoicePencilBtn('cal', ev.id)}
+                        </td>
                     `;
                     calTbody.appendChild(tr);
+                    calTbody.insertAdjacentHTML('beforeend', invoiceNoteRowHtml('cal', ev.id, calInvNote, 9));
                 });
             } else {
                 calSection.style.display = 'none';
@@ -11029,9 +11128,13 @@
                     <td style="padding: 12px;">${typeIcon} ${pod.serviceType || 'Service'}</td>
                     <td style="padding: 12px;">${carbsolve}</td>
                     <td style="padding: 12px;">${productsStr}</td>
-                    <td style="padding: 12px; font-size: 12px; font-style: italic;">${pod.notes || '-'}</td>
+                    <td style="padding: 12px; font-size: 12px; font-style: italic;">
+                        ${pod.notes || '-'}
+                        ${invoicePencilBtn('pod', pod.id)}
+                    </td>
                 `;
                 tbody.appendChild(tr);
+                tbody.insertAdjacentHTML('beforeend', invoiceNoteRowHtml('pod', pod.id, pod.invoiceNotes || null, 8));
             });
         }
         
@@ -11090,10 +11193,12 @@
                     <td style="padding: 10px;">${tm.carbsolve || '-'}</td>
                     <td style="padding: 10px; font-size: 12px; font-style: italic;">${tm.reason || '-'}</td>
                     <td style="padding: 8px; text-align: center;">
+                        ${invoicePencilBtn('tm', tm.id)}
                         <button onclick="deleteTankMovement(${tm.id}, '${(tm.customerName || '').replace(/'/g, "\\'")}')" style="background: none; border: none; cursor: pointer; color: #dc2626; font-size: 16px;" title="Delete tank movement">🗑️</button>
                     </td>
                 `;
                 tbody.appendChild(tr);
+                tbody.insertAdjacentHTML('beforeend', invoiceNoteRowHtml('tm', tm.id, tm.invoiceNotes || null, 8));
             });
         }
         
