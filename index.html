@@ -5662,8 +5662,9 @@
                     if (document.getElementById('homeView')?.classList.contains('active')) {
                         renderRunDays();
                     }
-                    // Re-render admin runsheet if open
-                    if (document.getElementById('adminRunsheetContainer')?.style.display !== 'none') {
+                    // Re-render admin runsheet if open — but skip if we just saved an invoice note
+                    // (the DOM is already updated in-place; a full re-render would flicker unnecessarily)
+                    if (!window._savingInvoiceNote && document.getElementById('adminRunsheetContainer')?.style.display !== 'none') {
                         loadAdminRunsheet();
                     }
                 })
@@ -6922,6 +6923,7 @@
             else if (type === 'tm') { table = 'tank_movements'; pkCol = 'id'; }
 
             try {
+                window._savingInvoiceNote = true;
                 const { error } = await supabase.from(table).update({ invoice_notes: note || null }).eq(pkCol, id);
                 if (error) throw error;
                 if (type === 'pod') {
@@ -6938,6 +6940,8 @@
             } catch (e) {
                 console.error('Error saving invoice note:', e);
                 showToast('Error saving note: ' + e.message, 'error');
+            } finally {
+                setTimeout(() => { window._savingInvoiceNote = false; }, 3000);
             }
         }
 
