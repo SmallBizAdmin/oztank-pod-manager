@@ -4033,6 +4033,7 @@
             calendarUrl: '',
             invoiceStatus: {},        // pod_id → { invoiced, checkedSent }
             skippedInvoiceStatus: {}, // "customerId|date" → { invoiced, checkedSent }
+            skippedInvoiceNotes: {}, // "customerId|date" → invoice_notes string
             serviceDayInvoiceStatus: {},
             tankMovements: [],
             monthlySkips: {}, // Tracks customers skipped for specific run dates (key: "customerId-YYYY-MM-DD")
@@ -4461,7 +4462,8 @@
                         tankLabel: p.tank_label || null,
                         tankServices: p.tank_services || null,
                         completedBy: p.completed_by || null,
-                        completedAt: p.completed_at || null
+                        completedAt: p.completed_at || null,
+                        invoiceNotes: p.invoice_notes || null
                     }));
                     
                     console.log(`Loaded ${this.pods.length} PODs for week starting ${startStr}`);
@@ -4923,6 +4925,7 @@
                         .from('skipped_invoice_status')
                         .select('*');
                     this.skippedInvoiceStatus = {};
+                    this.skippedInvoiceNotes = {};
                     if (!error && data) {
                         data.forEach(row => {
                             const key = `${row.customer_id}|${row.service_date}`;
@@ -4930,11 +4933,13 @@
                                 invoiced: row.invoiced,
                                 checkedSent: row.checked_sent || false
                             };
+                            if (row.invoice_notes) this.skippedInvoiceNotes[key] = row.invoice_notes;
                         });
                     }
                 } catch (e) {
                     console.log('skipped_invoice_status not available:', e);
                     this.skippedInvoiceStatus = {};
+                    this.skippedInvoiceNotes = {};
                 }
             },
             
@@ -6889,8 +6894,8 @@
         // ==================== END MONTHLY INVOICES ====================
         
         // ==================== INVOICE NOTES ====================
-        function openInvoiceNoteEditor(type, id) {
-            const ta = document.getElementById(`invnote_ta_${type}_${id}`);
+        function openInvoiceNoteEditor(type, elId) {
+            const ta = document.getElementById(`invnote_ta_${type}_${elId}`);
             if (!ta) return;
             ta.style.display = 'block';
             ta.focus();
@@ -6898,8 +6903,9 @@
 
         async function saveInvoiceNote(type, id, value) {
             const note = value.trim();
-            const ta = document.getElementById(`invnote_ta_${type}_${id}`);
-            const displayEl = document.getElementById(`invnote_display_${type}_${id}`);
+            const elId = String(id).replace(/[|]/g, '__');
+            const ta = document.getElementById(`invnote_ta_${type}_${elId}`);
+            const displayEl = document.getElementById(`invnote_display_${type}_${elId}`);
 
             if (ta) ta.style.display = 'none';
 
@@ -6921,17 +6927,30 @@
 
             try {
                 window._savingInvoiceNote = true;
-                const { error } = await supabase.from(table).update({ invoice_notes: note || null }).eq(pkCol, id);
-                if (error) throw error;
-                if (type === 'pod') {
-                    const pod = db.pods.find(p => p.id == id);
-                    if (pod) pod.invoiceNotes = note || null;
-                } else if (type === 'tm') {
-                    const tm = db.tankMovements.find(t => t.id == id);
-                    if (tm) tm.invoiceNotes = note || null;
-                } else if (type === 'cal') {
-                    if (!db.calendarEventInvoiceNotes) db.calendarEventInvoiceNotes = {};
-                    db.calendarEventInvoiceNotes[id] = note || null;
+                if (type === 'skip') {
+                    // id is "customerId|date"
+                    const [customerId, serviceDate] = String(id).split('|');
+                    const { error } = await supabase
+                        .from('skipped_invoice_status')
+                        .upsert({ customer_id: customerId, service_date: serviceDate, invoice_notes: note || null },
+                                 { onConflict: 'customer_id,service_date' });
+                    if (error) throw error;
+                    const key = `${customerId}|${serviceDate}`;
+                    if (!db.skippedInvoiceNotes) db.skippedInvoiceNotes = {};
+                    db.skippedInvoiceNotes[key] = note || null;
+                } else {
+                    const { error } = await supabase.from(table).update({ invoice_notes: note || null }).eq(pkCol, id);
+                    if (error) throw error;
+                    if (type === 'pod') {
+                        const pod = db.pods.find(p => p.id == id);
+                        if (pod) pod.invoiceNotes = note || null;
+                    } else if (type === 'tm') {
+                        const tm = db.tankMovements.find(t => t.id == id);
+                        if (tm) tm.invoiceNotes = note || null;
+                    } else if (type === 'cal') {
+                        if (!db.calendarEventInvoiceNotes) db.calendarEventInvoiceNotes = {};
+                        db.calendarEventInvoiceNotes[id] = note || null;
+                    }
                 }
                 showToast('✓ Note saved', 'success');
             } catch (e) {
@@ -6943,18 +6962,20 @@
         }
 
         function invoicePencilBtn(type, id) {
-            return `<button onclick="event.stopPropagation();openInvoiceNoteEditor('${type}',${id})" style="background:none;border:none;cursor:pointer;color:#d1d5db;font-size:13px;padding:2px 4px;line-height:1;" title="Add invoice note">✏️</button>`;
+            const elId = String(id).replace(/[|]/g, '__');
+            return `<button onclick="event.stopPropagation();openInvoiceNoteEditor('${type}','${elId}')" style="background:none;border:none;cursor:pointer;color:#d1d5db;font-size:13px;padding:2px 4px;line-height:1;" title="Add invoice note">✏️</button>`;
         }
 
         function invoiceNoteInlineHtml(type, id, note) {
             const hasNote = !!(note && note.trim());
             const safeNote = hasNote ? note.replace(/</g,'&lt;').replace(/>/g,'&gt;') : '';
+            const elId = String(id).replace(/[|]/g, '__');
             return `<div style="margin-top:5px;">
-                <div id="invnote_display_${type}_${id}" style="${hasNote ? '' : 'display:none;'}font-size:13px;color:#d97706;font-weight:600;font-style:italic;">📝 ${safeNote}</div>
-                <textarea id="invnote_ta_${type}_${id}" rows="2"
+                <div id="invnote_display_${type}_${elId}" style="${hasNote ? '' : 'display:none;'}font-size:13px;color:#d97706;font-weight:600;font-style:italic;">📝 ${safeNote}</div>
+                <textarea id="invnote_ta_${type}_${elId}" rows="2"
                     style="display:none;width:100%;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px;resize:vertical;margin-top:4px;"
                     placeholder="Invoice note..."
-                    onblur="saveInvoiceNote('${type}',${id},this.value)">${safeNote}</textarea>
+                    onblur="saveInvoiceNote('${type}','${id}',this.value)">${safeNote}</textarea>
             </div>`;
         }
         // ==================== END INVOICE NOTES ====================
@@ -10645,7 +10666,12 @@
                     ? `<span style="background: #fff7ed; color: #c2410c; border: 2px solid #f97316; padding: 3px 8px; border-radius: 6px; font-weight: 700; white-space: nowrap;">⚠️ ${carbsolve}</span><br><span style="font-size: 10px; color: #9ca3af;">default: ${customerDefaultCarbsolve}</span>`
                     : carbsolve;
 
+                const skipKey = `${customer.id}|${selectedDate}`;
                 const podInvNote = pod ? (pod.invoiceNotes || null) : null;
+                const skipInvNote = !pod ? ((db.skippedInvoiceNotes || {})[skipKey] || null) : null;
+                const noteType = pod ? 'pod' : 'skip';
+                const noteId = pod ? pod.id : skipKey;
+                const noteVal = pod ? podInvNote : skipInvNote;
                 tr.innerHTML = `
                     <td style="padding: 12px; text-align: center;">
                         ${statusDisplay}
@@ -10658,7 +10684,7 @@
                     </td>
                     <td style="padding: 12px;">
                         ${customerNameDisplay}
-                        ${pod ? invoiceNoteInlineHtml('pod', pod.id, podInvNote) : ''}
+                        ${invoiceNoteInlineHtml(noteType, noteId, noteVal)}
                     </td>
                     <td style="padding: 12px;">${serviceType}</td>
                     <td style="padding: 12px;">${carbsolveDisplay}</td>
@@ -10666,7 +10692,7 @@
                     <td style="padding: 12px; font-size: 12px; font-style: italic;">${notesHtml}</td>
                     <td style="padding: 12px; text-align: center;">
                         ${statusBadgeHtml}
-                        ${pod ? invoicePencilBtn('pod', pod.id) : ''}
+                        ${invoicePencilBtn(noteType, noteId)}
                     </td>
                 `;
                 tbody.appendChild(tr);
