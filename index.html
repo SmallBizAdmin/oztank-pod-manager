@@ -3617,7 +3617,7 @@
                             'July', 'August', 'September', 'October', 'November', 'December'];
         
         // Waste field values that are billing instructions, not physical collection types
-        const BILLING_WASTE_FLAGS = ['blanket invoice', 'use po', 'blanket po', 'po number', 'forward invoice', 'rent & ss'];
+        const BILLING_WASTE_FLAGS = ['blanket invoice', 'use po', 'blanket po', 'po number', 'forward invoice', 'rent & ss', 'del only'];
         function isBillingWaste(waste) {
             if (!waste) return false;
             return BILLING_WASTE_FLAGS.some(f => waste.toLowerCase().includes(f));
@@ -10051,6 +10051,7 @@
                             <option value="No Invoice" ${customer.invoiceType === 'No Invoice' ? 'selected' : ''}>No Invoice</option>
                             <option value="Forward Invoices" ${customer.invoiceType === 'Forward Invoices' ? 'selected' : ''}>📋 Forward Invoices</option>
                             <option value="Rent & SS" ${customer.invoiceType === 'Rent & SS' ? 'selected' : ''}>📋 Rent & SS</option>
+                            <option value="DEL ONLY" ${customer.invoiceType === 'DEL ONLY' ? 'selected' : ''}>📋 DEL ONLY</option>
                         </select>
                         
                         <input type="text" id="edit-code-${id}" value="${customer.code || ''}" placeholder="Code" style="width: 100%; padding: 8px; margin-bottom: 4px;">
