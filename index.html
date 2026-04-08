@@ -5845,17 +5845,9 @@
         // On mobile, WebSocket connections drop when the screen sleeps or the user
         // switches apps. This handler re-fetches calendar events the moment the app
         // comes back into focus, so workers always see current data without a manual refresh.
-        // A 2-hour periodic poll acts as an additional safety net.
+        // Periodic poll as safety net for dropped WebSocket connections.
+        // Apps Script now syncs every ~15 mins; poll every 2 hours is sufficient.
         function setupWorkerCalendarVisibilityRefresh() {
-            // Re-fetch when the tab/app becomes visible again
-            document.addEventListener('visibilitychange', async () => {
-                if (document.visibilityState === 'visible') {
-                    console.log('App resumed — refreshing worker calendar events');
-                    await loadWorkerCalendarEvents();
-                }
-            });
-
-            // Periodic safety-net poll every 2 hours (matches Apps Script sync interval)
             setInterval(async () => {
                 await loadWorkerCalendarEvents();
             }, 2 * 60 * 60 * 1000);
