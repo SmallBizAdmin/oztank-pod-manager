@@ -5686,7 +5686,11 @@
                         // Re-render admin runsheet if open — but skip if we just saved an invoice note
                         // (the DOM is already updated in-place; a full re-render would flicker unnecessarily)
                         if (!window._savingInvoiceNote && document.getElementById('adminRunsheetContainer')?.style.display !== 'none') {
-                            loadAdminRunsheet();
+                            if (currentAdminServiceDay === 'Ad-Hoc' && currentAdminDateFilter) {
+                                loadAdminAdHocRunsheet(currentAdminDateFilter);
+                            } else {
+                                loadAdminRunsheet();
+                            }
                         }
                     }, 5000);
                 })
@@ -5716,7 +5720,11 @@
                             });
                         }
                         if (document.getElementById('adminRunsheetContainer')?.style.display !== 'none') {
-                            loadAdminRunsheet();
+                            if (currentAdminServiceDay === 'Ad-Hoc' && currentAdminDateFilter) {
+                                loadAdminAdHocRunsheet(currentAdminDateFilter);
+                            } else {
+                                loadAdminRunsheet();
+                            }
                         }
                         if (document.getElementById('monthlyInvoicesContainer')?.style.display !== 'none' && currentInvoiceDate) {
                             renderInvoiceRunsheet(currentInvoiceDate);
@@ -5736,7 +5744,11 @@
                     _debounceSkippedInvoiceStatus = setTimeout(async () => {
                         await db.loadSkippedInvoiceStatus();
                         if (document.getElementById('adminRunsheetContainer')?.style.display !== 'none') {
-                            loadAdminRunsheet();
+                            if (currentAdminServiceDay === 'Ad-Hoc' && currentAdminDateFilter) {
+                                loadAdminAdHocRunsheet(currentAdminDateFilter);
+                            } else {
+                                loadAdminRunsheet();
+                            }
                         }
                         if (document.getElementById('monthlyInvoicesContainer')?.style.display !== 'none' && currentInvoiceDate) {
                             renderInvoiceRunsheet(currentInvoiceDate);
@@ -5802,7 +5814,11 @@
                             renderAdminChronologicalList();
                         }
                         if (document.getElementById('adminRunsheetContainer')?.style.display !== 'none') {
-                            loadAdminRunsheet();
+                            if (currentAdminServiceDay === 'Ad-Hoc' && currentAdminDateFilter) {
+                                loadAdminAdHocRunsheet(currentAdminDateFilter);
+                            } else {
+                                loadAdminRunsheet();
+                            }
                         }
                         if (document.getElementById('customerAdminList')) {
                             renderCustomerAdminList();
