@@ -8981,7 +8981,15 @@
                 card.style.opacity = '0.85';
             }
             
-            // For historical months, add a subtle indicator
+            // Apply worker colour (background + left border) for non-completed cards
+            if (!isFullyCompleted && serviceDay.employee) {
+                card.style.background = getWorkerColorLight(serviceDay.employee);
+                card.style.borderLeft = `4px solid ${getWorkerColor(serviceDay.employee)}`;
+            } else if (!isFullyCompleted) {
+                card.style.borderLeft = '4px solid #d1d5db';
+            }
+            
+            // For historical months, override left border with amber indicator
             if (isHistorical) {
                 card.style.borderLeft = '4px solid #f59e0b';
             }
