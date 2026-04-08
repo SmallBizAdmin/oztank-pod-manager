@@ -7136,17 +7136,21 @@
                 const pods = serviceDayPods[runDay] || [];
                 const scheduledDay = scheduledOnDate.find(sd => sd.serviceDayName === runDay);
                 
-                // For Ad-Hoc, count truly ad-hoc items + calendar events
-                let completedCount, totalCustomers;
+            // For Ad-Hoc, count truly ad-hoc items + calendar events
+            let completedCount, totalCustomers;
                 if (runDay === 'Ad-Hoc') {
-                    const tickedEvents = eventsOnDate.filter(ev => db.getCalendarEventStatus(ev.id));
-                    completedCount = trulyAdHocPods.length + trulyAdHocTankMoves.length + tickedEvents.length;
-                    totalCustomers = eventsOnDate.length; // total = all events
-                } else {
-                    completedCount = pods.length;
-                    totalCustomers = db.customers.filter(c => c.runDay === runDay).length;
-                }
-                
+            const tickedEvents = eventsOnDate.filter(ev => {
+                if (!db.getCalendarEventStatus(ev.id)) return false;
+            const hasLinkedTankMove = trulyAdHocTankMoves.some(tm => tm.calendarEventId == ev.id);
+            const hasLinkedPod = trulyAdHocPods.some(pod => pod.calendarEventId == ev.id);
+            return !hasLinkedTankMove && !hasLinkedPod;
+            });
+            completedCount = trulyAdHocPods.length + trulyAdHocTankMoves.length + tickedEvents.length;
+            totalCustomers = eventsOnDate.length;
+            } else {
+            completedCount = pods.length;
+            totalCustomers = db.customers.filter(c => c.runDay === runDay).length;
+             }
                 // Check if this service day is invoiced
                 const isInvoiced = db.isServiceDayInvoiced(runDay, dateStr);
                 
