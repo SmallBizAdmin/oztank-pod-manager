@@ -5675,17 +5675,20 @@
                 .channel('pods_changes')
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'pods' }, async (payload) => {
                     console.log('pods realtime change:', payload.eventType, payload.new?.id || payload.old?.id);
-                    // Reload pod data for the active period
-                    await refreshForPeriod();
-                    // Re-render home view if it's active
-                    if (document.getElementById('homeView')?.classList.contains('active')) {
-                        renderRunDays();
-                    }
-                    // Re-render admin runsheet if open — but skip if we just saved an invoice note
-                    // (the DOM is already updated in-place; a full re-render would flicker unnecessarily)
-                    if (!window._savingInvoiceNote && document.getElementById('adminRunsheetContainer')?.style.display !== 'none') {
-                        loadAdminRunsheet();
-                    }
+                    clearTimeout(_debouncePods);
+                    _debouncePods = setTimeout(async () => {
+                        // Reload pod data for the active period
+                        await refreshForPeriod();
+                        // Re-render home view if it's active
+                        if (document.getElementById('homeView')?.classList.contains('active')) {
+                            renderRunDays();
+                        }
+                        // Re-render admin runsheet if open — but skip if we just saved an invoice note
+                        // (the DOM is already updated in-place; a full re-render would flicker unnecessarily)
+                        if (!window._savingInvoiceNote && document.getElementById('adminRunsheetContainer')?.style.display !== 'none') {
+                            loadAdminRunsheet();
+                        }
+                    }, 5000);
                 })
                 .subscribe((status) => {
                     if (status === 'SUBSCRIBED') console.log('✅ Realtime: pods subscribed');
