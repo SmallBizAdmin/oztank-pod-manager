@@ -3158,6 +3158,8 @@
             'steve.oztank@gmail.com'
         ];
         
+        const ADMIN_EMAILS = ['steve.oztank@gmail.com'];
+        
         let currentUser = null;
         
         // Check for existing session on load (unlimited duration)
@@ -4287,7 +4289,8 @@
                             calendarOwner: ev.calendar_owner,
                             googleEventId: ev.google_event_id,
                             description: ev.description || '',
-                            location: ev.location || ''
+                            location: ev.location || '',
+                            quickComplete: ev.quick_complete || false
                         }));
                         
                         console.log(`Loaded ${this.scheduledDays.length} scheduled days and ${this.calendarEvents.length} other events for ${MONTH_NAMES[selectedMonth]} ${selectedYear}`);
@@ -4565,7 +4568,8 @@
                             calendarOwner: ev.calendar_owner,
                             googleEventId: ev.google_event_id,
                             description: ev.description || '',
-                            location: ev.location || ''
+                            location: ev.location || '',
+                            quickComplete: ev.quick_complete || false
                         }));
                         
                         console.log(`Loaded ${this.scheduledDays.length} scheduled days and ${this.calendarEvents.length} other events for week starting ${startStr}`);
@@ -7484,7 +7488,20 @@
             const status = db.getCalendarEventStatus(eventId);
             const statusText = status === 'completed' ? '✓ Completed' : status === 'cancelled' ? '✗ Cancelled' : '⏳ Pending';
             const statusColor = status === 'completed' ? '#16a34a' : status === 'cancelled' ? '#dc2626' : '#f59e0b';
+            const isAdmin = currentUser && ADMIN_EMAILS.includes(currentUser.email.toLowerCase());
             
+            // Admin toggle to flip quick_complete on this event
+            const adminToggleHtml = isAdmin ? `
+                <div style="margin-top: 12px; padding: 8px 12px; background: #f3f4f6; border-radius: 6px; display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                    <span style="font-size: 12px; color: #6b7280; font-weight: 600;">⚡ Quick Complete mode</span>
+                    <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 12px; color: #374151;">
+                        <input type="checkbox" id="quickCompleteToggle" ${event.quickComplete ? 'checked' : ''}
+                            onchange="setCalendarEventQuickComplete(${eventId}, this.checked)"
+                            style="width: 16px; height: 16px; cursor: pointer;">
+                        ${event.quickComplete ? 'ON' : 'OFF'}
+                    </label>
+                </div>` : '';
+
             // Create a modal overlay
             const existingModal = document.getElementById('calendarEventChooserModal');
             if (existingModal) existingModal.remove();
@@ -7492,44 +7509,117 @@
             const modal = document.createElement('div');
             modal.id = 'calendarEventChooserModal';
             modal.className = 'search-modal-overlay active';
-            modal.innerHTML = `
-                <div class="search-modal" style="max-width: 380px;">
-                    <div class="search-modal-header" style="background: #374151;">
-                        <h2>📋 Calendar Event</h2>
-                        <button class="search-modal-close" onclick="document.getElementById('calendarEventChooserModal').remove()">×</button>
-                    </div>
-                    <div class="search-modal-body">
-                        <div style="margin-bottom: 16px; padding: 12px; background: #f9fafb; border-radius: 8px;">
-                            <div style="font-weight: 700; font-size: 16px; color: #111827; margin-bottom: 4px;">${event.eventTitle}</div>
-                            <div style="font-size: 13px; color: #6b7280;">${dateStr} ${event.calendarOwner ? '• 👤 ' + event.calendarOwner : ''}</div>
-                            <div style="margin-top: 8px;"><span style="color: ${statusColor}; font-weight: 600;">${statusText}</span></div>
+
+            if (event.quickComplete) {
+                // ── Workflow 2: Quick Complete ──────────────────────────────
+                const storedNotes = db.getCalendarEventNotes(eventId);
+                modal.innerHTML = `
+                    <div class="search-modal" style="max-width: 380px;">
+                        <div class="search-modal-header" style="background: #374151;">
+                            <h2>📋 Calendar Event</h2>
+                            <button class="search-modal-close" onclick="document.getElementById('calendarEventChooserModal').remove()">×</button>
                         </div>
-                        
-                        <div style="display: flex; flex-direction: column; gap: 10px;">
-                            <button class="btn" onclick="document.getElementById('calendarEventChooserModal').remove(); toggleCalendarEventStatus('${eventId}', 'completed').then(() => showToast('✓ Marked complete', 'success'));" style="padding: 16px; font-size: 16px; background: #16a34a; font-weight: 700;">
-                                ✓ Confirm Complete
-                            </button>
-                            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 2px 0;">
-                            <button class="btn btn-adhoc" onclick="document.getElementById('calendarEventChooserModal').remove(); showCustomerSearchModal(null, 'Service', ${eventId});" style="padding: 16px; font-size: 16px;">
-                                🔧 Service
-                            </button>
-                            <button class="btn" onclick="document.getElementById('calendarEventChooserModal').remove(); showCustomerSearchModal(null, 'Delivery', ${eventId});" style="padding: 16px; font-size: 16px; background: #10b981;">
-                                📦 Delivery
-                            </button>
-                            <button class="btn" onclick="document.getElementById('calendarEventChooserModal').remove(); showCustomerSearchModal(null, 'Repairs', ${eventId});" style="padding: 16px; font-size: 16px; background: #ef4444;">
-                                🔨 Repairs
-                            </button>
-                            <button class="btn" onclick="document.getElementById('calendarEventChooserModal').remove(); showTankMovementModal(null, ${eventId});" style="padding: 16px; font-size: 16px; background: #0891b2;">
-                                🔄 Tank Movement
-                            </button>
-                            <button class="btn btn-secondary" onclick="showCalendarEventNotes('${eventId}', '${dateStr}')" style="padding: 16px; font-size: 16px;">
-                                📝 Enter Notes
-                            </button>
+                        <div class="search-modal-body">
+                            <div style="margin-bottom: 16px; padding: 12px; background: #f9fafb; border-radius: 8px;">
+                                <div style="font-weight: 700; font-size: 16px; color: #111827; margin-bottom: 4px;">${event.eventTitle}</div>
+                                <div style="font-size: 13px; color: #6b7280;">${dateStr} ${event.calendarOwner ? '• 👤 ' + event.calendarOwner : ''}</div>
+                                <div style="margin-top: 8px;"><span style="color: ${statusColor}; font-weight: 600;">${statusText}</span></div>
+                                ${adminToggleHtml}
+                            </div>
+
+                            <div style="display: flex; flex-direction: column; gap: 10px;">
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <label style="font-size: 13px; font-weight: 600; color: #374151;">Notes</label>
+                                    <textarea id="calEventQuickNotesInput" placeholder="Enter notes (optional)…" style="min-height: 90px; margin-top: 4px;">${storedNotes}</textarea>
+                                </div>
+                                <button class="btn" onclick="saveCalendarEventQuickComplete('${eventId}')" style="padding: 16px; font-size: 16px; background: #16a34a; font-weight: 700;">
+                                    ✓ Confirm Complete
+                                </button>
+                                <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 2px 0;">
+                                <button class="btn btn-adhoc" onclick="document.getElementById('calendarEventChooserModal').remove(); showCustomerSearchModal(null, 'Service', ${eventId});" style="padding: 16px; font-size: 16px;">
+                                    🔧 Service
+                                </button>
+                                <button class="btn" onclick="document.getElementById('calendarEventChooserModal').remove(); showCustomerSearchModal(null, 'Delivery', ${eventId});" style="padding: 16px; font-size: 16px; background: #10b981;">
+                                    📦 Delivery
+                                </button>
+                                <button class="btn" onclick="document.getElementById('calendarEventChooserModal').remove(); showCustomerSearchModal(null, 'Repairs', ${eventId});" style="padding: 16px; font-size: 16px; background: #ef4444;">
+                                    🔨 Repairs
+                                </button>
+                                <button class="btn" onclick="document.getElementById('calendarEventChooserModal').remove(); showTankMovementModal(null, ${eventId});" style="padding: 16px; font-size: 16px; background: #0891b2;">
+                                    🔄 Tank Movement
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            `;
+                `;
+            } else {
+                // ── Workflow 1: Full Documentation ──────────────────────────
+                modal.innerHTML = `
+                    <div class="search-modal" style="max-width: 380px;">
+                        <div class="search-modal-header" style="background: #374151;">
+                            <h2>📋 Calendar Event</h2>
+                            <button class="search-modal-close" onclick="document.getElementById('calendarEventChooserModal').remove()">×</button>
+                        </div>
+                        <div class="search-modal-body">
+                            <div style="margin-bottom: 16px; padding: 12px; background: #f9fafb; border-radius: 8px;">
+                                <div style="font-weight: 700; font-size: 16px; color: #111827; margin-bottom: 4px;">${event.eventTitle}</div>
+                                <div style="font-size: 13px; color: #6b7280;">${dateStr} ${event.calendarOwner ? '• 👤 ' + event.calendarOwner : ''}</div>
+                                <div style="margin-top: 8px;"><span style="color: ${statusColor}; font-weight: 600;">${statusText}</span></div>
+                                ${adminToggleHtml}
+                            </div>
+                            <p style="font-size: 13px; color: #6b7280; margin-bottom: 10px;">Select what was completed for this event:</p>
+                            <div style="display: flex; flex-direction: column; gap: 10px;">
+                                <button class="btn btn-adhoc" onclick="document.getElementById('calendarEventChooserModal').remove(); showCustomerSearchModal(null, 'Service', ${eventId});" style="padding: 16px; font-size: 16px;">
+                                    🔧 Service
+                                </button>
+                                <button class="btn" onclick="document.getElementById('calendarEventChooserModal').remove(); showCustomerSearchModal(null, 'Delivery', ${eventId});" style="padding: 16px; font-size: 16px; background: #10b981;">
+                                    📦 Delivery
+                                </button>
+                                <button class="btn" onclick="document.getElementById('calendarEventChooserModal').remove(); showCustomerSearchModal(null, 'Repairs', ${eventId});" style="padding: 16px; font-size: 16px; background: #ef4444;">
+                                    🔨 Repairs
+                                </button>
+                                <button class="btn" onclick="document.getElementById('calendarEventChooserModal').remove(); showTankMovementModal(null, ${eventId});" style="padding: 16px; font-size: 16px; background: #0891b2;">
+                                    🔄 Tank Movement
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
             document.body.appendChild(modal);
+        }
+
+        async function saveCalendarEventQuickComplete(eventId) {
+            const notes = document.getElementById('calEventQuickNotesInput').value.trim();
+            await db.saveCalendarEventNotes(eventId, notes || null);
+            await db.saveCalendarEventStatus(eventId, 'completed');
+            document.getElementById('calendarEventChooserModal').remove();
+            showToast('✓ Marked complete', 'success');
+            renderAdminCalendar();
+            loadWorkerCalendarEvents();
+            if (document.getElementById('adminListContainer').style.display !== 'none') {
+                renderAdminChronologicalList();
+            }
+        }
+
+        async function setCalendarEventQuickComplete(eventId, value) {
+            // Update DB
+            const { error } = await supabase
+                .from('worker_calendar_events')
+                .update({ quick_complete: value })
+                .eq('id', eventId);
+            if (error) {
+                showToast('Failed to update setting', 'error');
+                return;
+            }
+            // Update local cache
+            const ev = db.calendarEvents.find(e => e.id === parseInt(eventId));
+            if (ev) ev.quickComplete = value;
+            // Update the label next to the checkbox
+            const toggle = document.getElementById('quickCompleteToggle');
+            if (toggle) toggle.nextSibling.textContent = value ? ' ON' : ' OFF';
+            showToast(`Quick Complete ${value ? 'enabled' : 'disabled'}`, 'success');
         }
         
         function showCalendarEventNotes(eventId, dateStr) {
@@ -8146,7 +8236,8 @@
                         calendarOwner: ev.calendar_owner,
                         googleEventId: ev.google_event_id,
                         description: ev.description || '',
-                        location: ev.location || ''
+                        location: ev.location || '',
+                        quickComplete: ev.quick_complete || false
                     }));
                 }
                 
