@@ -3108,6 +3108,7 @@
                 <button class="search-modal-close" onclick="hideActionChooser()">×</button>
             </div>
             <div class="search-modal-body" style="display: flex; flex-direction: column; gap: 12px;">
+                <div id="actionChooserAdHocs" style="display: none;"></div>
                 <button class="btn btn-adhoc" onclick="hideActionChooser(); showCustomerSearchModal(currentRunDay, 'Service');" style="padding: 20px; font-size: 18px;">
                     🔧 Service
                 </button>
@@ -12367,17 +12368,13 @@
         }
         
         function showMainMenuAdHocWarning(type) {
-            if (confirm('⚠️ Creating an ad-hoc entry from the main menu.\n\nIf you are completing a service day, please add this from the runsheet via the ➕ button instead.\n\nContinue from main menu?')) {
-                currentServiceDate = null; // Always use today for main menu ad-hoc
-                showCustomerSearchModal(null, type); // null = main menu origin
-            }
+            currentServiceDate = null;
+            showCustomerSearchModal(null, type);
         }
         
         function showMainMenuTankWarning() {
-            if (confirm('⚠️ Creating a tank movement from the main menu.\n\nIf you are completing a service day, please add the tank movement from the runsheet via the ➕ button instead.\n\nContinue from main menu?')) {
-                currentServiceDate = null; // Always use today for main menu tank movements
-                showTankMovementModal(null); // null = main menu origin
-            }
+            currentServiceDate = null;
+            showTankMovementModal(null);
         }
         
         function showCustomerSearchModal(sourceRunDay = null, type = 'Service', calendarEventId = null) {
@@ -12864,11 +12861,70 @@
                 showToast('Cannot create entries for past months.', 'error');
                 return;
             }
+            // Inject My Ad-Hocs Today section
+            renderActionChooserAdHocs();
             document.getElementById('actionChooserModal').classList.add('active');
         }
         
-        function hideActionChooser() {
-            document.getElementById('actionChooserModal').classList.remove('active');
+        function renderActionChooserAdHocs() {
+            const today = formatDateLocal(new Date());
+            const userName = currentUser ? (currentUser.name || currentUser.email) : null;
+            const container = document.getElementById('actionChooserAdHocs');
+            if (!container || !userName) return;
+            
+            const myPods = db.pods.filter(p => p.date === today && p.isAdHoc && p.completedBy === userName);
+            const myTMs = db.tankMovements.filter(tm => tm.date === today && tm.completedBy === userName);
+            const total = myPods.length + myTMs.length;
+            
+            if (total === 0) {
+                container.style.display = 'none';
+                return;
+            }
+            container.style.display = 'block';
+            container.innerHTML = `
+                <button onclick="toggleActionChooserAdHocList()" style="width: 100%; padding: 10px 14px; background: #374151; border: none; border-radius: 10px; color: #f9fafb; font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: space-between; margin-bottom: 0;">
+                    <span>📋 My Ad-Hocs Today</span>
+                    <span style="background: #6b7280; color: white; border-radius: 10px; padding: 2px 8px; font-size: 12px;">${total}</span>
+                </button>
+                <div id="actionChooserAdHocList" style="display: none; margin-top: 6px; background: #f3f4f6; border-radius: 8px; padding: 8px; max-height: 200px; overflow-y: auto;">
+                    ${buildAdHocListHtmlLight(myPods, myTMs)}
+                </div>
+            `;
+        }
+
+        function toggleActionChooserAdHocList() {
+            const list = document.getElementById('actionChooserAdHocList');
+            if (list) list.style.display = list.style.display === 'none' ? 'block' : 'none';
+        }
+
+        function buildAdHocListHtmlLight(myPods, myTMs) {
+            let html = '';
+            myPods.forEach(pod => {
+                const customer = db.customers.find(c => c.id === pod.customerId);
+                const name = customer ? customer.name : (pod.customerName || 'Unknown');
+                const typeIcon = pod.serviceType === 'Delivery' ? '📦' : pod.serviceType === 'Repairs' ? '🔨' : '🔧';
+                html += `<div onclick="hideActionChooser(); viewPODFromOverview(${pod.id});" style="padding: 8px 10px; background: white; border-radius: 6px; margin-bottom: 5px; cursor: pointer; display: flex; align-items: center; gap: 8px; border: 1px solid #e5e7eb;">
+                    <span style="font-size: 15px;">${typeIcon}</span>
+                    <div style="flex: 1; min-width: 0;">
+                        <div style="font-size: 13px; font-weight: 600; color: #111827; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${name}</div>
+                        <div style="font-size: 11px; color: #6b7280;">${pod.serviceType || 'Service'}</div>
+                    </div>
+                    <span style="color: #9ca3af;">›</span>
+                </div>`;
+            });
+            myTMs.forEach(tm => {
+                const customer = db.customers.find(c => c.id === tm.customerId);
+                const name = customer ? customer.name : (tm.customerName || 'Unknown');
+                html += `<div onclick="hideActionChooser(); viewTankMovementDetail(${tm.id});" style="padding: 8px 10px; background: white; border-radius: 6px; margin-bottom: 5px; cursor: pointer; display: flex; align-items: center; gap: 8px; border: 1px solid #e5e7eb;">
+                    <span style="font-size: 15px;">🔄</span>
+                    <div style="flex: 1; min-width: 0;">
+                        <div style="font-size: 13px; font-weight: 600; color: #111827; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${name}</div>
+                        <div style="font-size: 11px; color: #6b7280;">Tank ${tm.movementType || 'Movement'}</div>
+                    </div>
+                    <span style="color: #9ca3af;">›</span>
+                </div>`;
+            });
+            return html;
         }
         
         // Floating Action Button functions
@@ -12888,67 +12944,63 @@
             const userName = currentUser ? (currentUser.name || currentUser.email) : null;
             if (!userName) return;
             
-            // Find today's ad-hoc PODs by this user
-            const myPods = db.pods.filter(p =>
-                p.date === today &&
-                p.isAdHoc &&
-                p.completedBy === userName
-            );
+            const myPods = db.pods.filter(p => p.date === today && p.isAdHoc && p.completedBy === userName);
+            const myTMs = db.tankMovements.filter(tm => tm.date === today && tm.completedBy === userName);
             
-            // Find today's ad-hoc tank movements by this user
-            const myTMs = db.tankMovements.filter(tm =>
-                tm.date === today &&
-                tm.completedBy === userName
-            );
-            
-            // Remove existing section if present
             const existing = document.getElementById('fabAdHocsToday');
             if (existing) existing.remove();
             
-            if (myPods.length === 0 && myTMs.length === 0) return;
+            const total = myPods.length + myTMs.length;
+            if (total === 0) return;
             
             const section = document.createElement('div');
             section.id = 'fabAdHocsToday';
-            section.style.cssText = 'margin-bottom: 8px; background: #1f2937; border-radius: 10px; padding: 10px; max-height: 220px; overflow-y: auto;';
-            
-            section.innerHTML = `<div style="font-size: 11px; font-weight: 700; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;">📋 My Ad-Hocs Today</div>`;
-            
+            section.style.cssText = 'margin-bottom: 8px;';
+            section.innerHTML = `
+                <button onclick="toggleFabAdHocList()" style="width: 100%; padding: 10px 14px; background: #374151; border: none; border-radius: 10px; color: #f9fafb; font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: space-between;">
+                    <span>📋 My Ad-Hocs Today</span>
+                    <span style="background: #6b7280; color: white; border-radius: 10px; padding: 2px 8px; font-size: 12px;">${total}</span>
+                </button>
+                <div id="fabAdHocList" style="display: none; margin-top: 6px; background: #1f2937; border-radius: 8px; padding: 8px; max-height: 200px; overflow-y: auto;">
+                    ${buildAdHocListHtml(myPods, myTMs)}
+                </div>
+            `;
+            menu.insertBefore(section, menu.firstChild);
+        }
+
+        function toggleFabAdHocList() {
+            const list = document.getElementById('fabAdHocList');
+            if (list) list.style.display = list.style.display === 'none' ? 'block' : 'none';
+        }
+
+        function buildAdHocListHtml(myPods, myTMs) {
+            let html = '';
             myPods.forEach(pod => {
                 const customer = db.customers.find(c => c.id === pod.customerId);
                 const name = customer ? customer.name : (pod.customerName || 'Unknown');
                 const typeIcon = pod.serviceType === 'Delivery' ? '📦' : pod.serviceType === 'Repairs' ? '🔨' : '🔧';
-                const item = document.createElement('div');
-                item.style.cssText = 'padding: 8px 10px; background: #374151; border-radius: 6px; margin-bottom: 6px; cursor: pointer; display: flex; align-items: center; gap: 8px;';
-                item.innerHTML = `
+                html += `<div onclick="closeFabMenu(); viewPODFromOverview(${pod.id});" style="padding: 8px 10px; background: #374151; border-radius: 6px; margin-bottom: 5px; cursor: pointer; display: flex; align-items: center; gap: 8px;">
                     <span style="font-size: 15px;">${typeIcon}</span>
                     <div style="flex: 1; min-width: 0;">
                         <div style="font-size: 13px; font-weight: 600; color: #f9fafb; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${name}</div>
                         <div style="font-size: 11px; color: #9ca3af;">${pod.serviceType || 'Service'}</div>
                     </div>
                     <span style="font-size: 11px; color: #6b7280;">›</span>
-                `;
-                item.onclick = () => { closeFabMenu(); viewPODFromOverview(pod.id); };
-                section.appendChild(item);
+                </div>`;
             });
-            
             myTMs.forEach(tm => {
                 const customer = db.customers.find(c => c.id === tm.customerId);
                 const name = customer ? customer.name : (tm.customerName || 'Unknown');
-                const item = document.createElement('div');
-                item.style.cssText = 'padding: 8px 10px; background: #374151; border-radius: 6px; margin-bottom: 6px; cursor: pointer; display: flex; align-items: center; gap: 8px;';
-                item.innerHTML = `
+                html += `<div onclick="closeFabMenu(); viewTankMovementDetail(${tm.id});" style="padding: 8px 10px; background: #374151; border-radius: 6px; margin-bottom: 5px; cursor: pointer; display: flex; align-items: center; gap: 8px;">
                     <span style="font-size: 15px;">🔄</span>
                     <div style="flex: 1; min-width: 0;">
                         <div style="font-size: 13px; font-weight: 600; color: #f9fafb; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${name}</div>
                         <div style="font-size: 11px; color: #9ca3af;">Tank ${tm.movementType || 'Movement'}</div>
                     </div>
                     <span style="font-size: 11px; color: #6b7280;">›</span>
-                `;
-                item.onclick = () => { closeFabMenu(); viewTankMovementDetail(tm.id); };
-                section.appendChild(item);
+                </div>`;
             });
-            
-            menu.insertBefore(section, menu.firstChild);
+            return html;
         }
         
         function closeFabMenu() {
