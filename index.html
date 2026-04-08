@@ -9813,6 +9813,8 @@
 
         // Submit POD - called directly from button
         async function savePOD() {
+            if (window._savingPOD) { console.log('savePOD: already in progress, ignoring'); return; }
+            window._savingPOD = true;
             console.log('savePOD called');
             
             // Prevent saving PODs in historical months
@@ -9952,40 +9954,44 @@
             }
             // ──────────────────────────────────────────────────────────────────────
             
-            const success = await db.savePOD(pod);
-            if (success) {
-                // Update or add to local array
-                const existingIndex = db.pods.findIndex(p => p.id === podId);
-                if (existingIndex !== -1) {
-                    db.pods[existingIndex] = pod;
-                } else {
-                    db.pods.push(pod);
-                }
-                
-                currentEditingPodId = null; // Reset editing state
-                const wasAdHoc = isAdHocService;
-                isAdHocService = false; // Reset ad-hoc state
-                adHocCustomerName = '';
-
-                // Auto-tick linked calendar event regardless of navigation path
-                if (currentCalendarEventId) {
-                    await db.saveCalendarEventStatus(currentCalendarEventId, 'completed');
-                    currentCalendarEventId = null;
-                    renderAdminCalendar();
-                    loadWorkerCalendarEvents();
-                    if (document.getElementById('adminListContainer').style.display !== 'none') {
-                        renderAdminChronologicalList();
-                    }
-                }
-
-                showToast('POD saved successfully!', 'success');
-                setTimeout(() => {
-                    if (wasAdHoc) {
-                        showHomeView();
+            try {
+                const success = await db.savePOD(pod);
+                if (success) {
+                    // Update or add to local array
+                    const existingIndex = db.pods.findIndex(p => p.id === podId);
+                    if (existingIndex !== -1) {
+                        db.pods[existingIndex] = pod;
                     } else {
-                        backToCustomerList();
+                        db.pods.push(pod);
                     }
-                }, 1000);
+                    
+                    currentEditingPodId = null; // Reset editing state
+                    const wasAdHoc = isAdHocService;
+                    isAdHocService = false; // Reset ad-hoc state
+                    adHocCustomerName = '';
+
+                    // Auto-tick linked calendar event regardless of navigation path
+                    if (currentCalendarEventId) {
+                        await db.saveCalendarEventStatus(currentCalendarEventId, 'completed');
+                        currentCalendarEventId = null;
+                        renderAdminCalendar();
+                        loadWorkerCalendarEvents();
+                        if (document.getElementById('adminListContainer').style.display !== 'none') {
+                            renderAdminChronologicalList();
+                        }
+                    }
+
+                    showToast('POD saved successfully!', 'success');
+                    setTimeout(() => {
+                        if (wasAdHoc) {
+                            showHomeView();
+                        } else {
+                            backToCustomerList();
+                        }
+                    }, 1000);
+                }
+            } finally {
+                window._savingPOD = false;
             }
         }
 
@@ -12865,8 +12871,11 @@
         }
 
         async function saveTankMovement() {
+            if (window._savingTankMovement) { console.log('saveTankMovement: already in progress, ignoring'); return; }
+            window._savingTankMovement = true;
             const freetextName = document.getElementById('tankMovementFreetextCustomer').value.trim();
             if (!selectedTankMovementCustomer && !freetextName) {
+                window._savingTankMovement = false;
                 showToast('Please select a customer or enter a name', 'error');
                 return;
             }
@@ -12917,24 +12926,28 @@
                 completedBy: currentUser ? (currentUser.name || currentUser.email) : null
             };
             
-            const success = await db.saveTankMovement(movement);
-            if (success) {
-                db.tankMovements.push(movement);
-                hideTankMovementModal();
-                
-                // Auto-tick linked calendar event if triggered from one
-                if (tankMovementCalendarEventId) {
-                    await db.saveCalendarEventStatus(tankMovementCalendarEventId, 'completed');
-                    tankMovementCalendarEventId = null;
-                    renderAdminCalendar();
-                    loadWorkerCalendarEvents();
-                    if (document.getElementById('adminListContainer').style.display !== 'none') {
-                        renderAdminChronologicalList();
+            try {
+                const success = await db.saveTankMovement(movement);
+                if (success) {
+                    db.tankMovements.push(movement);
+                    hideTankMovementModal();
+                    
+                    // Auto-tick linked calendar event if triggered from one
+                    if (tankMovementCalendarEventId) {
+                        await db.saveCalendarEventStatus(tankMovementCalendarEventId, 'completed');
+                        tankMovementCalendarEventId = null;
+                        renderAdminCalendar();
+                        loadWorkerCalendarEvents();
+                        if (document.getElementById('adminListContainer').style.display !== 'none') {
+                            renderAdminChronologicalList();
+                        }
                     }
+                    
+                    showToast('Tank movement saved!', 'success');
+                    renderRunDays();
                 }
-                
-                showToast('Tank movement saved!', 'success');
-                renderRunDays();
+            } finally {
+                window._savingTankMovement = false;
             }
         }
 
