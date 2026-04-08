@@ -8966,6 +8966,7 @@
             const completedCount = activeCustomers.filter(customer => 
                 progressPods.some(pod => {
                     if (pod.customerId !== customer.id) return false;
+                    if (pod.runDay !== serviceDay.name && pod.sourceRunDay !== serviceDay.name) return false;
                     const podDate = new Date(pod.date + 'T00:00:00');
                     return podDate.getMonth() === countMonth && podDate.getFullYear() === countYear;
                 })
