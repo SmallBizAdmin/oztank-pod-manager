@@ -8889,16 +8889,18 @@
             noServiceDaysMsg.style.display = 'none';
             selector.innerHTML = '';
             
-            // Filter service days by selected worker
-            let filteredDays = db.serviceDays;
+            // Filter service days by selected worker (exclude N/A placeholder)
+            let filteredDays = db.serviceDays.filter(sd => sd.name !== 'N/A');
             let otherDays = [];
             
             if (currentSelectedWorker) {
                 filteredDays = db.serviceDays.filter(sd => 
+                    sd.name !== 'N/A' &&
                     sd.employee && sd.employee.trim().toLowerCase() === currentSelectedWorker.toLowerCase()
                 );
                 otherDays = db.serviceDays.filter(sd => 
-                    !sd.employee || sd.employee.trim().toLowerCase() !== currentSelectedWorker.toLowerCase()
+                    sd.name !== 'N/A' &&
+                    (!sd.employee || sd.employee.trim().toLowerCase() !== currentSelectedWorker.toLowerCase())
                 );
                 
                 // Show count
@@ -8908,7 +8910,7 @@
             } else {
                 workerDayCount.style.display = 'block';
                 workerDayCount.className = 'worker-day-count all-workers';
-                workerDayCount.innerHTML = `Showing all ${db.serviceDays.length} service days`;
+                workerDayCount.innerHTML = `Showing all ${db.serviceDays.filter(sd => sd.name !== 'N/A').length} service days`;
             }
             
             // Render filtered days
