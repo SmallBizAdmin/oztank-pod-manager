@@ -2285,6 +2285,7 @@
         <!-- Floating Action Button for Ad-Hoc -->
         <div class="fab-container" id="homeFab">
             <div class="fab-menu" id="fabMenu">
+                <div id="fabMenuButtons">
                 <button class="fab-option adhoc" onclick="closeFabMenu(); showMainMenuAdHocWarning('Service');">
                     🔧 Service
                 </button>
@@ -2297,6 +2298,7 @@
                 <button class="fab-option tank" onclick="closeFabMenu(); showMainMenuTankWarning();">
                     🔄 Tank Movement
                 </button>
+                </div>
             </div>
             <button class="fab-main" onclick="toggleFabMenu()" title="Add Ad-Hoc">
                 ➕
@@ -3109,6 +3111,7 @@
             </div>
             <div class="search-modal-body" style="display: flex; flex-direction: column; gap: 12px;">
                 <div id="actionChooserAdHocs" style="display: none;"></div>
+                <div id="actionChooserButtons">
                 <button class="btn btn-adhoc" onclick="hideActionChooser(); showCustomerSearchModal(currentRunDay, 'Service');" style="padding: 20px; font-size: 18px;">
                     🔧 Service
                 </button>
@@ -3121,6 +3124,7 @@
                 <button class="btn" onclick="hideActionChooser(); showTankMovementModal(currentRunDay);" style="padding: 20px; font-size: 18px; background: #0891b2;">
                     🔄 Tank Movement
                 </button>
+                </div>
             </div>
         </div>
     </div>
@@ -12894,7 +12898,19 @@
 
         function toggleActionChooserAdHocList() {
             const list = document.getElementById('actionChooserAdHocList');
-            if (list) list.style.display = list.style.display === 'none' ? 'block' : 'none';
+            const buttons = document.getElementById('actionChooserButtons');
+            if (!list) return;
+            const expanding = list.style.display === 'none';
+            list.style.display = expanding ? 'block' : 'none';
+            if (buttons) buttons.style.display = expanding ? 'none' : 'flex';
+        }
+
+        function hideActionChooser() {
+            document.getElementById('actionChooserModal').classList.remove('active');
+            const list = document.getElementById('actionChooserAdHocList');
+            const buttons = document.getElementById('actionChooserButtons');
+            if (list) list.style.display = 'none';
+            if (buttons) buttons.style.display = 'flex';
         }
 
         function buildAdHocListHtmlLight(myPods, myTMs) {
@@ -12970,7 +12986,11 @@
 
         function toggleFabAdHocList() {
             const list = document.getElementById('fabAdHocList');
-            if (list) list.style.display = list.style.display === 'none' ? 'block' : 'none';
+            const buttons = document.getElementById('fabMenuButtons');
+            if (!list) return;
+            const expanding = list.style.display === 'none';
+            list.style.display = expanding ? 'block' : 'none';
+            if (buttons) buttons.style.display = expanding ? 'none' : 'block';
         }
 
         function buildAdHocListHtml(myPods, myTMs) {
@@ -13006,6 +13026,11 @@
         function closeFabMenu() {
             const menu = document.getElementById('fabMenu');
             if (menu) menu.classList.remove('open');
+            // Reset list state for next open
+            const list = document.getElementById('fabAdHocList');
+            const buttons = document.getElementById('fabMenuButtons');
+            if (list) list.style.display = 'none';
+            if (buttons) buttons.style.display = 'block';
         }
         
         // Open address in Google Maps with confirmation
