@@ -5634,20 +5634,34 @@
         }
         
         // Realtime subscription so status/notes changes on any device instantly reflect everywhere
+        // ─── Debounce timers for realtime handlers ────────────────────────────────
+        // Prevents burst writes (e.g. Apps Script syncing many rows) from triggering
+        // hundreds of back-to-back fetches. Each handler waits 5s after the last
+        // change before re-fetching, so a batch of writes results in one fetch.
+        let _debounceCalendarStatus = null;
+        let _debouncePods = null;
+        let _debounceInvoiceStatus = null;
+        let _debounceSkippedInvoiceStatus = null;
+        let _debounceCustomers = null;
+        let _debounceWorkerCalendarEvents = null;
+
         function setupCalendarStatusRealtime() {
             supabase
                 .channel('calendar_event_status_changes')
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'calendar_event_status' }, async (payload) => {
                     console.log('calendar_event_status realtime change:', payload.eventType);
-                    // Refresh the in-memory cache first
-                    await db.loadCalendarEventStatus();
-                    // Re-render whichever views are visible
-                    renderAdminCalendar();
-                    if (document.getElementById('adminListContainer') && document.getElementById('adminListContainer').style.display !== 'none') {
-                        renderAdminChronologicalList();
-                    }
-                    // Re-render worker calendar with updated status
-                    await loadWorkerCalendarEvents();
+                    clearTimeout(_debounceCalendarStatus);
+                    _debounceCalendarStatus = setTimeout(async () => {
+                        // Refresh the in-memory cache first
+                        await db.loadCalendarEventStatus();
+                        // Re-render whichever views are visible
+                        renderAdminCalendar();
+                        if (document.getElementById('adminListContainer') && document.getElementById('adminListContainer').style.display !== 'none') {
+                            renderAdminChronologicalList();
+                        }
+                        // Re-render worker calendar with updated status
+                        await loadWorkerCalendarEvents();
+                    }, 5000);
                 })
                 .subscribe((status) => {
                     if (status === 'SUBSCRIBED') console.log('✅ Realtime: calendar_event_status subscribed');
@@ -5685,23 +5699,26 @@
                 .channel('invoice_status_changes')
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'invoice_status' }, async (payload) => {
                     console.log('invoice_status realtime change:', payload.eventType);
-                    // Refresh the in-memory invoice status map
-                    const { data: invoices } = await supabase.from('invoice_status').select('*');
-                    db.invoiceStatus = {};
-                    if (invoices) {
-                        invoices.forEach(inv => {
-                            db.invoiceStatus[inv.pod_id] = {
-                                invoiced: inv.invoiced,
-                                checkedSent: inv.checked_sent || false
-                            };
-                        });
-                    }
-                    if (document.getElementById('adminRunsheetContainer')?.style.display !== 'none') {
-                        loadAdminRunsheet();
-                    }
-                    if (document.getElementById('monthlyInvoicesContainer')?.style.display !== 'none' && currentInvoiceDate) {
-                        renderInvoiceRunsheet(currentInvoiceDate);
-                    }
+                    clearTimeout(_debounceInvoiceStatus);
+                    _debounceInvoiceStatus = setTimeout(async () => {
+                        // Refresh the in-memory invoice status map
+                        const { data: invoices } = await supabase.from('invoice_status').select('*');
+                        db.invoiceStatus = {};
+                        if (invoices) {
+                            invoices.forEach(inv => {
+                                db.invoiceStatus[inv.pod_id] = {
+                                    invoiced: inv.invoiced,
+                                    checkedSent: inv.checked_sent || false
+                                };
+                            });
+                        }
+                        if (document.getElementById('adminRunsheetContainer')?.style.display !== 'none') {
+                            loadAdminRunsheet();
+                        }
+                        if (document.getElementById('monthlyInvoicesContainer')?.style.display !== 'none' && currentInvoiceDate) {
+                            renderInvoiceRunsheet(currentInvoiceDate);
+                        }
+                    }, 5000);
                 })
                 .subscribe((status) => {
                     if (status === 'SUBSCRIBED') console.log('✅ Realtime: invoice_status subscribed');
@@ -5712,13 +5729,16 @@
                 .channel('skipped_invoice_status_changes')
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'skipped_invoice_status' }, async (payload) => {
                     console.log('skipped_invoice_status realtime change:', payload.eventType);
-                    await db.loadSkippedInvoiceStatus();
-                    if (document.getElementById('adminRunsheetContainer')?.style.display !== 'none') {
-                        loadAdminRunsheet();
-                    }
-                    if (document.getElementById('monthlyInvoicesContainer')?.style.display !== 'none' && currentInvoiceDate) {
-                        renderInvoiceRunsheet(currentInvoiceDate);
-                    }
+                    clearTimeout(_debounceSkippedInvoiceStatus);
+                    _debounceSkippedInvoiceStatus = setTimeout(async () => {
+                        await db.loadSkippedInvoiceStatus();
+                        if (document.getElementById('adminRunsheetContainer')?.style.display !== 'none') {
+                            loadAdminRunsheet();
+                        }
+                        if (document.getElementById('monthlyInvoicesContainer')?.style.display !== 'none' && currentInvoiceDate) {
+                            renderInvoiceRunsheet(currentInvoiceDate);
+                        }
+                    }, 5000);
                 })
                 .subscribe((status) => {
                     if (status === 'SUBSCRIBED') console.log('✅ Realtime: skipped_invoice_status subscribed');
@@ -5732,56 +5752,59 @@
                 .channel('customers_changes')
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'customers' }, async (payload) => {
                     console.log('customers realtime change:', payload.eventType);
-                    // Re-fetch all customers (paginated, same as initial load)
-                    let allCustomers = [];
-                    let page = 0;
-                    const pageSize = 1000;
-                    let hasMore = true;
-                    while (hasMore) {
-                        const { data: batch } = await supabase
-                            .from('customers')
-                            .select('*')
-                            .order('order', { ascending: true })
-                            .range(page * pageSize, (page + 1) * pageSize - 1);
-                        if (batch && batch.length > 0) {
-                            allCustomers = allCustomers.concat(batch);
-                            page++;
-                            hasMore = batch.length === pageSize;
-                        } else {
-                            hasMore = false;
+                    clearTimeout(_debounceCustomers);
+                    _debounceCustomers = setTimeout(async () => {
+                        // Re-fetch all customers (paginated, same as initial load)
+                        let allCustomers = [];
+                        let page = 0;
+                        const pageSize = 1000;
+                        let hasMore = true;
+                        while (hasMore) {
+                            const { data: batch } = await supabase
+                                .from('customers')
+                                .select('*')
+                                .order('order', { ascending: true })
+                                .range(page * pageSize, (page + 1) * pageSize - 1);
+                            if (batch && batch.length > 0) {
+                                allCustomers = allCustomers.concat(batch);
+                                page++;
+                                hasMore = batch.length === pageSize;
+                            } else {
+                                hasMore = false;
+                            }
                         }
-                    }
-                    db.customers = allCustomers.map(c => ({
-                        id: c.id,
-                        name: c.name,
-                        runDay: c.run_day,
-                        address: c.address,
-                        phone: c.phone,
-                        serviceType: c.service_type,
-                        carbsolve: c.carbsolve,
-                        waste: c.waste,
-                        code: c.code,
-                        notes: c.notes,
-                        specialInstructions: c.special_instructions,
-                        businessGroup: c.business_group,
-                        invoiceType: c.invoice_type,
-                        order: c.order,
-                        serviceMonths: c.service_months,
-                        tankCount: c.tank_count || 1,
-                        tankLabels: c.tank_labels || null
-                    }));
-                    // Re-render all views that depend on customer data
-                    renderRunDays();
-                    renderAdminCalendar();
-                    if (document.getElementById('adminListContainer')?.style.display !== 'none') {
-                        renderAdminChronologicalList();
-                    }
-                    if (document.getElementById('adminRunsheetContainer')?.style.display !== 'none') {
-                        loadAdminRunsheet();
-                    }
-                    if (document.getElementById('customerAdminList')) {
-                        renderCustomerAdminList();
-                    }
+                        db.customers = allCustomers.map(c => ({
+                            id: c.id,
+                            name: c.name,
+                            runDay: c.run_day,
+                            address: c.address,
+                            phone: c.phone,
+                            serviceType: c.service_type,
+                            carbsolve: c.carbsolve,
+                            waste: c.waste,
+                            code: c.code,
+                            notes: c.notes,
+                            specialInstructions: c.special_instructions,
+                            businessGroup: c.business_group,
+                            invoiceType: c.invoice_type,
+                            order: c.order,
+                            serviceMonths: c.service_months,
+                            tankCount: c.tank_count || 1,
+                            tankLabels: c.tank_labels || null
+                        }));
+                        // Re-render all views that depend on customer data
+                        renderRunDays();
+                        renderAdminCalendar();
+                        if (document.getElementById('adminListContainer')?.style.display !== 'none') {
+                            renderAdminChronologicalList();
+                        }
+                        if (document.getElementById('adminRunsheetContainer')?.style.display !== 'none') {
+                            loadAdminRunsheet();
+                        }
+                        if (document.getElementById('customerAdminList')) {
+                            renderCustomerAdminList();
+                        }
+                    }, 5000);
                 })
                 .subscribe((status) => {
                     if (status === 'SUBSCRIBED') console.log('✅ Realtime: customers subscribed');
@@ -5797,14 +5820,17 @@
                 .channel('worker_calendar_events_changes')
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'worker_calendar_events' }, async (payload) => {
                     console.log('worker_calendar_events realtime change:', payload.eventType);
-                    await loadWorkerCalendarEvents();
-                    renderAdminCalendar();
-                    if (document.getElementById('adminListContainer')?.style.display !== 'none') {
-                        renderAdminChronologicalList();
-                    }
-                    if (document.getElementById('homeView')?.classList.contains('active')) {
-                        renderRunDays();
-                    }
+                    clearTimeout(_debounceWorkerCalendarEvents);
+                    _debounceWorkerCalendarEvents = setTimeout(async () => {
+                        await loadWorkerCalendarEvents();
+                        renderAdminCalendar();
+                        if (document.getElementById('adminListContainer')?.style.display !== 'none') {
+                            renderAdminChronologicalList();
+                        }
+                        if (document.getElementById('homeView')?.classList.contains('active')) {
+                            renderRunDays();
+                        }
+                    }, 5000);
                 })
                 .subscribe((status) => {
                     if (status === 'SUBSCRIBED') console.log('✅ Realtime: worker_calendar_events subscribed');
