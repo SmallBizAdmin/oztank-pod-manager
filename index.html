@@ -10744,6 +10744,11 @@
                     carbsolve = pod.tankServices.map(t =>
                         `<span style="white-space:nowrap;">${t.serviced ? '✅' : '⬜'} ${t.tankLabel}${t.carbsolve ? ` · ${t.carbsolve}` : ''}</span>`
                     ).join('<br>');
+                } else if (customer.tankCount > 1) {
+                    const tankEntries = getTankEntries(customer);
+                    carbsolve = tankEntries.map(t =>
+                        `<span style="white-space:nowrap;">⬜ ${t.label}${t.carbsolve ? ` · ${t.carbsolve}` : ''}</span>`
+                    ).join('<br>');
                 } else {
                     carbsolve = pod ? (pod.carbsolve || customer.carbsolve || '-') : (customer.carbsolve || '-');
                     if (carbsolve && carbsolve !== '-') {
