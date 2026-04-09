@@ -7448,6 +7448,12 @@
             if (!event) return;
 
             const status = db.getCalendarEventStatus(eventId);
+
+            // If already completed, go straight to the action modal (view/edit doc, untick, etc.)
+            if (status === 'completed') {
+                showCalendarEventModal(eventId, dateStr);
+                return;
+            }
             const storedNotes = db.getCalendarEventNotes(eventId);
             const borderColor = getWorkerColor(event.calendarOwner);
             const bgColor = getWorkerColorLight(event.calendarOwner);
