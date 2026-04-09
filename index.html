@@ -4937,6 +4937,8 @@
                         .upsert(payload, { onConflict: 'pod_id', ignoreDuplicates: false })
                         .select();
                     if (error) throw error;
+                    // Keep offline cache in sync so hard refresh shows correct state
+                    cacheForOffline('invoiceStatus', this.invoiceStatus);
                     return true;
                 } catch (error) {
                     console.error('Error saving invoice status:', error);
@@ -5734,11 +5736,9 @@
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'invoice_status' }, async (payload) => {
                     console.log('invoice_status realtime change:', payload.eventType);
                     if (window._savingInvoiceStatus) return;
-
                     const row = payload.new || payload.old;
                     if (!row || !row.pod_id) return;
                     const podId = row.pod_id;
-
                     if (payload.eventType === 'DELETE') {
                         delete db.invoiceStatus[podId];
                     } else {
@@ -5761,11 +5761,9 @@
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'skipped_invoice_status' }, async (payload) => {
                     console.log('skipped_invoice_status realtime change:', payload.eventType);
                     if (window._savingInvoiceStatus) return;
-
                     const row = payload.new || payload.old;
                     if (!row) return;
                     const key = `${row.customer_id}|${row.service_date}`;
-
                     if (payload.eventType === 'DELETE') {
                         delete db.skippedInvoiceStatus[key];
                     } else {
@@ -5786,10 +5784,7 @@
             const invCb = document.querySelector(`.invoice-checkbox[data-pod-id="${podId}"]`);
             const csCb = document.querySelector(`.checked-sent-checkbox[data-pod-id="${podId}"]`);
             if (invCb) invCb.checked = status.invoiced;
-            if (csCb) {
-                csCb.checked = status.checkedSent;
-                csCb.disabled = !status.invoiced;
-            }
+            if (csCb) { csCb.checked = status.checkedSent; csCb.disabled = !status.invoiced; }
             updateInvoiceSelectAllState();
         }
 
@@ -5797,10 +5792,7 @@
             const invCb = document.querySelector(`.invoice-checkbox[data-customer-id="${customerId}"][data-date="${serviceDate}"]`);
             const csCb = document.querySelector(`.checked-sent-checkbox[data-customer-id="${customerId}"][data-date="${serviceDate}"]`);
             if (invCb) invCb.checked = status.invoiced;
-            if (csCb) {
-                csCb.checked = status.checkedSent;
-                csCb.disabled = !status.invoiced;
-            }
+            if (csCb) { csCb.checked = status.checkedSent; csCb.disabled = !status.invoiced; }
             updateInvoiceSelectAllState();
         }
 
