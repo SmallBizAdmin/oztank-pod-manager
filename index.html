@@ -4917,6 +4917,7 @@
             
             async saveInvoiceStatus(podId, invoiced, checkedSent, invoicedAt, invoicedBy) {
                 try {
+                    window._savingInvoiceStatus = true;
                     const payload = {
                         pod_id: podId,
                         invoiced: invoiced,
@@ -4939,6 +4940,8 @@
                 } catch (error) {
                     console.error('Error saving invoice status:', error);
                     return false;
+                } finally {
+                    setTimeout(() => { window._savingInvoiceStatus = false; }, 6000);
                 }
             },
             
@@ -5731,14 +5734,18 @@
                     console.log('invoice_status realtime change:', payload.eventType);
                     clearTimeout(_debounceInvoiceStatus);
                     _debounceInvoiceStatus = setTimeout(async () => {
-                        // Refresh the in-memory invoice status map
+                        // Skip if a save is in progress to avoid clobbering local state
+                        if (window._savingInvoiceStatus) return;
+                        // Refresh the in-memory invoice status map, preserving all fields
                         const { data: invoices } = await supabase.from('invoice_status').select('*');
                         db.invoiceStatus = {};
                         if (invoices) {
                             invoices.forEach(inv => {
                                 db.invoiceStatus[inv.pod_id] = {
                                     invoiced: inv.invoiced,
-                                    checkedSent: inv.checked_sent || false
+                                    checkedSent: inv.checked_sent || false,
+                                    invoicedAt: inv.invoiced_at || null,
+                                    invoicedBy: inv.invoiced_by || null
                                 };
                             });
                         }
