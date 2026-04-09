@@ -10808,8 +10808,9 @@
             // Update select all checkbox state
             updateInvoiceSelectAllState();
             
-            // Render ad-hoc PODs for this date
-            renderAdHocPodsTable(selectedDate);
+            // Hide ad-hoc PODs section — these belong in the standalone ad-hoc view only
+            const adHocSecEl = document.getElementById('adHocPodsSection');
+            if (adHocSecEl) adHocSecEl.style.display = 'none';
             
             // Render tank movements for this date
             renderTankMovementsTable(serviceDayName, selectedDate);
@@ -10847,10 +10848,10 @@
             `;
 
             // ── SECTION 1: AD-HOC PODS ──────────────────────────────────────────
-            // Include pathway 1 (standalone, no calendarEventId) AND pathway 3 (calendar-linked)
+            // Include all isAdHoc pods for this date regardless of which runsheet they originated from
             const adHocPods = db.pods.filter(pod =>
                 pod.date === selectedDate &&
-                pod.runDay === 'Ad-Hoc' &&
+                (pod.isAdHoc || pod.runDay === 'Ad-Hoc') &&
                 !pod.sourceRunDay
             );
 
