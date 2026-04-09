@@ -4144,7 +4144,9 @@
                         invoices.forEach(inv => {
                             this.invoiceStatus[inv.pod_id] = {
                                 invoiced: inv.invoiced,
-                                checkedSent: inv.checked_sent || false
+                                checkedSent: inv.checked_sent || false,
+                                invoicedAt: inv.invoiced_at || null,
+                                invoicedBy: inv.invoiced_by || null
                             };
                         });
                     }
@@ -4911,15 +4913,25 @@
                 }
             },
             
-            async saveInvoiceStatus(podId, invoiced, checkedSent) {
+            async saveInvoiceStatus(podId, invoiced, checkedSent, invoicedAt, invoicedBy) {
                 try {
+                    const payload = {
+                        pod_id: podId,
+                        invoiced: invoiced,
+                        checked_sent: checkedSent || false
+                    };
+                    // Only set invoiced_at/invoiced_by when marking as invoiced
+                    if (invoiced && invoicedAt) {
+                        payload.invoiced_at = invoicedAt;
+                        payload.invoiced_by = invoicedBy;
+                    } else if (!invoiced) {
+                        // Clear when un-invoicing
+                        payload.invoiced_at = null;
+                        payload.invoiced_by = null;
+                    }
                     const { data, error } = await supabase
                         .from('invoice_status')
-                        .upsert({
-                            pod_id: podId,
-                            invoiced: invoiced,
-                            checked_sent: checkedSent || false
-                        }, { onConflict: 'pod_id' });
+                        .upsert(payload, { onConflict: 'pod_id' });
                     if (error) throw error;
                     return true;
                 } catch (error) {
@@ -11498,8 +11510,10 @@
                 if (newInvoiced === undefined) newInvoiced = !current.invoiced;
                 // If uninvoicing, also clear checked_sent
                 const newCheckedSent = newInvoiced ? current.checkedSent : false;
-                db.invoiceStatus[podId] = { invoiced: newInvoiced, checkedSent: newCheckedSent };
-                await db.saveInvoiceStatus(podId, newInvoiced, newCheckedSent);
+                const invoicedAt = newInvoiced ? new Date().toISOString() : null;
+                const invoicedBy = newInvoiced ? (currentUser ? currentUser.email : 'Unknown') : null;
+                db.invoiceStatus[podId] = { invoiced: newInvoiced, checkedSent: newCheckedSent, invoicedAt, invoicedBy };
+                await db.saveInvoiceStatus(podId, newInvoiced, newCheckedSent, invoicedAt, invoicedBy);
                 // Update checked_sent checkbox if present
                 const csBox = document.querySelector(`.checked-sent-checkbox[data-pod-id="${podId}"]`);
                 if (csBox) { csBox.checked = newCheckedSent; csBox.disabled = !newInvoiced; }
@@ -11522,7 +11536,7 @@
                 const current = getInvoiceStatus(podId);
                 const newCheckedSent = !current.checkedSent;
                 db.invoiceStatus[podId] = { ...current, checkedSent: newCheckedSent };
-                await db.saveInvoiceStatus(podId, current.invoiced, newCheckedSent);
+                await db.saveInvoiceStatus(podId, current.invoiced, newCheckedSent, current.invoicedAt, current.invoicedBy);
             } else if (customerId && serviceDate) {
                 const key = `${customerId}|${serviceDate}`;
                 const current = db.skippedInvoiceStatus[key] || { invoiced: false, checkedSent: false };
@@ -11556,8 +11570,10 @@
                 if (podId) {
                     const current = getInvoiceStatus(podId);
                     const newCheckedSent = checked ? current.checkedSent : false;
-                    db.invoiceStatus[podId] = { invoiced: checked, checkedSent: newCheckedSent };
-                    await db.saveInvoiceStatus(podId, checked, newCheckedSent);
+                    const invoicedAt = checked ? new Date().toISOString() : null;
+                    const invoicedBy = checked ? (currentUser ? currentUser.email : 'Unknown') : null;
+                    db.invoiceStatus[podId] = { invoiced: checked, checkedSent: newCheckedSent, invoicedAt, invoicedBy };
+                    await db.saveInvoiceStatus(podId, checked, newCheckedSent, invoicedAt, invoicedBy);
                     csBox = document.querySelector(`.checked-sent-checkbox[data-pod-id="${podId}"]`);
                 } else if (customerId && serviceDate) {
                     const key = `${customerId}|${serviceDate}`;
@@ -11590,8 +11606,10 @@
                 const serviceDate = cb.dataset.date;
                 if (podId) {
                     const cs = getInvoiceStatus(podId).checkedSent;
-                    db.invoiceStatus[podId] = { invoiced: true, checkedSent: cs };
-                    await db.saveInvoiceStatus(podId, true, cs);
+                    const invoicedAt = new Date().toISOString();
+                    const invoicedBy = currentUser ? currentUser.email : 'Unknown';
+                    db.invoiceStatus[podId] = { invoiced: true, checkedSent: cs, invoicedAt, invoicedBy };
+                    await db.saveInvoiceStatus(podId, true, cs, invoicedAt, invoicedBy);
                 } else if (customerId && serviceDate) {
                     const key = `${customerId}|${serviceDate}`;
                     const cs = (db.skippedInvoiceStatus[key] || {}).checkedSent || false;
