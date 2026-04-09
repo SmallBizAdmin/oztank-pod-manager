@@ -6388,7 +6388,7 @@
             if (success) {
                 // If this POD was linked to a calendar event, revert its status to pending
                 if (linkedCalEventId) {
-                    await db.saveCalendarEventStatus(linkedCalEventId, 'pending');
+                    await db.saveCalendarEventStatus(linkedCalEventId, null);
                 }
                 showToast('POD deleted', 'success');
                 setTimeout(() => history.back(), 800);
@@ -7648,7 +7648,7 @@
 
         async function untickCalendarEvent(eventId) {
             document.getElementById('calendarEventChooserModal').remove();
-            await db.saveCalendarEventStatus(eventId, 'pending');
+            await db.saveCalendarEventStatus(eventId, null);
             showToast('Event reverted to pending', 'success');
             renderAdminCalendar();
             loadWorkerCalendarEvents();
@@ -13281,7 +13281,7 @@
             if (success) {
                 // If linked to a calendar event, revert its status to pending
                 if (linkedCalEventId) {
-                    await db.saveCalendarEventStatus(linkedCalEventId, 'pending');
+                    await db.saveCalendarEventStatus(linkedCalEventId, null);
                 }
                 showToast('Tank movement deleted', 'success');
                 // Re-render whichever view is active
