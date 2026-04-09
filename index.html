@@ -5732,34 +5732,24 @@
                 .channel('invoice_status_changes')
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'invoice_status' }, async (payload) => {
                     console.log('invoice_status realtime change:', payload.eventType);
-                    clearTimeout(_debounceInvoiceStatus);
-                    _debounceInvoiceStatus = setTimeout(async () => {
-                        // Skip if a save is in progress to avoid clobbering local state
-                        if (window._savingInvoiceStatus) return;
-                        // Refresh the in-memory invoice status map, preserving all fields
-                        const { data: invoices } = await supabase.from('invoice_status').select('*');
-                        db.invoiceStatus = {};
-                        if (invoices) {
-                            invoices.forEach(inv => {
-                                db.invoiceStatus[inv.pod_id] = {
-                                    invoiced: inv.invoiced,
-                                    checkedSent: inv.checked_sent || false,
-                                    invoicedAt: inv.invoiced_at || null,
-                                    invoicedBy: inv.invoiced_by || null
-                                };
-                            });
-                        }
-                        if (document.getElementById('adminRunsheetContainer')?.style.display !== 'none') {
-                            if (currentAdminServiceDay === 'Ad-Hoc' && currentAdminDateFilter) {
-                                loadAdminAdHocRunsheet(currentAdminDateFilter);
-                            } else {
-                                loadAdminRunsheet();
-                            }
-                        }
-                        if (document.getElementById('monthlyInvoicesContainer')?.style.display !== 'none' && currentInvoiceDate) {
-                            renderInvoiceRunsheet(currentInvoiceDate);
-                        }
-                    }, 5000);
+                    // Skip events we triggered ourselves
+                    if (window._savingInvoiceStatus) return;
+
+                    const row = payload.new || payload.old;
+                    if (!row || !row.pod_id) return;
+                    const podId = row.pod_id;
+
+                    if (payload.eventType === 'DELETE') {
+                        delete db.invoiceStatus[podId];
+                    } else {
+                        db.invoiceStatus[podId] = {
+                            invoiced: row.invoiced || false,
+                            checkedSent: row.checked_sent || false,
+                            invoicedAt: row.invoiced_at || null,
+                            invoicedBy: row.invoiced_by || null
+                        };
+                    }
+                    patchInvoiceCheckboxes(podId, db.invoiceStatus[podId] || { invoiced: false, checkedSent: false });
                 })
                 .subscribe((status) => {
                     if (status === 'SUBSCRIBED') console.log('✅ Realtime: invoice_status subscribed');
@@ -5770,25 +5760,48 @@
                 .channel('skipped_invoice_status_changes')
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'skipped_invoice_status' }, async (payload) => {
                     console.log('skipped_invoice_status realtime change:', payload.eventType);
-                    clearTimeout(_debounceSkippedInvoiceStatus);
-                    _debounceSkippedInvoiceStatus = setTimeout(async () => {
-                        await db.loadSkippedInvoiceStatus();
-                        if (document.getElementById('adminRunsheetContainer')?.style.display !== 'none') {
-                            if (currentAdminServiceDay === 'Ad-Hoc' && currentAdminDateFilter) {
-                                loadAdminAdHocRunsheet(currentAdminDateFilter);
-                            } else {
-                                loadAdminRunsheet();
-                            }
-                        }
-                        if (document.getElementById('monthlyInvoicesContainer')?.style.display !== 'none' && currentInvoiceDate) {
-                            renderInvoiceRunsheet(currentInvoiceDate);
-                        }
-                    }, 5000);
+                    if (window._savingInvoiceStatus) return;
+
+                    const row = payload.new || payload.old;
+                    if (!row) return;
+                    const key = `${row.customer_id}|${row.service_date}`;
+
+                    if (payload.eventType === 'DELETE') {
+                        delete db.skippedInvoiceStatus[key];
+                    } else {
+                        db.skippedInvoiceStatus[key] = {
+                            invoiced: row.invoiced || false,
+                            checkedSent: row.checked_sent || false
+                        };
+                    }
+                    patchSkippedInvoiceCheckboxes(row.customer_id, row.service_date, db.skippedInvoiceStatus[key] || { invoiced: false, checkedSent: false });
                 })
                 .subscribe((status) => {
                     if (status === 'SUBSCRIBED') console.log('✅ Realtime: skipped_invoice_status subscribed');
                     if (status === 'CHANNEL_ERROR') console.warn('⚠️ Realtime: skipped_invoice_status subscription error');
                 });
+        }
+
+        function patchInvoiceCheckboxes(podId, status) {
+            const invCb = document.querySelector(`.invoice-checkbox[data-pod-id="${podId}"]`);
+            const csCb = document.querySelector(`.checked-sent-checkbox[data-pod-id="${podId}"]`);
+            if (invCb) invCb.checked = status.invoiced;
+            if (csCb) {
+                csCb.checked = status.checkedSent;
+                csCb.disabled = !status.invoiced;
+            }
+            updateInvoiceSelectAllState();
+        }
+
+        function patchSkippedInvoiceCheckboxes(customerId, serviceDate, status) {
+            const invCb = document.querySelector(`.invoice-checkbox[data-customer-id="${customerId}"][data-date="${serviceDate}"]`);
+            const csCb = document.querySelector(`.checked-sent-checkbox[data-customer-id="${customerId}"][data-date="${serviceDate}"]`);
+            if (invCb) invCb.checked = status.invoiced;
+            if (csCb) {
+                csCb.checked = status.checkedSent;
+                csCb.disabled = !status.invoiced;
+            }
+            updateInvoiceSelectAllState();
         }
 
         // ─── Real-time: customers ─────────────────────────────────────────────────
