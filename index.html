@@ -2907,6 +2907,8 @@
                         <thead>
                             <tr style="background: #ecfeff; text-align: left;">
                                 <th style="padding: 10px; border-bottom: 2px solid #0891b2;">Done</th>
+                                <th style="padding: 10px; text-align: center; border-bottom: 2px solid #0891b2; width: 40px;">Inv</th>
+                                <th style="padding: 10px; text-align: center; border-bottom: 2px solid #0891b2; width: 50px;">Chk'd</th>
                                 <th style="padding: 10px; border-bottom: 2px solid #0891b2;">Company</th>
                                 <th style="padding: 10px; border-bottom: 2px solid #0891b2;">Type</th>
                                 <th style="padding: 10px; border-bottom: 2px solid #0891b2;">Tank Placed</th>
@@ -3082,13 +3084,9 @@
                     <select id="tankMovementCarbsolve" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 16px;">
                         <option value="">Select size...</option>
                         <option value="4kg">4kg</option>
-                        <option value="4kg spcl">4kg spcl</option>
                         <option value="7kg">7kg</option>
-                        <option value="7kg spcl">7kg spcl</option>
                         <option value="10kg">10kg</option>
-                        <option value="11kg spcl">11kg spcl</option>
                         <option value="14kg">14kg</option>
-                        <option value="17kg">17kg</option>
                         <option value="21kg">21kg</option>
                         <option value="28kg">28kg</option>
                     </select>
@@ -9581,122 +9579,6 @@
                 list.appendChild(li);
             });
             
-            // Add ad-hoc PODs section - show ad-hocs that belong to this runsheet ON THIS DATE ONLY
-            // New PODs: runDay = service day, isAdHoc = true
-            // Old PODs: runDay = 'Ad-Hoc', sourceRunDay = service day
-            const adHocPods = db.pods.filter(pod => {
-                if (pod.date !== workDate) return false;
-                // New format: isAdHoc flag and runDay matches
-                if (pod.isAdHoc && pod.runDay === currentRunDay) {
-                    return true;
-                }
-                // Legacy format: runDay is 'Ad-Hoc' and sourceRunDay matches
-                if (pod.runDay === 'Ad-Hoc' && pod.sourceRunDay === currentRunDay) {
-                    return true;
-                }
-                return false;
-            });
-            
-            if (adHocPods.length > 0) {
-                // Add section header
-                const headerLi = document.createElement('li');
-                headerLi.className = 'adhoc-section-header';
-                headerLi.innerHTML = `
-                    <div style="padding: 12px 16px; background: #fef3c7; border-left: 4px solid #f59e0b; margin-top: 16px; border-radius: 6px;">
-                        <strong style="color: #92400e;">📋 Ad-Hoc Services & Deliveries (${adHocPods.length})</strong>
-                        <span style="color: #92400e; font-size: 12px; margin-left: 8px;">Added to this runsheet</span>
-                    </div>
-                `;
-                list.appendChild(headerLi);
-                
-                // Add each ad-hoc POD
-                adHocPods.forEach(pod => {
-                    const li = document.createElement('li');
-                    li.className = 'customer-item completed adhoc-item';
-                    li.style.cssText = 'background: #fffbeb; border-left: 4px solid #f59e0b;';
-                    
-                    const customer = db.customers.find(c => c.id === pod.customerId);
-                    const customerName = customer ? customer.name : (pod.customerName || 'Unknown Customer');
-                    const productsStr = pod.products && pod.products.length > 0 
-                        ? pod.products.map(p => `${p.product} x${p.quantity}`).join(', ')
-                        : '';
-                    const isDelivery = pod.serviceType === 'Delivery';
-                    const typeIcon = isDelivery ? '📦' : '🔧';
-                    
-                    li.innerHTML = `
-                        <div class="customer-info" style="flex: 1;">
-                            <div class="customer-name">
-                                ${customerName}
-                                <span style="background: #f59e0b; color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px; margin-left: 8px;">Ad-Hoc</span>
-                            </div>
-                            <div style="font-size: 12px; color: #6b7280; margin-top: 4px;">
-                                ${formatDisplayDate(pod.date)} • ${typeIcon} ${pod.serviceType || 'Service'}
-                            </div>
-                            ${productsStr ? `<div style="font-size: 12px; color: #6b7280; margin-top: 2px;">Products: ${productsStr}</div>` : ''}
-                            ${pod.notes ? `<div style="font-size: 12px; color: #6b7280; margin-top: 2px; font-style: italic;">📝 ${pod.notes}</div>` : ''}
-                        </div>
-                        <div class="status-indicator completed">✓</div>
-                    `;
-                    
-                    li.addEventListener('click', () => {
-                        returnToRunDay = currentRunDay; // Remember which runsheet we're on
-                        viewPODFromOverview(pod.id);
-                    });
-                    list.appendChild(li);
-                });
-            }
-            
-            // Add tank movements section - show movements that belong to this runsheet
-            const tankMoves = db.tankMovements.filter(tm => {
-                // Regular movement for this service day
-                if (tm.runDay === currentRunDay) return true;
-                // Ad-hoc created from this runsheet
-                if (tm.sourceRunDay === currentRunDay) return true;
-                return false;
-            });
-            
-            if (tankMoves.length > 0) {
-                // Add section header
-                const headerLi = document.createElement('li');
-                headerLi.className = 'tank-section-header';
-                headerLi.innerHTML = `
-                    <div style="padding: 12px 16px; background: #dbeafe; border-left: 4px solid #3b82f6; margin-top: 16px; border-radius: 6px;">
-                        <strong style="color: #1e40af;">🔄 Tank Movements (${tankMoves.length})</strong>
-                        <span style="color: #1e40af; font-size: 12px; margin-left: 8px;">Added to this runsheet</span>
-                    </div>
-                `;
-                list.appendChild(headerLi);
-                
-                // Add each tank movement
-                tankMoves.forEach(tm => {
-                    const li = document.createElement('li');
-                    li.className = 'customer-item completed tank-item';
-                    li.style.cssText = 'background: #eff6ff; border-left: 4px solid #3b82f6;';
-                    
-                    const customer = db.customers.find(c => c.id === tm.customerId);
-                    const customerName = customer ? customer.name : (tm.customerName || 'Unknown Customer');
-                    
-                    li.innerHTML = `
-                        <div class="customer-info" style="flex: 1;">
-                            <div class="customer-name">
-                                ${customerName}
-                                <span style="background: #3b82f6; color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px; margin-left: 8px;">Tank ${tm.movementType || 'Movement'}</span>
-                            </div>
-                            <div style="font-size: 12px; color: #6b7280; margin-top: 4px;">
-                                ${formatDisplayDate(tm.date)}
-                                ${tm.carbsolve ? ` • ${tm.carbsolve}` : ''}
-                                ${tm.tankNoPulled ? ` • Out: ${tm.tankNoPulled}` : ''}
-                                ${tm.tankNoPlaced ? ` • In: ${tm.tankNoPlaced}` : ''}
-                            </div>
-                            ${tm.reason ? `<div style="font-size: 12px; color: #6b7280; margin-top: 2px; font-style: italic;">📝 ${tm.reason}</div>` : ''}
-                        </div>
-                        <div class="status-indicator completed">✓</div>
-                    `;
-                    
-                    list.appendChild(li);
-                });
-            }
-
             // Apply remaining-only filter if active (mobile)
             applyRemainingFilter();
         }
@@ -11095,8 +10977,21 @@
                 adHocTankMoves.forEach(tm => {
                     const tr = document.createElement('tr');
                     tr.style.cssText = 'border-bottom: 1px solid #e5e7eb; background: #eff6ff;';
+                    const tmInvStatus = getTankMovementInvoiceStatus(tm.id);
+                    const tmIsInvoiced = tmInvStatus.invoiced || false;
+                    const tmIsCheckedSent = tmInvStatus.checkedSent || false;
                     tr.innerHTML = `
                         <td style="padding: 10px; text-align: center;"><span style="color: #16a34a; font-size: 18px;">✓</span></td>
+                        <td style="padding: 10px; text-align: center;" onclick="event.stopPropagation();">
+                            <input type="checkbox" ${tmIsInvoiced ? 'checked' : ''}
+                                onchange="toggleTankMovementInvoice(${tm.id},'invoiced',this.checked)"
+                                style="width:16px;height:16px;cursor:pointer;">
+                        </td>
+                        <td style="padding: 10px; text-align: center;" onclick="event.stopPropagation();">
+                            <input type="checkbox" ${tmIsCheckedSent ? 'checked' : ''} ${!tmIsInvoiced ? 'disabled' : ''}
+                                onchange="toggleTankMovementInvoice(${tm.id},'checkedSent',this.checked)"
+                                style="width:16px;height:16px;cursor:pointer;${!tmIsInvoiced ? 'opacity:0.4;' : ''}">
+                        </td>
                         <td style="padding: 10px;">
                             ${tm.customerName}
                             <div style="margin-top:4px;">
@@ -11159,8 +11054,6 @@
                         <thead>
                             <tr style="background: #f0fdf4; text-align: left;">
                                 <th style="padding: 10px; border-bottom: 2px solid #86efac; width: 40px;">Done</th>
-                                <th style="padding: 10px; border-bottom: 2px solid #86efac; width: 40px;">Inv</th>
-                                <th style="padding: 10px; border-bottom: 2px solid #86efac; width: 50px;">Chk'd</th>
                                 <th style="padding: 10px; border-bottom: 2px solid #86efac;">Event / Company</th>
                                 <th style="padding: 10px; border-bottom: 2px solid #86efac;">Type</th>
                                 <th style="padding: 10px; border-bottom: 2px solid #86efac;">Carbsolve</th>
@@ -11205,10 +11098,6 @@
                         ? `<span style="background:#dcfce7;color:#166534;padding:2px 6px;border-radius:8px;font-size:10px;">✅ Done</span>${actionAttrib}`
                         : `<span style="background:#fee2e2;color:#991b1b;padding:2px 6px;border-radius:8px;font-size:10px;">❌ Not done</span>${actionAttrib}`;
 
-                    const invStatus = getCalEventInvoiceStatus(ev.id, selectedDate);
-                    const isInvoiced = invStatus.invoiced || false;
-                    const isCheckedSent = invStatus.checkedSent || false;
-
                     const tr = document.createElement('tr');
                     tr.style.borderBottom = '1px solid #e5e7eb';
                     tr.style.background = rowBg;
@@ -11220,16 +11109,6 @@
                     const calInvNote = (db.calendarEventInvoiceNotes || {})[ev.id] || null;
                     tr.innerHTML = `
                         <td style="padding:12px;text-align:center;font-size:16px;">${isDone ? '✅' : '❌'}</td>
-                        <td style="padding:12px;text-align:center;" onclick="event.stopPropagation();">
-                            <input type="checkbox" ${isInvoiced ? 'checked' : ''}
-                                onchange="toggleCalEventInvoice('${ev.id}','${selectedDate}','invoiced',this.checked)"
-                                style="width:16px;height:16px;cursor:pointer;">
-                        </td>
-                        <td style="padding:12px;text-align:center;" onclick="event.stopPropagation();">
-                            <input type="checkbox" ${isCheckedSent ? 'checked' : ''} ${!isInvoiced ? 'disabled' : ''}
-                                onchange="toggleCalEventInvoice('${ev.id}','${selectedDate}','checkedSent',this.checked)"
-                                style="width:16px;height:16px;cursor:pointer;${!isInvoiced ? 'opacity:0.4;' : ''}">
-                        </td>
                         <td style="padding:12px;">
                             ${companyCell}
                             ${invoiceNoteInlineHtml('cal', ev.id, calInvNote)}
@@ -11422,10 +11301,24 @@
                 const adHocBadge = tm.runDay === 'Ad-Hoc' 
                     ? '<span style="background: #3b82f6; color: white; padding: 2px 6px; border-radius: 8px; font-size: 10px; margin-left: 8px;">Ad-Hoc</span>'
                     : '';
+
+                const tmInvStatus = getTankMovementInvoiceStatus(tm.id);
+                const tmIsInvoiced = tmInvStatus.invoiced || false;
+                const tmIsCheckedSent = tmInvStatus.checkedSent || false;
                 
                 tr.innerHTML = `
                     <td style="padding: 10px; text-align: center;">
                         <span style="color: #16a34a; font-size: 18px;">✓</span>
+                    </td>
+                    <td style="padding: 10px; text-align: center;" onclick="event.stopPropagation();">
+                        <input type="checkbox" ${tmIsInvoiced ? 'checked' : ''}
+                            onchange="toggleTankMovementInvoice(${tm.id},'invoiced',this.checked)"
+                            style="width:16px;height:16px;cursor:pointer;">
+                    </td>
+                    <td style="padding: 10px; text-align: center;" onclick="event.stopPropagation();">
+                        <input type="checkbox" ${tmIsCheckedSent ? 'checked' : ''} ${!tmIsInvoiced ? 'disabled' : ''}
+                            onchange="toggleTankMovementInvoice(${tm.id},'checkedSent',this.checked)"
+                            style="width:16px;height:16px;cursor:pointer;${!tmIsInvoiced ? 'opacity:0.4;' : ''}">
                     </td>
                     <td style="padding: 10px;">
                         ${tm.customerName}
@@ -11495,6 +11388,30 @@
             return raw;
         }
         
+        function getTankMovementInvoiceStatus(tmId) {
+            try {
+                const raw = localStorage.getItem(`tm_inv_${tmId}`);
+                return raw ? JSON.parse(raw) : { invoiced: false, checkedSent: false };
+            } catch (e) { return { invoiced: false, checkedSent: false }; }
+        }
+
+        function setTankMovementInvoiceStatus(tmId, invoiced, checkedSent) {
+            localStorage.setItem(`tm_inv_${tmId}`, JSON.stringify({ invoiced, checkedSent }));
+        }
+
+        function toggleTankMovementInvoice(tmId, field, value) {
+            const current = getTankMovementInvoiceStatus(tmId);
+            const updated = { ...current, [field]: value };
+            if (field === 'invoiced' && !value) updated.checkedSent = false;
+            setTankMovementInvoiceStatus(tmId, updated.invoiced, updated.checkedSent);
+            // Refresh whichever view is active
+            if (currentAdminServiceDay === 'Ad-Hoc') {
+                loadAdminAdHocRunsheet(currentAdminDateFilter);
+            } else {
+                renderTankMovementsTable(currentAdminServiceDay, currentAdminDateFilter);
+            }
+        }
+
         function getCalEventInvoiceStatus(eventId, serviceDate) {
             try {
                 const raw = localStorage.getItem(`calev_inv_${eventId}_${serviceDate}`);
