@@ -10851,8 +10851,7 @@
             // Include all isAdHoc pods for this date regardless of which runsheet they originated from
             const adHocPods = db.pods.filter(pod =>
                 pod.date === selectedDate &&
-                (pod.isAdHoc || pod.runDay === 'Ad-Hoc') &&
-                !pod.sourceRunDay
+                (pod.isAdHoc || pod.runDay === 'Ad-Hoc')
             );
 
             let adHocSection = document.getElementById('adHocPodsSection');
