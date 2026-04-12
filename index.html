@@ -7604,6 +7604,7 @@
                                 <div style="font-weight: 700; font-size: 16px; color: #111827; margin-bottom: 4px;">${event.eventTitle}</div>
                                 <div style="font-size: 13px; color: #6b7280;">${dateStr} ${event.calendarOwner ? '• 👤 ' + event.calendarOwner : ''}</div>
                                 <div style="margin-top: 8px;"><span style="color: ${statusColor}; font-weight: 600;">${statusText}</span></div>
+                                ${event.description && event.description.trim() && event.description.trim() !== event.eventTitle.trim() ? `<div style="margin-top: 8px; padding: 8px 10px; background: #f0f9ff; border-left: 3px solid #3b82f6; border-radius: 4px; font-size: 12px; color: #374151;">${event.description.trim().replace(/\n/g, '<br>')}</div>` : ''}
                                 ${adminToggleHtml}
                             </div>
 
@@ -7655,6 +7656,7 @@
                                 <div style="font-weight: 700; font-size: 16px; color: #111827; margin-bottom: 4px;">${event.eventTitle}</div>
                                 <div style="font-size: 13px; color: #6b7280;">${dateStr} ${event.calendarOwner ? '• 👤 ' + event.calendarOwner : ''}</div>
                                 <div style="margin-top: 8px;"><span style="color: ${statusColor}; font-weight: 600;">${statusText}</span></div>
+                                ${event.description && event.description.trim() && event.description.trim() !== event.eventTitle.trim() ? `<div style="margin-top: 8px; padding: 8px 10px; background: #f0f9ff; border-left: 3px solid #3b82f6; border-radius: 4px; font-size: 12px; color: #374151;">${event.description.trim().replace(/\n/g, '<br>')}</div>` : ''}
                                 ${adminToggleHtml}
                             </div>
                             ${hasDoc ? `
