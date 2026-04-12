@@ -4136,14 +4136,28 @@
                     // Load PODs for selected month
                     await this.loadPodsForMonth();
                     
-                    // Load invoice status
-                    const { data: invoices, error: invError } = await supabase
-                        .from('invoice_status')
-                        .select('*');
-                    if (invError) throw invError;
-                    this.invoiceStatus = {};
-                    if (invoices) {
-                        invoices.forEach(inv => {
+                    // Load invoice status — paginated to bypass 1000 row default limit
+                    {
+                        let allInvoices = [];
+                        let page = 0;
+                        const pageSize = 1000;
+                        let hasMore = true;
+                        while (hasMore) {
+                            const { data: batch, error: invError } = await supabase
+                                .from('invoice_status')
+                                .select('*')
+                                .range(page * pageSize, (page + 1) * pageSize - 1);
+                            if (invError) throw invError;
+                            if (batch && batch.length > 0) {
+                                allInvoices = allInvoices.concat(batch);
+                                hasMore = batch.length === pageSize;
+                                page++;
+                            } else {
+                                hasMore = false;
+                            }
+                        }
+                        this.invoiceStatus = {};
+                        allInvoices.forEach(inv => {
                             this.invoiceStatus[inv.pod_id] = {
                                 invoiced: inv.invoiced,
                                 checkedSent: inv.checked_sent || false,
@@ -4151,6 +4165,7 @@
                                 invoicedBy: inv.invoiced_by || null
                             };
                         });
+                        console.log(`Loaded ${allInvoices.length} invoice status entries`);
                     }
                     
                     // Load skipped customer invoice status
@@ -4950,21 +4965,33 @@
             
             async loadSkippedInvoiceStatus() {
                 try {
-                    const { data, error } = await supabase
-                        .from('skipped_invoice_status')
-                        .select('*');
+                    let allSkipped = [];
+                    let skippedPage = 0;
+                    const skippedPageSize = 1000;
+                    let skippedHasMore = true;
+                    while (skippedHasMore) {
+                        const { data: batch, error } = await supabase
+                            .from('skipped_invoice_status')
+                            .select('*')
+                            .range(skippedPage * skippedPageSize, (skippedPage + 1) * skippedPageSize - 1);
+                        if (error) throw error;
+                        if (batch && batch.length > 0) {
+                            allSkipped = allSkipped.concat(batch);
+                            skippedHasMore = batch.length === skippedPageSize;
+                            skippedPage++;
+                        } else {
+                            skippedHasMore = false;
+                        }
+                    }
                     this.skippedInvoiceStatus = {};
                     this.skippedInvoiceNotes = {};
-                    if (!error && data) {
-                        data.forEach(row => {
-                            const key = `${row.customer_id}|${row.service_date}`;
-                            this.skippedInvoiceStatus[key] = {
+                    allSkipped.forEach(row => {
+                            const key = `${row.customer_id}|${row.service_date}`;\n                            this.skippedInvoiceStatus[key] = {
                                 invoiced: row.invoiced,
                                 checkedSent: row.checked_sent || false
                             };
                             if (row.invoice_notes) this.skippedInvoiceNotes[key] = row.invoice_notes;
-                        });
-                    }
+                    });
                 } catch (e) {
                     console.log('skipped_invoice_status not available:', e);
                     this.skippedInvoiceStatus = {};
