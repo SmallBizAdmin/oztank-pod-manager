@@ -4986,7 +4986,8 @@
                     this.skippedInvoiceStatus = {};
                     this.skippedInvoiceNotes = {};
                     allSkipped.forEach(row => {
-                            const key = `${row.customer_id}|${row.service_date}`;\n                            this.skippedInvoiceStatus[key] = {
+                            const key = `${row.customer_id}|${row.service_date}`;
+                            this.skippedInvoiceStatus[key] = {
                                 invoiced: row.invoiced,
                                 checkedSent: row.checked_sent || false
                             };
