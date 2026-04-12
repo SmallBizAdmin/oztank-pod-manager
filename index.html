@@ -10887,6 +10887,124 @@
                 </tr>
             `;
 
+            // ── SECTION 1: AD-HOC PODS ──────────────────────────────────────────
+            // Include all isAdHoc pods for this date regardless of which runsheet they originated from
+            const adHocPods = db.pods.filter(pod =>
+                pod.date === selectedDate &&
+                (pod.isAdHoc || pod.runDay === 'Ad-Hoc')
+            );
+
+            let adHocSection = document.getElementById('adHocPodsSection');
+            if (!adHocSection) {
+                adHocSection = document.createElement('div');
+                adHocSection.id = 'adHocPodsSection';
+                const tankSec = document.getElementById('tankMovementsSection');
+                if (tankSec) tankSec.parentNode.insertBefore(adHocSection, tankSec);
+                else document.getElementById('adminRunsheetContainer').appendChild(adHocSection);
+            }
+
+            if (adHocPods.length > 0) {
+                adHocSection.style.display = 'block';
+                adHocSection.innerHTML = `
+                    <h3 style="margin: 24px 0 12px; color: #92400e;">📋 Ad-Hoc Services & Deliveries</h3>
+                    <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+                        <thead>
+                            <tr style="background: #fef3c7;">
+                                <th style="padding: 10px; text-align: center; border-bottom: 2px solid #f59e0b; width: 40px;">✓</th>
+                                <th style="padding: 10px; text-align: center; border-bottom: 2px solid #f59e0b; width: 40px;">Inv</th>
+                                <th style="padding: 10px; text-align: center; border-bottom: 2px solid #f59e0b; width: 50px;">Chk'd</th>
+                                <th style="padding: 10px; text-align: left; border-bottom: 2px solid #f59e0b;">Customer</th>
+                                <th style="padding: 10px; text-align: left; border-bottom: 2px solid #f59e0b;">Type</th>
+                                <th style="padding: 10px; text-align: left; border-bottom: 2px solid #f59e0b;">Carbsolve</th>
+                                <th style="padding: 10px; text-align: left; border-bottom: 2px solid #f59e0b;">Products</th>
+                                <th style="padding: 10px; text-align: left; border-bottom: 2px solid #f59e0b;">Notes</th>
+                            </tr>
+                        </thead>
+                        <tbody id="adHocPodsTableBody"></tbody>
+                    </table>
+                `;
+                const adHocTbody = document.getElementById('adHocPodsTableBody');
+                adHocPods.forEach(pod => {
+                    const customer = db.customers.find(c => c.id === pod.customerId);
+                    const customerName = customer ? customer.name : (pod.customerName || 'Unknown Customer');
+                    const productsStr = (() => {
+                        if (!pod.products || pod.products.length === 0) return '-';
+                        const saleItems = pod.products.filter(p => p.type !== 'repair');
+                        const repairItems = pod.products.filter(p => p.type === 'repair');
+                        const parts = [];
+                        if (saleItems.length > 0) parts.push(saleItems.map(p => `${p.product} x${p.quantity}`).join(', '));
+                        if (repairItems.length > 0) {
+                            const hasTaggedTanks = repairItems.some(p => p.tankLabel);
+                            if (hasTaggedTanks) {
+                                const grouped = {};
+                                repairItems.forEach(p => {
+                                    const key = p.tankLabel || 'General';
+                                    if (!grouped[key]) grouped[key] = [];
+                                    grouped[key].push(`${p.product} x${p.quantity}`);
+                                });
+                                parts.push(Object.entries(grouped).map(([tank, items]) =>
+                                    `<span style="color:#1d4ed8;font-weight:600;">${tank}:</span> ${items.join(', ')}`
+                                ).join('<br>'));
+                            } else {
+                                parts.push(repairItems.map(p => `${p.product} x${p.quantity}`).join(', '));
+                            }
+                        }
+                        return parts.join('<br>');
+                    })();
+                    const typeIcon = pod.serviceType === 'Delivery' ? '📦' : pod.serviceType === 'Repairs' ? '🔨' : '🔧';
+                    let carbsolve;
+                    if (pod.serviceType === 'Delivery') {
+                        carbsolve = '-';
+                    } else if (pod.tankServices && pod.tankServices.length > 0) {
+                        carbsolve = pod.tankServices.map(t =>
+                            `<span style="white-space:nowrap;">${t.serviced ? '✅' : '⬜'} ${t.tankLabel}${t.carbsolve ? ` · ${t.carbsolve}` : ''}</span>`
+                        ).join('<br>');
+                    } else {
+                        carbsolve = (pod.carbsolve || '-').replace(/^(Carbsolve\s*[-:]\s*|Carb:\s*)/i, '');
+                    }
+                    const invStatus = getInvoiceStatus(pod.id);
+                    const calBadge = pod.calendarEventId
+                        ? '<span style="background:#8b5cf6;color:white;padding:2px 6px;border-radius:8px;font-size:10px;margin-left:4px;">Cal</span>'
+                        : '';
+                    const podWorkerBadge = pod.completedBy
+                        ? `<span style="display:inline-block;margin-left:6px;background:${getWorkerColor(pod.completedBy)};color:white;padding:1px 6px;border-radius:8px;font-size:10px;">👤 ${pod.completedBy}</span>`
+                        : '';
+                    const tr = document.createElement('tr');
+                    tr.style.cssText = 'border-bottom: 1px solid #fde68a; cursor: pointer; background: #fffbeb; vertical-align: top;';
+                    tr.onclick = () => viewPODFromOverview(pod.id);
+                    tr.onmouseover = () => tr.style.background = '#fef3c7';
+                    tr.onmouseout = () => tr.style.background = '#fffbeb';
+                    tr.innerHTML = `
+                        <td style="padding: 12px; text-align: center;"><span style="color: #16a34a; font-size: 18px;">✓</span></td>
+                        <td style="padding: 12px; text-align: center;" onclick="event.stopPropagation();">
+                            <input type="checkbox" class="invoice-checkbox" data-pod-id="${pod.id}" ${invStatus.invoiced ? 'checked' : ''}
+                               onchange="toggleInvoice(${pod.id}, null, null, this.checked)">
+                        </td>
+                        <td style="padding: 12px; text-align: center;" onclick="event.stopPropagation();">
+                            <input type="checkbox" class="checked-sent-checkbox" data-pod-id="${pod.id}" ${invStatus.checkedSent ? 'checked' : ''} ${!invStatus.invoiced ? 'disabled' : ''}
+                               onchange="toggleCheckedSent(${pod.id}, null, null)" title="Checked & Sent">
+                        </td>
+                        <td style="padding: 12px;">
+                            ${customerName}
+                            <span style="background:#f59e0b;color:white;padding:2px 6px;border-radius:8px;font-size:10px;margin-left:8px;">Ad-Hoc</span>
+                            ${calBadge}
+                            ${podWorkerBadge}
+                            ${invoiceNoteInlineHtml('pod', pod.id, pod.invoiceNotes || null)}
+                        </td>
+                        <td style="padding: 12px;">${typeIcon} ${pod.serviceType || 'Service'}</td>
+                        <td style="padding: 12px;">${carbsolve}</td>
+                        <td style="padding: 12px;">${productsStr}</td>
+                        <td style="padding: 12px; font-size: 12px; font-style: italic;">
+                            ${pod.notes || '-'}
+                            ${invoicePencilBtn('pod', pod.id)}
+                        </td>
+                    `;
+                    adHocTbody.appendChild(tr);
+                });
+            } else {
+                adHocSection.style.display = 'none';
+            }
+
             // ── SECTION 2: TANK MOVEMENTS ───────────────────────────────────────
             const adHocTankMoves = db.tankMovements.filter(tm =>
                 tm.date === selectedDate && tm.runDay === 'Ad-Hoc'
