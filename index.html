@@ -546,7 +546,7 @@
             flex: 1;
         }
 
-        .product-line input[type="number"] {
+        .product-line .product-quantity {
             width: 80px;
         }
 
@@ -576,7 +576,7 @@
             .product-line select {
                 flex: 1 1 100%;
             }
-            .product-line input[type="number"] {
+            .product-line .product-quantity {
                 width: 70px;
                 flex-shrink: 0;
             }
@@ -9812,7 +9812,7 @@
                     <select class="product-select" onchange="checkProductLineComplete(this)">
                         ${getProductOptionsHtml('sale')}
                     </select>
-                    <input type="number" class="product-quantity" placeholder="Qty" min="0" value="0" onchange="checkProductLineComplete(this)">
+                    <input type="text" inputmode="numeric" class="product-quantity" placeholder="0" min="0" value="" onchange="checkProductLineComplete(this)">
                     <button type="button" class="product-confirm-btn" onclick="confirmProductLine(this)" disabled style="background: #9ca3af; cursor: not-allowed;">Confirm</button>
                     <button type="button" onclick="removeProductLine(this)">Remove</button>
                 </div>
@@ -9834,7 +9834,7 @@
                         <select class="product-select" onchange="checkProductLineComplete(this)">
                             ${getProductOptionsHtml('repair')}
                         </select>
-                        <input type="number" class="product-quantity" placeholder="Qty" min="0" value="0" onchange="checkProductLineComplete(this)">
+                        <input type="text" inputmode="numeric" class="product-quantity" placeholder="0" min="0" value="" onchange="checkProductLineComplete(this)">
                         <button type="button" class="product-confirm-btn" onclick="confirmProductLine(this)" disabled style="background: #9ca3af; cursor: not-allowed;">Confirm</button>
                         <button type="button" onclick="removeProductLine(this)">Remove</button>
                     </div>
@@ -9863,7 +9863,7 @@
                 <select class="product-select" onchange="checkProductLineComplete(this)">
                     ${getProductOptionsHtml(category)}
                 </select>
-                <input type="number" class="product-quantity" placeholder="Qty" min="0" value="0" onchange="checkProductLineComplete(this)">
+                <input type="text" inputmode="numeric" class="product-quantity" placeholder="0" min="0" value="" onchange="checkProductLineComplete(this)">
                 <button type="button" class="product-confirm-btn" onclick="confirmProductLine(this)" disabled style="background: #9ca3af; cursor: not-allowed;">Confirm</button>
                 <button type="button" onclick="removeProductLine(this)">Remove</button>
             `;
