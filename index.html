@@ -4038,6 +4038,7 @@
             customers: [],
             products: [],
             pods: [],
+            progressPods: [], // Always holds today's real month — never clobbered by admin calendar navigation
             serviceDays: [],
             calendarUrl: '',
             invoiceStatus: {},        // pod_id → { invoiced, checkedSent }
@@ -4135,6 +4136,9 @@
                     
                     // Load PODs for selected month
                     await this.loadPodsForMonth();
+                    
+                    // Load progress PODs for today's month (always today, never affected by admin calendar nav)
+                    await this.loadProgressPods();
                     
                     // Load invoice status — paginated to bypass 1000 row default limit
                     {
@@ -4553,6 +4557,30 @@
                 }
             },
             
+            // Always loads today's real month into this.progressPods — unaffected by admin calendar nav
+            async loadProgressPods() {
+                const now = new Date();
+                this.progressPods = await this.loadPodsForSpecificMonth(now.getMonth(), now.getFullYear());
+                console.log(`Loaded ${this.progressPods.length} progress PODs for ${MONTH_NAMES[now.getMonth()]} ${now.getFullYear()}`);
+            },
+            
+            // Mirror individual pod saves/deletes into progressPods so it stays correct
+            // even when db.pods has been replaced by admin calendar navigation.
+            _syncProgressPod(pod, remove = false) {
+                const now = new Date();
+                const podDate = pod.date ? new Date(pod.date + 'T00:00:00') : null;
+                const isThisMonth = podDate &&
+                    podDate.getMonth() === now.getMonth() &&
+                    podDate.getFullYear() === now.getFullYear();
+                const idx = this.progressPods.findIndex(p => p.id === pod.id);
+                if (remove) {
+                    if (idx >= 0) this.progressPods.splice(idx, 1);
+                } else if (isThisMonth) {
+                    if (idx >= 0) this.progressPods[idx] = pod;
+                    else this.progressPods.push(pod);
+                }
+            },
+            
             async loadScheduledDaysForWeek() {
                 try {
                     const startStr = formatDateLocal(selectedWeekStart);
@@ -4847,6 +4875,7 @@
                     } else {
                         this.pods.push(pod);
                     }
+                    this._syncProgressPod(pod);
                     
                     // Update cache with new pod
                     cacheForOffline('pods', this.pods);
@@ -4868,6 +4897,7 @@
                     } else {
                         this.pods.push(pod);
                     }
+                    this._syncProgressPod(pod);
                     cacheForOffline('pods', this.pods);
                     
                     return true;
@@ -4889,6 +4919,7 @@
                     // Remove from local array
                     const index = this.pods.findIndex(p => p.id === podId);
                     if (index >= 0) {
+                        this._syncProgressPod(this.pods[index], true);
                         this.pods.splice(index, 1);
                     }
                     
@@ -4915,6 +4946,7 @@
                     // Remove from local array and update cache
                     const index = this.pods.findIndex(p => p.id === podId);
                     if (index >= 0) {
+                        this._syncProgressPod(this.pods[index], true);
                         this.pods.splice(index, 1);
                     }
                     cacheForOffline('pods', this.pods);
@@ -5736,6 +5768,8 @@
                     _debouncePods = setTimeout(async () => {
                         // Reload pod data for the active period
                         await refreshForPeriod();
+                        // Keep progressPods (today's month) in sync
+                        await db.loadProgressPods();
                         // Re-render home view if it's active
                         if (document.getElementById('homeView')?.classList.contains('active')) {
                             renderRunDays();
@@ -9034,8 +9068,8 @@
             const countMonth = _todayForProgress.getMonth();
             const countYear = _todayForProgress.getFullYear();
             
-            // Always use the currently loaded PODs (which are for today's month)
-            const progressPods = db.pods;
+            // Always use progressPods — loaded for today's month, never overwritten by admin calendar nav
+            const progressPods = db.progressPods;
             
             // Update the month progress heading
             if (monthProgressHeading) {
