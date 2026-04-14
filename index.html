@@ -9028,46 +9028,14 @@
             const workerDayCount = document.getElementById('workerDayCount');
             const monthProgressHeading = document.getElementById('monthProgressHeading');
             
-            // Determine the month for counting completions based on the viewed week
-            let countMonth, countYear;
-            if (workerPeriod === 'week') {
-                // For week view: if today is within the selected week, use today's month
-                // This handles cross-month weeks (e.g., Mar 30 - Apr 3)
-                const todayDate = new Date();
-                const weekEnd = new Date(workerWeekStart);
-                weekEnd.setDate(weekEnd.getDate() + 4); // Friday
-                
-                const todayStr = formatDateLocal(todayDate);
-                const weekStartStr = formatDateLocal(workerWeekStart);
-                const weekEndStr = formatDateLocal(weekEnd);
-                
-                if (todayStr >= weekStartStr && todayStr <= weekEndStr) {
-                    // Today is within the viewed week - use today's month
-                    countMonth = todayDate.getMonth();
-                    countYear = todayDate.getFullYear();
-                } else {
-                    // Viewing a different week - use week start's month
-                    countMonth = workerWeekStart.getMonth();
-                    countYear = workerWeekStart.getFullYear();
-                }
-            } else {
-                // Month view - use workerMonthYear
-                countMonth = workerMonthYear.month;
-                countYear = workerMonthYear.year;
-            }
+            // Progress tiles always reflect the current real-world month, regardless of
+            // which week or month is being viewed in the calendar above.
+            const _todayForProgress = new Date();
+            const countMonth = _todayForProgress.getMonth();
+            const countYear = _todayForProgress.getFullYear();
             
-            // Check if we need to load PODs for a different month than what's currently loaded
-            // This happens in cross-month weeks where progress month differs from week start month
-            let progressPods = db.pods; // Default to existing PODs
-            if (workerPeriod === 'week') {
-                const weekStartMonth = workerWeekStart.getMonth();
-                const weekStartYear = workerWeekStart.getFullYear();
-                if (countMonth !== weekStartMonth || countYear !== weekStartYear) {
-                    // Need to load PODs for the progress month
-                    console.log(`Loading PODs for progress month: ${MONTH_NAMES[countMonth]} ${countYear}`);
-                    progressPods = await db.loadPodsForSpecificMonth(countMonth, countYear);
-                }
-            }
+            // Always use the currently loaded PODs (which are for today's month)
+            const progressPods = db.pods;
             
             // Update the month progress heading
             if (monthProgressHeading) {
