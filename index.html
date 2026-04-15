@@ -5246,7 +5246,7 @@
                             this.monthlySkips[key] = {
                                 reason: skip.reason || '',
                                 createdAt: skip.created_at,
-                                isRentalOnly: skip.is_rental_only || false
+                                isRentalOnly: skip.is_rental_only === null ? null : (skip.is_rental_only || false)
                             };
                         });
                     }
@@ -5326,7 +5326,8 @@
 
             getSkipIsRentalOnly(customerId, date) {
                 const key = `${customerId}-${date}`;
-                return this.monthlySkips[key]?.isRentalOnly || false;
+                const val = this.monthlySkips[key]?.isRentalOnly;
+                return val === undefined ? null : val;
             },
 
             // For historical/admin views: check if skipped on any date within a given month
@@ -7153,7 +7154,11 @@
             const key = `${customerId}-${skipDate}`;
             const skip = db.monthlySkips[key];
             if (!skip) return;
-            const newValue = !skip.isRentalOnly;
+            const skipRentalFlag = db.getSkipIsRentalOnly(customerId, skipDate);
+            const autoDetect = (db.getSkipReason(customerId, skipDate) || '').toLowerCase().includes('no service required');
+            const currentIsRental = skipRentalFlag === true || (skipRentalFlag === null && autoDetect);
+            // Toggle: if currently rental → set explicitly false; if not → set explicitly true
+            const newValue = currentIsRental ? false : true;
             const { error } = await supabase
                 .from('customer_monthly_skips')
                 .update({ is_rental_only: newValue })
@@ -10848,8 +10853,9 @@
                         statusBadgeHtml = `<span style="background: #dcfce7; color: #166534; padding: 2px 8px; border-radius: 8px; font-size: 10px; font-weight: 600;">${badgeLabel}</span>` + podAttrib + rentalToggleBtn;
                     }
                 } else if (isSkipped) {
-                    const isRentalSkip = db.getSkipIsRentalOnly(customer.id, selectedDate)
-                        || (skipReason && skipReason.toLowerCase().includes('no service required'));
+                    const skipRentalFlag = db.getSkipIsRentalOnly(customer.id, selectedDate);
+                    const isRentalSkip = skipRentalFlag === true
+                        || (skipRentalFlag === null && skipReason && skipReason.toLowerCase().includes('no service required'));
                     const skipToggleBtn = isAdminUser
                         ? `<button onclick="event.stopPropagation(); toggleSkipRentalOnly(${customer.id}, '${selectedDate}')" style="background:none;border:none;cursor:pointer;font-size:11px;color:#9ca3af;padding:2px 4px;display:block;margin-top:3px;" title="Toggle Rental Only">${isRentalSkip ? '↩ Set Skipped' : '🏠 Set Rental Only'}</button>`
                         : '';
