@@ -11189,6 +11189,7 @@
             // 2. Ad-hoc from this runsheet: sourceRunDay matches and date matches
             const movements = db.tankMovements.filter(tm => {
                 if (tm.date !== selectedDate) return false;
+                if (tm.runDay === 'Ad-Hoc') return false; // Always in ad-hoc section, never runsheet
                 // Regular movement for this service day
                 if (tm.runDay === serviceDayName) return true;
                 // Ad-hoc created from this runsheet
@@ -13213,7 +13214,7 @@
             
             // If tank movement was initiated from a runsheet, use that runsheet's day
             // If from main menu (tankMovementSourceRunDay is null), always use 'Ad-Hoc'
-            const effectiveRunDay = tankMovementSourceRunDay !== null ? tankMovementSourceRunDay : 'Ad-Hoc';
+            const effectiveRunDay = 'Ad-Hoc';
             const effectiveCustomerId = selectedTankMovementCustomer ? selectedTankMovementCustomer.id : null;
             const effectiveCustomerName = selectedTankMovementCustomer ? selectedTankMovementCustomer.name : freetextName;
             
