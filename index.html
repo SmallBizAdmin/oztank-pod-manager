@@ -7146,7 +7146,7 @@
             if (error) { showToast('Error updating invoice type', 'error'); return; }
             pod.isRentalOnly = newValue;
             showToast(newValue ? 'Set to Rental Only' : 'Set to Serviced', 'success');
-            loadAdminRunsheet(currentAdminServiceDay, currentAdminDateFilter);
+            loadAdminRunsheet();
         }
 
         async function toggleSkipRentalOnly(customerId, skipDate) {
@@ -7162,7 +7162,7 @@
             if (error) { showToast('Error updating invoice type', 'error'); return; }
             skip.isRentalOnly = newValue;
             showToast(newValue ? 'Set to Rental Only' : 'Set to Skipped', 'success');
-            loadAdminRunsheet(currentAdminServiceDay, currentAdminDateFilter);
+            loadAdminRunsheet();
         }
 
         function renderAdminCalendar() {
