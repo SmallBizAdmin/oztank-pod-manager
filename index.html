@@ -10844,25 +10844,27 @@
                         ? `<div style="font-size: 10px; color: #9ca3af; margin-top: 3px;">${pod.completedBy}${pod.completedAt ? ' · ' + new Date(pod.completedAt).toLocaleString('en-AU', { timeZone: 'Australia/Brisbane', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}</div>`
                         : '';
                     const rentalToggleBtn = isAdminUser
-                        ? `<button onclick="event.stopPropagation(); toggleRentalOnly(${pod.id})" style="background:none;border:none;cursor:pointer;font-size:11px;color:#9ca3af;padding:2px 4px;display:block;margin-top:3px;" title="Toggle Rental Only">${isRentalOnly ? '↩ Set Serviced' : '🏠 Set Rental Only'}</button>`
+                        ? `<button onclick="event.stopPropagation(); toggleRentalOnly(${pod.id})" style="background:none;border:none;cursor:pointer;font-size:11px;color:#9ca3af;padding:2px 4px;" title="Toggle Rental Only">${isRentalOnly ? '↩ Set Serviced' : '🏠 Set Rental Only'}</button>`
                         : '';
+                    const podPencil = invoicePencilBtn(noteType, noteId);
                     if (isRentalOnly) {
-                        statusBadgeHtml = '<span class="rental-only-badge">Rental Only</span>' + podAttrib + rentalToggleBtn;
+                        statusBadgeHtml = `<div style="text-align:center;"><span class="rental-only-badge">Rental Only</span>${podAttrib}<div style="display:flex;align-items:center;justify-content:center;gap:4px;margin-top:3px;">${rentalToggleBtn}${podPencil}</div></div>`;
                     } else {
                         const badgeLabel = (pod.serviceType === 'Delivery' || customer.serviceType === 'Delivery') ? 'Delivered' : 'Serviced';
-                        statusBadgeHtml = `<span style="background: #dcfce7; color: #166534; padding: 2px 8px; border-radius: 8px; font-size: 10px; font-weight: 600;">${badgeLabel}</span>` + podAttrib + rentalToggleBtn;
+                        statusBadgeHtml = `<div style="text-align:center;"><span style="background: #dcfce7; color: #166534; padding: 2px 8px; border-radius: 8px; font-size: 10px; font-weight: 600;">${badgeLabel}</span>${podAttrib}<div style="display:flex;align-items:center;justify-content:center;gap:4px;margin-top:3px;">${rentalToggleBtn}${podPencil}</div></div>`;
                     }
                 } else if (isSkipped) {
                     const skipRentalFlag = db.getSkipIsRentalOnly(customer.id, selectedDate);
                     const isRentalSkip = skipRentalFlag === true
                         || (skipRentalFlag === null && skipReason && skipReason.toLowerCase().includes('no service required'));
                     const skipToggleBtn = isAdminUser
-                        ? `<button onclick="event.stopPropagation(); toggleSkipRentalOnly(${customer.id}, '${selectedDate}')" style="background:none;border:none;cursor:pointer;font-size:11px;color:#9ca3af;padding:2px 4px;display:block;margin-top:3px;" title="Toggle Rental Only">${isRentalSkip ? '↩ Set Skipped' : '🏠 Set Rental Only'}</button>`
+                        ? `<button onclick="event.stopPropagation(); toggleSkipRentalOnly(${customer.id}, '${selectedDate}')" style="background:none;border:none;cursor:pointer;font-size:11px;color:#9ca3af;padding:2px 4px;" title="Toggle Rental Only">${isRentalSkip ? '↩ Set Skipped' : '🏠 Set Rental Only'}</button>`
                         : '';
+                    const skipPencil = invoicePencilBtn(noteType, noteId);
                     if (isRentalSkip) {
-                        statusBadgeHtml = '<span class="rental-only-badge">Rental Only</span>' + skipToggleBtn;
+                        statusBadgeHtml = `<div style="text-align:center;"><span class="rental-only-badge">Rental Only</span><div style="display:flex;align-items:center;justify-content:center;gap:4px;margin-top:3px;">${skipToggleBtn}${skipPencil}</div></div>`;
                     } else {
-                        statusBadgeHtml = '<span style="background: #e5e7eb; color: #6b7280; padding: 2px 8px; border-radius: 8px; font-size: 10px;">Skipped</span>' + skipToggleBtn;
+                        statusBadgeHtml = `<div style="text-align:center;"><span style="background: #e5e7eb; color: #6b7280; padding: 2px 8px; border-radius: 8px; font-size: 10px;">Skipped</span><div style="display:flex;align-items:center;justify-content:center;gap:4px;margin-top:3px;">${skipToggleBtn}${skipPencil}</div></div>`;
                     }
                 }
 
@@ -10899,8 +10901,7 @@
                     <td style="padding: 12px;">${productsStr}</td>
                     <td style="padding: 12px; font-size: 12px; font-style: italic;">${notesHtml}</td>
                     <td style="padding: 12px; text-align: center;">
-                        ${statusBadgeHtml}
-                        ${invoicePencilBtn(noteType, noteId)}
+                        ${statusBadgeHtml || `<div style="display:flex;justify-content:center;">${invoicePencilBtn(noteType, noteId)}</div>`}
                     </td>
                 `;
                 tbody.appendChild(tr);
