@@ -5261,6 +5261,8 @@
                 try {
                     // Derive year_month from skipDate for backward compat with DB column
                     const yearMonth = skipDate.substring(0, 7); // 'YYYY-MM-DD' → 'YYYY-MM'
+                    const skippedBy = currentUser ? (currentUser.name || currentUser.email) : null;
+                    const skippedAt = new Date().toISOString();
                     const { error } = await supabase
                         .from('customer_monthly_skips')
                         .upsert({
@@ -5268,7 +5270,9 @@
                             skip_date: skipDate,
                             year_month: yearMonth,
                             reason: reason,
-                            created_at: new Date().toISOString()
+                            created_at: skippedAt,
+                            skipped_by: skippedBy,
+                            skipped_at: skippedAt
                         }, { onConflict: 'customer_id,skip_date' });
 
                     if (error) throw error;
@@ -5276,7 +5280,9 @@
                     const key = `${customerId}-${skipDate}`;
                     this.monthlySkips[key] = {
                         reason: reason,
-                        createdAt: new Date().toISOString()
+                        createdAt: skippedAt,
+                        skippedBy: skippedBy,
+                        skippedAt: skippedAt
                     };
 
                     return true;
