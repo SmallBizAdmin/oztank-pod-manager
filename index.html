@@ -7291,7 +7291,7 @@
             completedCount = trulyAdHocPods.length + trulyAdHocTankMoves.length + tickedEvents.length;
             totalCustomers = eventsOnDate.length;
             } else {
-            completedCount = pods.length;
+            completedCount = pods.filter(p => !p.isAdHoc).length;
             totalCustomers = db.customers.filter(c => c.runDay === runDay).length;
              }
                 // Check if this service day is invoiced
