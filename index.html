@@ -10833,6 +10833,13 @@
                         onchange="toggleCheckedSent(null, ${customer.id}, '${selectedDate}')" title="Checked & Sent">`;
                 }
 
+                const skipKey = `${customer.id}|${selectedDate}`;
+                const podInvNote = pod ? (pod.invoiceNotes || null) : null;
+                const skipInvNote = !pod ? ((db.skippedInvoiceNotes || {})[skipKey] || null) : null;
+                const noteType = pod ? 'pod' : 'skip';
+                const noteId = pod ? pod.id : skipKey;
+                const noteVal = pod ? podInvNote : skipInvNote;
+
                 // Status badge
                 const isAdminUser = currentUser && ADMIN_EMAILS.includes(currentUser.email.toLowerCase());
                 let statusBadgeHtml = '';
@@ -10876,12 +10883,6 @@
                     ? `<span style="background: #fff7ed; color: #c2410c; border: 2px solid #f97316; padding: 3px 8px; border-radius: 6px; font-weight: 700; white-space: nowrap;">⚠️ ${carbsolve}</span><br><span style="font-size: 10px; color: #9ca3af;">default: ${customerDefaultCarbsolve}</span>`
                     : carbsolve;
 
-                const skipKey = `${customer.id}|${selectedDate}`;
-                const podInvNote = pod ? (pod.invoiceNotes || null) : null;
-                const skipInvNote = !pod ? ((db.skippedInvoiceNotes || {})[skipKey] || null) : null;
-                const noteType = pod ? 'pod' : 'skip';
-                const noteId = pod ? pod.id : skipKey;
-                const noteVal = pod ? podInvNote : skipInvNote;
                 tr.innerHTML = `
                     <td style="padding: 12px; text-align: center;">
                         ${statusDisplay}
