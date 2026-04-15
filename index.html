@@ -11069,15 +11069,22 @@
             // ── SECTION 3: CALENDAR EVENTS (ticked/crossed only) ───────────────
             const actionedEvents = (db.calendarEvents || [])
                 .filter(ev => {
-                    if (ev.eventDate !== selectedDate) return false;
                     const status = db.getCalendarEventStatus(ev.id);
                     if (status !== 'completed' && status !== 'cancelled') return false;
-                    // If a POD already exists for this event it's shown in the Ad-Hoc section above
-                    const hasLinkedPod = db.pods.some(p => p.calendarEventId == ev.id && p.date === selectedDate);
+                    // If a POD already exists for this event, it's shown in Section 1 above — suppress here regardless of date
+                    const hasLinkedPod = db.pods.some(p => p.calendarEventId == ev.id);
                     if (hasLinkedPod) return false;
-                    // If a tank movement exists for this event it's shown in Tank Movements above
-                    const hasLinkedTM = db.tankMovements.some(tm => tm.calendarEventId == ev.id && tm.date === selectedDate);
-                    return !hasLinkedTM;
+                    // If a tank movement exists for this event, it's shown in Section 2 above — suppress here regardless of date
+                    const hasLinkedTM = db.tankMovements.some(tm => tm.calendarEventId == ev.id);
+                    if (hasLinkedTM) return false;
+                    // Display on completion date (Option A):
+                    // Quick-complete: use actioned_at converted to Brisbane local date
+                    // Fallback: use the original event date (e.g. cancelled events with no actioned_at)
+                    const actionInfo = db.getCalendarEventActionInfo(ev.id);
+                    const effectiveDate = (actionInfo && actionInfo.actioned_at)
+                        ? new Date(actionInfo.actioned_at).toLocaleDateString('en-CA', { timeZone: 'Australia/Brisbane' })
+                        : ev.eventDate;
+                    return effectiveDate === selectedDate;
                 })
                 .sort((a, b) => workerRank(a.calendarOwner) - workerRank(b.calendarOwner));
 
