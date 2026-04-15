@@ -5245,7 +5245,8 @@
                             const key = `${skip.customer_id}-${skip.skip_date}`;
                             this.monthlySkips[key] = {
                                 reason: skip.reason || '',
-                                createdAt: skip.created_at
+                                createdAt: skip.created_at,
+                                isRentalOnly: skip.is_rental_only || false
                             };
                         });
                     }
@@ -5321,6 +5322,11 @@
             getSkipReason(customerId, date) {
                 const key = `${customerId}-${date}`;
                 return this.monthlySkips[key]?.reason || '';
+            },
+
+            getSkipIsRentalOnly(customerId, date) {
+                const key = `${customerId}-${date}`;
+                return this.monthlySkips[key]?.isRentalOnly || false;
             },
 
             // For historical/admin views: check if skipped on any date within a given month
@@ -7140,6 +7146,22 @@
             if (error) { showToast('Error updating invoice type', 'error'); return; }
             pod.isRentalOnly = newValue;
             showToast(newValue ? 'Set to Rental Only' : 'Set to Serviced', 'success');
+            loadAdminRunsheet(currentAdminServiceDay, currentAdminDateFilter);
+        }
+
+        async function toggleSkipRentalOnly(customerId, skipDate) {
+            const key = `${customerId}-${skipDate}`;
+            const skip = db.monthlySkips[key];
+            if (!skip) return;
+            const newValue = !skip.isRentalOnly;
+            const { error } = await supabase
+                .from('customer_monthly_skips')
+                .update({ is_rental_only: newValue })
+                .eq('customer_id', customerId)
+                .eq('skip_date', skipDate);
+            if (error) { showToast('Error updating invoice type', 'error'); return; }
+            skip.isRentalOnly = newValue;
+            showToast(newValue ? 'Set to Rental Only' : 'Set to Skipped', 'success');
             loadAdminRunsheet(currentAdminServiceDay, currentAdminDateFilter);
         }
 
@@ -10826,11 +10848,15 @@
                         statusBadgeHtml = `<span style="background: #dcfce7; color: #166534; padding: 2px 8px; border-radius: 8px; font-size: 10px; font-weight: 600;">${badgeLabel}</span>` + podAttrib + rentalToggleBtn;
                     }
                 } else if (isSkipped) {
-                    const isRentalSkip = skipReason && skipReason.toLowerCase().includes('no service required');
+                    const isRentalSkip = db.getSkipIsRentalOnly(customer.id, selectedDate)
+                        || (skipReason && skipReason.toLowerCase().includes('no service required'));
+                    const skipToggleBtn = isAdminUser
+                        ? `<button onclick="event.stopPropagation(); toggleSkipRentalOnly(${customer.id}, '${selectedDate}')" style="background:none;border:none;cursor:pointer;font-size:11px;color:#9ca3af;padding:2px 4px;display:block;margin-top:3px;" title="Toggle Rental Only">${isRentalSkip ? '↩ Set Skipped' : '🏠 Set Rental Only'}</button>`
+                        : '';
                     if (isRentalSkip) {
-                        statusBadgeHtml = '<span class="rental-only-badge">Rental Only</span>';
+                        statusBadgeHtml = '<span class="rental-only-badge">Rental Only</span>' + skipToggleBtn;
                     } else {
-                        statusBadgeHtml = '<span style="background: #e5e7eb; color: #6b7280; padding: 2px 8px; border-radius: 8px; font-size: 10px;">Skipped</span>';
+                        statusBadgeHtml = '<span style="background: #e5e7eb; color: #6b7280; padding: 2px 8px; border-radius: 8px; font-size: 10px;">Skipped</span>' + skipToggleBtn;
                     }
                 }
 
