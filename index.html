@@ -10361,6 +10361,7 @@
             
             // Strip stored prefix (e.g. "Carbsolve - 4kg" → "4kg") so the dropdown matches
             const currentCarbsolve = (customer.carbsolve || '').replace(/^(Carbsolve\s*[-:]\s*|Carb:\s*)/i, '').trim();
+            const isMultiTank = (customer.tankCount || 1) > 1;
             
             const div = document.getElementById(`customer-${id}`);
             div.innerHTML = `
@@ -10378,6 +10379,11 @@
                             <option value="Check" ${customer.serviceType === 'Check' ? 'selected' : ''}>Check</option>
                         </select>
                         
+                        ${isMultiTank ? `
+                        <div style="width: 100%; padding: 8px; margin-bottom: 4px; background: #f3f4f6; border: 1px dashed #9ca3af; border-radius: 4px; color: #6b7280; font-size: 13px; font-style: italic;">
+                            📋 Per-tank carbsolve — edit in customer profile (Schedule & Notes)
+                        </div>
+                        ` : `
                         <select id="edit-carbsolve-${id}" style="width: 100%; padding: 8px; margin-bottom: 4px;">
                             <option value="">Carbsolve...</option>
                             <option value="4kg" ${currentCarbsolve === '4kg' ? 'selected' : ''}>4kg</option>
@@ -10391,6 +10397,7 @@
                             <option value="21kg" ${currentCarbsolve === '21kg' ? 'selected' : ''}>21kg</option>
                             <option value="28kg" ${currentCarbsolve === '28kg' ? 'selected' : ''}>28kg</option>
                         </select>
+                        `}
                         
                         <select id="edit-waste-${id}" style="width: 100%; padding: 8px; margin-bottom: 4px;">
                             <option value="">Waste...</option>
@@ -10429,8 +10436,13 @@
             customer.address = document.getElementById(`edit-address-${id}`).value;
             customer.phone = document.getElementById(`edit-phone-${id}`).value;
             customer.serviceType = document.getElementById(`edit-servicetype-${id}`).value;
-            const rawCarbsolve = document.getElementById(`edit-carbsolve-${id}`).value;
-            customer.carbsolve = rawCarbsolve ? `Carbsolve - ${rawCarbsolve}` : '';
+            // Only overwrite customer-level carbsolve for single-tank customers.
+            // Multi-tank customers store carbsolve per-tank in tankLabels and the dropdown isn't rendered.
+            const carbsolveEl = document.getElementById(`edit-carbsolve-${id}`);
+            if (carbsolveEl) {
+                const rawCarbsolve = carbsolveEl.value;
+                customer.carbsolve = rawCarbsolve ? `Carbsolve - ${rawCarbsolve}` : '';
+            }
             customer.waste = document.getElementById(`edit-waste-${id}`).value;
             customer.invoiceType = document.getElementById(`edit-invoicetype-${id}`).value;
             customer.code = document.getElementById(`edit-code-${id}`).value;
