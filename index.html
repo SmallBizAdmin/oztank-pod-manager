@@ -11039,6 +11039,14 @@
                 adHocPods.forEach(pod => {
                     const customer = db.customers.find(c => c.id === pod.customerId);
                     const customerName = customer ? customer.name : (pod.customerName || 'Unknown Customer');
+                    const podBillingValue = customer
+                        ? ((customer.invoiceType && isBillingWaste(customer.invoiceType))
+                            ? customer.invoiceType
+                            : (isBillingWaste(customer.waste) ? customer.waste : null))
+                        : null;
+                    const podBillingBadge = podBillingValue
+                        ? `<span style="background: #fff7ed; color: #c2410c; border: 1px solid #fdba74; padding: 2px 7px; border-radius: 8px; font-size: 10px; font-weight: 600; margin-left: 6px;">📋 ${podBillingValue}</span>`
+                        : '';
                     const productsStr = (() => {
                         if (!pod.products || pod.products.length === 0) return '-';
                         const saleItems = pod.products.filter(p => p.type !== 'repair');
@@ -11097,7 +11105,7 @@
                                onchange="toggleCheckedSent(${pod.id}, null, null)" title="Checked & Sent">
                         </td>
                         <td style="padding: 12px;">
-                            ${customerName}
+                            ${customerName}${podBillingBadge}
                             <span style="background:#f59e0b;color:white;padding:2px 6px;border-radius:8px;font-size:10px;margin-left:8px;">Ad-Hoc</span>
                             ${calBadge}
                             ${podWorkerBadge}
@@ -11132,6 +11140,15 @@
                     const tmInvStatus = getTankMovementInvoiceStatus(tm.id);
                     const tmIsInvoiced = tmInvStatus.invoiced || false;
                     const tmIsCheckedSent = tmInvStatus.checkedSent || false;
+                    const tmCustomer = tm.customerId ? db.customers.find(c => c.id === tm.customerId) : null;
+                    const tmBillingValue = tmCustomer
+                        ? ((tmCustomer.invoiceType && isBillingWaste(tmCustomer.invoiceType))
+                            ? tmCustomer.invoiceType
+                            : (isBillingWaste(tmCustomer.waste) ? tmCustomer.waste : null))
+                        : null;
+                    const tmBillingBadge = tmBillingValue
+                        ? `<span style="background: #fff7ed; color: #c2410c; border: 1px solid #fdba74; padding: 2px 7px; border-radius: 8px; font-size: 10px; font-weight: 600; margin-left: 6px;">📋 ${tmBillingValue}</span>`
+                        : '';
                     tr.innerHTML = `
                         <td style="padding: 10px; text-align: center;"><span style="color: #16a34a; font-size: 18px;">✓</span></td>
                         <td style="padding: 10px; text-align: center;" onclick="event.stopPropagation();">
@@ -11145,7 +11162,7 @@
                                 style="width:16px;height:16px;cursor:pointer;${!tmIsInvoiced ? 'opacity:0.4;' : ''}">
                         </td>
                         <td style="padding: 10px;">
-                            ${tm.customerName}
+                            ${tm.customerName}${tmBillingBadge}
                             <div style="margin-top:4px;">
                                 <span style="background:#3b82f6;color:white;padding:2px 6px;border-radius:8px;font-size:10px;">Ad-Hoc</span>
                                 ${tm.completedBy ? `<span style="display:inline-block;margin-left:4px;background:${getWorkerColor(tm.completedBy)};color:white;padding:1px 6px;border-radius:8px;font-size:10px;">👤 ${tm.completedBy}</span>` : ''}
