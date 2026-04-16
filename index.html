@@ -9678,8 +9678,10 @@
                         !e.target.classList.contains('done-checkbox') &&
                         !e.target.classList.contains('skip-btn') &&
                         e.target.type !== 'checkbox') {
-                        if (isSkipped) {
-                            showSkipReasonModal(customer.id, currentServiceDate || formatDateLocal(new Date()), true);
+                        const clickDate = currentServiceDate || formatDateLocal(new Date());
+                        const currentlySkipped = db.isCustomerSkipped(customer.id, clickDate);
+                        if (currentlySkipped) {
+                            showSkipReasonModal(customer.id, clickDate, true);
                         } else {
                             showPodView(customer);
                         }
