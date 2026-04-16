@@ -10359,6 +10359,9 @@
             const customer = db.customers.find(c => c.id === id);
             if (!customer) return;
             
+            // Strip stored prefix (e.g. "Carbsolve - 4kg" → "4kg") so the dropdown matches
+            const currentCarbsolve = (customer.carbsolve || '').replace(/^(Carbsolve\s*[-:]\s*|Carb:\s*)/i, '').trim();
+            
             const div = document.getElementById(`customer-${id}`);
             div.innerHTML = `
                 <div style="flex: 1;">
@@ -10377,16 +10380,16 @@
                         
                         <select id="edit-carbsolve-${id}" style="width: 100%; padding: 8px; margin-bottom: 4px;">
                             <option value="">Carbsolve...</option>
-                            <option value="4kg" ${customer.carbsolve === '4kg' ? 'selected' : ''}>4kg</option>
-                            <option value="4kg spcl" ${customer.carbsolve === '4kg spcl' ? 'selected' : ''}>4kg spcl</option>
-                            <option value="7kg" ${customer.carbsolve === '7kg' ? 'selected' : ''}>7kg</option>
-                            <option value="7kg spcl" ${customer.carbsolve === '7kg spcl' ? 'selected' : ''}>7kg spcl</option>
-                            <option value="10kg" ${customer.carbsolve === '10kg' ? 'selected' : ''}>10kg</option>
-                            <option value="11kg spcl" ${customer.carbsolve === '11kg spcl' ? 'selected' : ''}>11kg spcl</option>
-                            <option value="14kg" ${customer.carbsolve === '14kg' ? 'selected' : ''}>14kg</option>
-                            <option value="17kg" ${customer.carbsolve === '17kg' ? 'selected' : ''}>17kg</option>
-                            <option value="21kg" ${customer.carbsolve === '21kg' ? 'selected' : ''}>21kg</option>
-                            <option value="28kg" ${customer.carbsolve === '28kg' ? 'selected' : ''}>28kg</option>
+                            <option value="4kg" ${currentCarbsolve === '4kg' ? 'selected' : ''}>4kg</option>
+                            <option value="4kg spcl" ${currentCarbsolve === '4kg spcl' ? 'selected' : ''}>4kg spcl</option>
+                            <option value="7kg" ${currentCarbsolve === '7kg' ? 'selected' : ''}>7kg</option>
+                            <option value="7kg spcl" ${currentCarbsolve === '7kg spcl' ? 'selected' : ''}>7kg spcl</option>
+                            <option value="10kg" ${currentCarbsolve === '10kg' ? 'selected' : ''}>10kg</option>
+                            <option value="11kg spcl" ${currentCarbsolve === '11kg spcl' ? 'selected' : ''}>11kg spcl</option>
+                            <option value="14kg" ${currentCarbsolve === '14kg' ? 'selected' : ''}>14kg</option>
+                            <option value="17kg" ${currentCarbsolve === '17kg' ? 'selected' : ''}>17kg</option>
+                            <option value="21kg" ${currentCarbsolve === '21kg' ? 'selected' : ''}>21kg</option>
+                            <option value="28kg" ${currentCarbsolve === '28kg' ? 'selected' : ''}>28kg</option>
                         </select>
                         
                         <select id="edit-waste-${id}" style="width: 100%; padding: 8px; margin-bottom: 4px;">
