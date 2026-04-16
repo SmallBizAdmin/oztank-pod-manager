@@ -11498,7 +11498,8 @@
         }
         
         function updateInvoiceSelectAllState() {
-            const checkboxes = document.querySelectorAll('.invoice-checkbox:not([disabled])');
+            const runsheetTable = document.getElementById('adminRunsheetTable');
+            const checkboxes = (runsheetTable || document).querySelectorAll('.invoice-checkbox:not([disabled])');
             const selectAllCheckbox = document.getElementById('invoiceSelectAll');
             if (!selectAllCheckbox || checkboxes.length === 0) return;
             
@@ -11510,7 +11511,8 @@
         }
         
         async function toggleAllInvoices(checked) {
-            const checkboxes = document.querySelectorAll('.invoice-checkbox:not([disabled])');
+            const runsheetTable = document.getElementById('adminRunsheetTable');
+            const checkboxes = (runsheetTable || document).querySelectorAll('.invoice-checkbox:not([disabled])');
             for (const cb of checkboxes) {
                 if (cb.checked === checked) continue;
                 cb.checked = checked;
@@ -11539,7 +11541,8 @@
         }
         
         async function markAllInvoiced() {
-            const checkboxes = document.querySelectorAll('.invoice-checkbox:not([disabled])');
+            const runsheetTable = document.getElementById('adminRunsheetTable');
+            const checkboxes = (runsheetTable || document).querySelectorAll('.invoice-checkbox:not([disabled])');
             const uncheckedCount = Array.from(checkboxes).filter(cb => !cb.checked).length;
             
             if (uncheckedCount === 0) {
