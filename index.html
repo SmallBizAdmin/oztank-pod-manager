@@ -9676,8 +9676,13 @@
                     if (!e.target.classList.contains('drag-handle') && 
                         !e.target.classList.contains('edit-customer-btn') &&
                         !e.target.classList.contains('done-checkbox') &&
+                        !e.target.classList.contains('skip-btn') &&
                         e.target.type !== 'checkbox') {
-                        showPodView(customer);
+                        if (isSkipped) {
+                            showSkipReasonModal(customer.id, currentServiceDate || formatDateLocal(new Date()), true);
+                        } else {
+                            showPodView(customer);
+                        }
                     }
                 });
                 
@@ -9772,9 +9777,44 @@
             }
         }
 
-        function showSkipReasonModal(customerId, skipDate) {
+        function showSkipReasonModal(customerId, skipDate, isEditing = false) {
             const customer = db.customers.find(c => c.id === customerId);
             const customerName = customer ? customer.name : 'Customer';
+
+            // Pre-fill if editing an existing skip
+            const existingReason = isEditing ? (db.getSkipReason(customerId, skipDate) || '') : '';
+            const knownReasonValues = [
+                'No service required - tank still clean', '', 'Bi-monthly (off month)',
+                'Already serviced', 'Tank pulled', 'Customer request',
+                'Access issue', 'Account issue - Call Teegan', 'Other'
+            ];
+            let preSelect = '';
+            let preComments = '';
+            if (existingReason) {
+                const colonIdx = existingReason.indexOf(': ');
+                const base = colonIdx >= 0 ? existingReason.substring(0, colonIdx) : existingReason;
+                const comment = colonIdx >= 0 ? existingReason.substring(colonIdx + 2) : '';
+                if (knownReasonValues.includes(base)) {
+                    preSelect = base;
+                    preComments = comment;
+                } else {
+                    preComments = existingReason;
+                }
+            }
+
+            const reasonOptions = [
+                ['No service required - tank still clean', 'No service required - tank still clean'],
+                ['', 'No reason specified'],
+                ['Bi-monthly (off month)', 'Bi-monthly (off month)'],
+                ['Already serviced', 'Already serviced by another worker'],
+                ['Tank pulled', 'Tank pulled for repairs'],
+                ['Customer request', 'Customer requested skip'],
+                ['Access issue', 'Access issue'],
+                ['Account issue - Call Teegan', 'Account issue - Call Teegan'],
+                ['Other', 'Other'],
+            ].map(([val, label]) =>
+                `<option value="${val}"${val === preSelect ? ' selected' : ''}>${label}</option>`
+            ).join('');
 
             const modal = document.createElement('div');
             modal.className = 'search-modal-overlay active';
@@ -9782,7 +9822,7 @@
             modal.innerHTML = `
                 <div class="search-modal" style="max-width: 400px;">
                     <div class="search-modal-header">
-                        <h2>Skip ${customerName}</h2>
+                        <h2>${isEditing ? 'Edit Skip' : 'Skip'} — ${customerName}</h2>
                         <button class="search-modal-close" onclick="closeSkipReasonModal()">×</button>
                     </div>
                     <div class="search-modal-body">
@@ -9791,25 +9831,17 @@
                         <div class="form-group">
                             <label>Reason</label>
                             <select id="skipReasonSelect" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 16px;">
-                                <option value="No service required - tank still clean">No service required - tank still clean</option>
-                                <option value="">No reason specified</option>
-                                <option value="Bi-monthly (off month)">Bi-monthly (off month)</option>
-                                <option value="Already serviced">Already serviced by another worker</option>
-                                <option value="Tank pulled">Tank pulled for repairs</option>
-                                <option value="Customer request">Customer requested skip</option>
-                                <option value="Access issue">Access issue</option>
-                                <option value="Account issue - Call Teegan">Account issue - Call Teegan</option>
-                                <option value="Other">Other</option>
+                                ${reasonOptions}
                             </select>
                         </div>
 
                         <div class="form-group">
                             <label>Comments (optional)</label>
-                            <textarea id="skipComments" placeholder="Add any additional comments..." style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; min-height: 80px; resize: vertical;"></textarea>
+                            <textarea id="skipComments" placeholder="Add any additional comments..." style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; min-height: 80px; resize: vertical;">${preComments}</textarea>
                         </div>
 
                         <button class="btn" onclick="confirmSkipCustomer(${customerId}, '${skipDate}')" style="margin-top: 8px;">
-                            Skip Customer
+                            ${isEditing ? 'Update Skip' : 'Skip Customer'}
                         </button>
                     </div>
                 </div>
