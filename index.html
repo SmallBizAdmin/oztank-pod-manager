@@ -10362,6 +10362,9 @@
             // Strip stored prefix (e.g. "Carbsolve - 4kg" → "4kg") so the dropdown matches
             const currentCarbsolve = (customer.carbsolve || '').replace(/^(Carbsolve\s*[-:]\s*|Carb:\s*)/i, '').trim();
             const isMultiTank = (customer.tankCount || 1) > 1;
+            // Standard dropdown options (lowercased for matching). Blank counts as standard.
+            const STANDARD_CARBSOLVE = ['', '4kg', '4kg spcl', '7kg', '7kg spcl', '10kg', '11kg spcl', '14kg', '17kg', '21kg', '28kg'];
+            const isCustomCarbsolve = !isMultiTank && currentCarbsolve && !STANDARD_CARBSOLVE.includes(currentCarbsolve.toLowerCase());
             
             const div = document.getElementById(`customer-${id}`);
             div.innerHTML = `
@@ -10382,6 +10385,10 @@
                         ${isMultiTank ? `
                         <div style="width: 100%; padding: 8px; margin-bottom: 4px; background: #f3f4f6; border: 1px dashed #9ca3af; border-radius: 4px; color: #6b7280; font-size: 13px; font-style: italic;">
                             📋 Per-tank carbsolve — edit in customer profile (Schedule & Notes)
+                        </div>
+                        ` : isCustomCarbsolve ? `
+                        <div style="width: 100%; padding: 8px; margin-bottom: 4px; background: #fff7ed; border: 1px dashed #fb923c; border-radius: 4px; color: #9a3412; font-size: 13px;">
+                            📋 Custom carbsolve: <strong>${currentCarbsolve}</strong> — edit in customer profile
                         </div>
                         ` : `
                         <select id="edit-carbsolve-${id}" style="width: 100%; padding: 8px; margin-bottom: 4px;">
