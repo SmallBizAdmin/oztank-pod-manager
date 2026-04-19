@@ -10863,9 +10863,6 @@
                     if (pod.serviceNotes) allNotesDisplay.push(`<strong>Service:</strong> ${pod.serviceNotes}`);
                     if (pod.notes) allNotesDisplay.push(`<strong>Notes:</strong> ${pod.notes}`);
                 }
-                if (allNotesDisplay.length === 0 && customer.notes) {
-                    allNotesDisplay.push(customer.notes);
-                }
                 const notesHtml = allNotesDisplay.length > 0 ? allNotesDisplay.join('<br>') : '-';
                 
                 // Invoice & checked-sent state
