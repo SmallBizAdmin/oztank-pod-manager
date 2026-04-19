@@ -5792,8 +5792,8 @@
                             renderRunDays();
                         }
                         // Re-render admin runsheet if open — but skip if we just saved an invoice note
-                        // (the DOM is already updated in-place; a full re-render would flicker unnecessarily)
-                        if (!window._savingInvoiceNote && document.getElementById('adminRunsheetContainer')?.style.display !== 'none') {
+                        // or the user is currently typing one (would destroy textarea mid-edit)
+                        if (!window._savingInvoiceNote && !window._typingInvoiceNote && document.getElementById('adminRunsheetContainer')?.style.display !== 'none') {
                             if (currentAdminServiceDay === 'Ad-Hoc' && currentAdminDateFilter) {
                                 loadAdminAdHocRunsheet(currentAdminDateFilter);
                             } else {
@@ -5928,7 +5928,9 @@
                             renderAdminChronologicalList();
                         }
                         if (document.getElementById('adminRunsheetContainer')?.style.display !== 'none') {
-                            if (currentAdminServiceDay === 'Ad-Hoc' && currentAdminDateFilter) {
+                            if (window._savingInvoiceNote || window._typingInvoiceNote) {
+                                // skip — would destroy invoice note textarea mid-edit
+                            } else if (currentAdminServiceDay === 'Ad-Hoc' && currentAdminDateFilter) {
                                 loadAdminAdHocRunsheet(currentAdminDateFilter);
                             } else {
                                 loadAdminRunsheet();
@@ -7126,6 +7128,7 @@
                 console.error('Error saving invoice note:', e);
                 showToast('Error saving note: ' + e.message, 'error');
             } finally {
+                window._typingInvoiceNote = false;
                 setTimeout(() => { window._savingInvoiceNote = false; }, 3000);
             }
         }
@@ -7139,11 +7142,13 @@
             const hasNote = !!(note && note.trim());
             const safeNote = hasNote ? note.replace(/</g,'&lt;').replace(/>/g,'&gt;') : '';
             const elId = String(id).replace(/[|]/g, '__');
-            return `<div style="margin-top:5px;">
+            return `<div style="margin-top:5px;" onclick="event.stopPropagation();">
                 <div id="invnote_display_${type}_${elId}" style="${hasNote ? '' : 'display:none;'}font-size:13px;color:#d97706;font-weight:600;font-style:italic;">📝 ${safeNote}</div>
                 <textarea id="invnote_ta_${type}_${elId}" rows="2"
                     style="display:none;width:100%;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px;resize:vertical;margin-top:4px;"
                     placeholder="Invoice note..."
+                    onclick="event.stopPropagation();"
+                    onfocus="window._typingInvoiceNote=true;"
                     onblur="saveInvoiceNote('${type}','${id}',this.value)">${safeNote}</textarea>
             </div>`;
         }
