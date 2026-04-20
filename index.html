@@ -2448,7 +2448,7 @@
                     </div>
                 </div>
 
-                <button type="button" class="btn btn-success" onclick="savePOD()">Save POD</button>
+                <button type="button" id="savePodBtn" class="btn btn-success" onclick="savePOD()">Save POD</button>
             </div>
         </div>
     </div>
@@ -10030,11 +10030,24 @@
         async function savePOD() {
             if (window._savingPOD) { console.log('savePOD: already in progress, ignoring'); return; }
             window._savingPOD = true;
+            const saveBtn = document.getElementById('savePodBtn');
+            if (saveBtn) saveBtn.disabled = true;
             console.log('savePOD called');
+
+            // Helper: release the save lock and re-enable the button.
+            // Called on every failure/early-return path. On success we DO NOT call this
+            // until after navigation completes (inside the setTimeout below) — that's
+            // what prevents a second tap in the window between save-success and
+            // the form disappearing from screen.
+            const releaseLock = () => {
+                window._savingPOD = false;
+                if (saveBtn) saveBtn.disabled = false;
+            };
             
             // Prevent saving PODs in historical months
             if (isPastMonth()) {
                 showToast('Cannot create PODs for past months. Switch to the current month to create new PODs.', 'error');
+                releaseLock();
                 return;
             }
 
@@ -10075,6 +10088,7 @@
             
             if (hasUnconfirmedProduct) {
                 showToast('Please confirm all products/repairs by clicking the Confirm button', 'error');
+                releaseLock();
                 return;
             }
 
@@ -10164,7 +10178,10 @@
                     const proceed = confirm(
                         `⚠️ A POD for ${pod.customerName} on ${pod.date} was already filed at ${dupeTime}.\n\nSave a second POD anyway?`
                     );
-                    if (!proceed) return;
+                    if (!proceed) {
+                        releaseLock();
+                        return;
+                    }
                 }
             }
             // ──────────────────────────────────────────────────────────────────────
@@ -10198,15 +10215,31 @@
 
                     showToast('POD saved successfully!', 'success');
                     setTimeout(() => {
-                        if (wasAdHoc) {
-                            showHomeView();
-                        } else {
-                            backToCustomerList();
+                        try {
+                            if (wasAdHoc) {
+                                showHomeView();
+                            } else {
+                                backToCustomerList();
+                            }
+                        } finally {
+                            // Release lock only AFTER navigation — this is the key
+                            // race-condition fix. During the ~1s between save-success
+                            // and this callback firing, the lock stays engaged and the
+                            // Save button stays disabled, so a second tap cannot fire
+                            // another savePOD() with the now-reset state variables.
+                            releaseLock();
                         }
                     }, 1000);
+                    // Deliberately DO NOT release the lock here — held until navigation.
+                } else {
+                    // db.savePOD currently always returns true, but defensive in case that changes.
+                    releaseLock();
                 }
-            } finally {
-                window._savingPOD = false;
+            } catch (e) {
+                // Unexpected error — release so the worker can retry rather than being stuck.
+                console.error('savePOD unexpected error:', e);
+                releaseLock();
+                throw e;
             }
         }
 
