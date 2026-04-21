@@ -2153,41 +2153,36 @@
             background: rgba(255,255,255,0.3);
         }
 
-        /* Floating Home button — compact circular icon visible on all non-home views */
-        #homeLogoBtn {
-            display: none;
-            position: fixed;
+        /* Home button — injected into each header next to Back, styled as a sibling
+           header control. Absolutely positioned within .header (which is sticky). */
+        .home-btn {
+            position: absolute;
             top: 10px;
-            right: 10px;
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            background: rgba(255, 255, 255, 0.95);
-            border: 1px solid rgba(0, 0, 0, 0.1);
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-            font-size: 20px;
-            line-height: 1;
-            align-items: center;
-            justify-content: center;
+            right: 8px;
+            background: none;
+            border: none;
+            color: white;
+            font-size: 24px;
             cursor: pointer;
-            z-index: 9999;
-            user-select: none;
+            padding: 8px;
+            z-index: 1;
+            line-height: 1;
+            opacity: 0.9;
             -webkit-tap-highlight-color: transparent;
-            transition: transform 0.1s ease, box-shadow 0.1s ease;
+            transition: opacity 0.15s ease, transform 0.1s ease;
         }
 
-        #homeLogoBtn:hover {
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+        .home-btn:hover {
+            opacity: 1;
         }
 
-        #homeLogoBtn:active {
+        .home-btn:active {
+            opacity: 0.6;
             transform: scale(0.92);
         }
     </style>
 </head>
 <body>
-    <!-- Fixed home button — visible on all non-home views -->
-    <div id="homeLogoBtn" onclick="goHome()" title="Go Home" aria-label="Go Home">🏠</div>
     <!-- Login Screen -->
     <div id="loginScreen" class="login-screen">
         <div class="login-container">
@@ -3633,6 +3628,24 @@
         // Initial UI update
         document.addEventListener('DOMContentLoaded', () => {
             updateOfflineUI();
+        });
+
+        // Inject a Home button into every sticky header that has a Back button.
+        // This automatically covers all non-home views (homeView has no .back-btn).
+        // Positioned as an absolute sibling inside .header to match Back's styling.
+        document.addEventListener('DOMContentLoaded', () => {
+            document.querySelectorAll('.header .back-btn').forEach(backBtn => {
+                const header = backBtn.closest('.header');
+                if (!header || header.querySelector('.home-btn')) return;
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'home-btn';
+                btn.innerHTML = '🏠';
+                btn.title = 'Go Home';
+                btn.setAttribute('aria-label', 'Go Home');
+                btn.onclick = goHome;
+                header.appendChild(btn);
+            });
         });
         // ===== END OFFLINE QUEUE SYSTEM =====
         
@@ -6041,11 +6054,6 @@
             if (fab) {
                 fab.style.display = viewId === 'homeView' ? 'block' : 'none';
                 closeFabMenu(); // Always close menu when switching views
-            }
-            // Show/hide home logo button
-            const homeLogoBtn = document.getElementById('homeLogoBtn');
-            if (homeLogoBtn) {
-                homeLogoBtn.style.display = viewId === 'homeView' ? 'none' : 'flex';
             }
         }
         
