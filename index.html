@@ -10092,6 +10092,19 @@
                 return;
             }
 
+            // Delivery/Repair validation: must have at least one line item OR a comment.
+            // Applies to the POD modal save path only — the worker runsheet quick-tick
+            // flow uses a separate db.savePOD() call and is unaffected.
+            // Service and Tank Movements have their own rules handled elsewhere.
+            if (isDelivery) {
+                const notesForValidation = document.getElementById('notes').value.trim();
+                if (products.length === 0 && notesForValidation === '') {
+                    showToast(`Add at least one line item or a comment before saving a ${serviceType} job.`, 'error');
+                    releaseLock();
+                    return;
+                }
+            }
+
             // If we get here, validation passed
             // Get photo (already compressed)
             const photoPreview = document.getElementById('photoPreview');
