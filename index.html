@@ -2152,13 +2152,42 @@
         .logout-btn:hover {
             background: rgba(255,255,255,0.3);
         }
+
+        /* Floating Home button — compact circular icon visible on all non-home views */
+        #homeLogoBtn {
+            display: none;
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.95);
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            font-size: 20px;
+            line-height: 1;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 9999;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            transition: transform 0.1s ease, box-shadow 0.1s ease;
+        }
+
+        #homeLogoBtn:hover {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+        }
+
+        #homeLogoBtn:active {
+            transform: scale(0.92);
+        }
     </style>
 </head>
 <body>
     <!-- Fixed home button — visible on all non-home views -->
-    <div id="homeLogoBtn" onclick="goHome()" style="display:none; position:fixed; top:0; right:0; height:68px; z-index:9999; cursor:pointer; background:rgba(255,255,255,0.15); border:none; border-radius:0 0 0 10px; padding:0 18px; align-items:center; gap:8px; backdrop-filter:blur(4px);" title="Go Home">
-        <span style="font-size:24px;">🏠</span><span style="font-size:15px; font-weight:600; color:white;">Home</span>
-    </div>
+    <div id="homeLogoBtn" onclick="goHome()" title="Go Home" aria-label="Go Home">🏠</div>
     <!-- Login Screen -->
     <div id="loginScreen" class="login-screen">
         <div class="login-container">
