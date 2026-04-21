@@ -2183,6 +2183,23 @@
             opacity: 0.6;
             transform: translateY(-50%) scale(0.92);
         }
+
+        /* Reserve space on the right of the header row so the title text doesn't
+           flow underneath the absolute-positioned Home button. */
+        .header-content {
+            padding-right: 44px;
+        }
+
+        /* Bigger home button on desktop with matching reserved space. */
+        @media (min-width: 768px) {
+            .home-btn {
+                font-size: 28px;
+                padding: 10px;
+            }
+            .header-content {
+                padding-right: 60px;
+            }
+        }
     </style>
 </head>
 <body>
