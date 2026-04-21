@@ -9330,10 +9330,19 @@
 
             const total = active.length;
 
-            // Completed count
+            // Completed count — month-wide match scoped to this run day, so it agrees
+            // with the per-customer tick count in the list below (e.g. 8 PODs on Apr 8
+            // + 2 on Apr 9 → header reads 10/10, same as the progress tile).
             const podDate = currentServiceDate || formatDateLocal(new Date());
+            const summaryPodDateObj = new Date(podDate + 'T00:00:00');
             const completedCount = active.filter(c =>
-                db.pods.find(p => p.customerId === c.id && p.date === podDate)
+                db.pods.find(p => {
+                    if (p.customerId !== c.id) return false;
+                    const pd = new Date(p.date + 'T00:00:00');
+                    return pd.getMonth() === summaryPodDateObj.getMonth() &&
+                           pd.getFullYear() === summaryPodDateObj.getFullYear() &&
+                           (p.runDay === currentRunDay || p.sourceRunDay === currentRunDay);
+                })
             ).length;
 
             // Type breakdown
@@ -9525,16 +9534,21 @@
                 // Treat off-month as effectively skipped (auto-strikethrough)
                 const effectivelySkipped = isSkipped || customerIsOffMonth;
                 
-                // Find completed POD for the selected month (matches service day card logic)
+                // Find completed POD for the displayed month. Match any POD in the
+                // work date's month where this run day is the source — so PODs split
+                // across the primary run date plus any makeup/ad-hoc dates all show
+                // as completed, consistent with the progress tile counts.
                 const completedPod = db.pods.find(pod => {
                     if (pod.customerId !== customer.id) return false;
+                    const podDate = new Date(pod.date + 'T00:00:00');
                     if (isHistorical) {
                         // Historical view: match any pod in that month/year
-                        const podDate = new Date(pod.date + 'T00:00:00');
                         return podDate.getMonth() === selectedMonth && podDate.getFullYear() === selectedYear;
                     } else {
-                        // Current month: match exact service date (same logic as summary counter)
-                        return pod.date === workDate;
+                        // Current month: month-wide match scoped to this run day
+                        return podDate.getMonth() === workDateObj.getMonth() &&
+                               podDate.getFullYear() === workDateObj.getFullYear() &&
+                               (pod.runDay === currentRunDay || pod.sourceRunDay === currentRunDay);
                     }
                 });
                 
