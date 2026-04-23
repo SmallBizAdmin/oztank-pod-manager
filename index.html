@@ -9041,7 +9041,8 @@
             
             // Scroll within the list container so today is visible without moving the whole page.
             // Account for the mobile day nav which is position:sticky inside this container —
-            // otherwise the today banner ends up tucked behind it.
+            // otherwise the today banner ends up tucked behind it. Use bounding rects so the
+            // math is correct regardless of which element is the offsetParent.
             requestAnimationFrame(() => {
                 const listContainer = document.getElementById('workerListView');
                 const todayEl = eventsList.querySelector(`[data-date="${todayStr}"]`);
@@ -9049,7 +9050,10 @@
                     const dayNav = document.getElementById('workerMobileDayNav');
                     // offsetParent is null when the element is display:none (desktop) — skip offset there
                     const dayNavHeight = (dayNav && dayNav.offsetParent !== null) ? dayNav.offsetHeight : 0;
-                    listContainer.scrollTop = todayEl.offsetTop - listContainer.offsetTop - dayNavHeight - 8;
+                    const containerRect = listContainer.getBoundingClientRect();
+                    const todayRect = todayEl.getBoundingClientRect();
+                    const currentDistance = todayRect.top - containerRect.top;
+                    listContainer.scrollTop = listContainer.scrollTop + (currentDistance - dayNavHeight);
                 }
             });
         }
