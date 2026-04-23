@@ -8629,6 +8629,9 @@
                 // Apply correct view (list on mobile, week on desktop)
                 setWorkerCalendarView(workerCalendarView);
                 eventsContainer.style.display = 'block';
+                // Now that all parents are visible, re-run the scroll — earlier attempts ran
+                // while eventsContainer was display:none, which makes getBoundingClientRect zeros
+                requestAnimationFrame(() => scrollWorkerListToToday(todayStr));
                 
             } catch (e) {
                 console.error('Error loading worker calendar events:', e);
@@ -9040,22 +9043,27 @@
             }
             
             // Scroll within the list container so today is visible without moving the whole page.
-            // Account for the mobile day nav which is position:sticky inside this container —
-            // otherwise the today banner ends up tucked behind it. Use bounding rects so the
-            // math is correct regardless of which element is the offsetParent.
-            requestAnimationFrame(() => {
-                const listContainer = document.getElementById('workerListView');
-                const todayEl = eventsList.querySelector(`[data-date="${todayStr}"]`);
-                if (todayEl && listContainer) {
-                    const dayNav = document.getElementById('workerMobileDayNav');
-                    // offsetParent is null when the element is display:none (desktop) — skip offset there
-                    const dayNavHeight = (dayNav && dayNav.offsetParent !== null) ? dayNav.offsetHeight : 0;
-                    const containerRect = listContainer.getBoundingClientRect();
-                    const todayRect = todayEl.getBoundingClientRect();
-                    const currentDistance = todayRect.top - containerRect.top;
-                    listContainer.scrollTop = listContainer.scrollTop + (currentDistance - dayNavHeight);
-                }
-            });
+            // (Initial-load path also re-runs this after eventsContainer becomes visible — see
+            // loadWorkerCalendarEvents — because measurements taken while a parent is display:none
+            // are all zeros.)
+            requestAnimationFrame(() => scrollWorkerListToToday(todayStr));
+        }
+
+        function scrollWorkerListToToday(todayStr) {
+            const listContainer = document.getElementById('workerListView');
+            const eventsList = document.getElementById('workerEventsList');
+            if (!listContainer || !eventsList) return;
+            const todayEl = eventsList.querySelector(`[data-date="${todayStr}"]`);
+            if (!todayEl) return;
+            // If a parent is display:none, getBoundingClientRect returns zeros — bail out
+            const containerRect = listContainer.getBoundingClientRect();
+            if (containerRect.width === 0 && containerRect.height === 0) return;
+            const dayNav = document.getElementById('workerMobileDayNav');
+            // offsetParent is null when the element is display:none (desktop) — skip offset there
+            const dayNavHeight = (dayNav && dayNav.offsetParent !== null) ? dayNav.offsetHeight : 0;
+            const todayRect = todayEl.getBoundingClientRect();
+            const currentDistance = todayRect.top - containerRect.top;
+            listContainer.scrollTop = listContainer.scrollTop + (currentDistance - dayNavHeight);
         }
 
         function openWorkerRunsheet(serviceDayName, dateStr) {
@@ -9134,6 +9142,9 @@
                 // Apply correct view (list on mobile, week on desktop)
                 setWorkerCalendarView(workerCalendarView);
                 eventsContainer.style.display = 'block';
+                // Now that all parents are visible, re-run the scroll — earlier attempts ran
+                // while eventsContainer was display:none, which makes getBoundingClientRect zeros
+                requestAnimationFrame(() => scrollWorkerListToToday(todayStr));
                 
             } catch (e) {
                 console.error('Fallback also failed:', e);
