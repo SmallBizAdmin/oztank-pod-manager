@@ -2318,7 +2318,7 @@
                 
                 <!-- Month progress heading -->
                 <div id="monthProgressHeading" style="margin-top: 16px; margin-bottom: 12px; padding: 8px 12px; background: #f0f9ff; border-left: 4px solid #3b82f6; border-radius: 4px; text-align: center;">
-                    <span style="font-weight: 600; color: #1e40af;">January 2026 Progress</span>
+                    <span style="font-weight: 600; color: #1e40af;">&nbsp;</span>
                 </div>
                 
                 <div class="run-day-selector" id="runDaySelector">
@@ -3857,6 +3857,9 @@
                 await db.loadPodsForMonth();
                 await db.loadScheduledDaysForMonth();
             }
+            // Tank movements only have a per-month loader; align it to the navigated period
+            // so the admin calendar/list reflects the current view rather than the boot month
+            await db.loadTankMovementsForMonth();
             renderAdminCalendar();
             // Also refresh list view if visible
             if (document.getElementById('adminListContainer') && 
@@ -4268,7 +4271,6 @@
                     cacheForOffline('customers', this.customers);
                     cacheForOffline('serviceDays', this.serviceDays);
                     cacheForOffline('products', this.products);
-                    cacheForOffline('pods', this.pods);
                     cacheForOffline('invoiceStatus', this.invoiceStatus);
                     
                 } catch (error) {
@@ -4953,7 +4955,6 @@
                     this._syncProgressPod(pod);
                     
                     // Update cache with new pod
-                    cacheForOffline('pods', this.pods);
                     
                     showToast('📴 POD saved offline - will sync when connected', 'success');
                     return true;
@@ -4973,7 +4974,6 @@
                         this.pods.push(pod);
                     }
                     this._syncProgressPod(pod);
-                    cacheForOffline('pods', this.pods);
                     
                     return true;
                 } catch (error) {
@@ -4999,7 +4999,6 @@
                     }
                     
                     // Update cache
-                    cacheForOffline('pods', this.pods);
                     
                     showToast('📴 Delete queued - will sync when connected', 'success');
                     return true;
@@ -5024,7 +5023,6 @@
                         this._syncProgressPod(this.pods[index], true);
                         this.pods.splice(index, 1);
                     }
-                    cacheForOffline('pods', this.pods);
                     
                     return true;
                 } catch (error) {
