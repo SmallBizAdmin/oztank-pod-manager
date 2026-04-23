@@ -589,15 +589,13 @@
             }
         }
 
-        /* Sticky admin list view header — date selector + period toggle + view tabs stay pinned to top while scrolling. Only active when the list view is shown (body class toggled by view switchers). */
-        body.admin-list-active #adminView .admin-list-sticky-header {
+        /* Sticky admin list view header — date selector + period toggle + view tabs stay pinned to top while scrolling. Only active when the list view is shown (body class toggled by view switchers). The page header above is itself sticky at top:0 with z-index 100, so this stack must offset below it. */
+        body.admin-list-active #adminDashboardView .admin-list-sticky-header {
             position: sticky;
-            top: 0;
+            top: 70px;
             z-index: 20;
             background: #f5f5f5;
-            padding-top: 8px;
-            margin-top: -8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.06);
         }
 
         .add-product-btn {
@@ -6133,13 +6131,18 @@
             if (viewId && document.getElementById(viewId)) {
                 showView(viewId, true);
                 // If returning to admin dashboard, close any open subpanel
+                // and restore whichever sub-view (calendar/list/bimonthly) the user was on
+                // before they drilled into a runsheet or invoice subview
                 if (viewId === 'adminDashboardView') {
                     document.getElementById('adminRunsheetContainer').style.display = 'none';
                     document.getElementById('monthlyInvoicesContainer').style.display = 'none';
-                    document.getElementById('adminCalendarContainer').style.display = 'block';
-                    document.getElementById('calendarViewTab').classList.add('active');
-                    document.getElementById('listViewTab').classList.remove('active');
-                    renderAdminCalendar();
+                    if (_lastAdminSubview === 'list') {
+                        showAdminListView();
+                    } else if (_lastAdminSubview === 'bimonthly') {
+                        showBimonthlyView();
+                    } else {
+                        showAdminCalendarView();
+                    }
                 }
             } else {
                 // No state = first entry, go home
@@ -6626,12 +6629,19 @@
             }
         }
         
+        // Track which admin sub-view (calendar / list / bimonthly) was last shown,
+        // so when the user backs out of a runsheet or invoice subview we restore the
+        // sub-view they were on rather than defaulting to calendar (which doesn't
+        // exist on mobile and silently bumps desktop users out of list/bimonthly).
+        let _lastAdminSubview = 'calendar';
+
         function showAdminCalendarView() {
             // On mobile, calendar view is hidden — redirect to list view
             if (window.innerWidth <= 768) {
                 showAdminListView();
                 return;
             }
+            _lastAdminSubview = 'calendar';
             document.body.classList.remove('admin-list-active');
             document.getElementById('adminCalendarContainer').style.display = 'block';
             document.getElementById('adminListContainer').style.display = 'none';
@@ -6646,6 +6656,7 @@
         }
         
         function showAdminListView() {
+            _lastAdminSubview = 'list';
             document.body.classList.add('admin-list-active');
             document.getElementById('adminCalendarContainer').style.display = 'none';
             document.getElementById('adminListContainer').style.display = 'block';
@@ -6852,6 +6863,7 @@
         let bimonthlyFilter = 'all';
         
         function showBimonthlyView() {
+            _lastAdminSubview = 'bimonthly';
             document.body.classList.remove('admin-list-active');
             document.getElementById('adminCalendarContainer').style.display = 'none';
             document.getElementById('adminListContainer').style.display = 'none';
