@@ -6853,10 +6853,17 @@
             
             container.innerHTML = html;
             
-            // Scroll to today
+            // Scroll to today — measure both sticky headers (page header + list-view header)
+            // so the card lands in view rather than tucked under the freeze
             requestAnimationFrame(() => {
                 const todayCard = container.querySelector(`[data-date="${todayStr}"]`);
-                if (todayCard) todayCard.scrollIntoView({ block: "start", behavior: "instant" });
+                if (todayCard) {
+                    const pageHeader = document.querySelector('#adminDashboardView > .header');
+                    const stickyHeader = document.querySelector('#adminDashboardView .admin-list-sticky-header');
+                    const offset = (pageHeader?.offsetHeight || 0) + (stickyHeader?.offsetHeight || 0) + 8;
+                    todayCard.style.scrollMarginTop = offset + 'px';
+                    todayCard.scrollIntoView({ block: "start", behavior: "instant" });
+                }
             });
         }
         
