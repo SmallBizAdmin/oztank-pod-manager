@@ -2249,8 +2249,8 @@
                 <div class="month-selector-center">
                     <button class="month-nav-btn" onclick="navigateWorkerPeriod(-1)" title="Previous">‹</button>
                     <div class="month-display">
-                        <div class="month-name" id="workerPeriodDisplay">Jan 13 - 17</div>
-                        <div class="month-year" id="workerYearDisplay">2026</div>
+                        <div class="month-name" id="workerPeriodDisplay"></div>
+                        <div class="month-year" id="workerYearDisplay"></div>
                     </div>
                     <button class="month-nav-btn" onclick="navigateWorkerPeriod(1)" title="Next">›</button>
                 </div>
@@ -2777,8 +2777,8 @@
                 <div class="month-selector-center">
                     <button class="month-nav-btn" onclick="navigatePeriod(-1)" title="Previous">‹</button>
                     <div class="month-display">
-                        <div class="month-name" id="adminMonthDisplay">January</div>
-                        <div class="month-year" id="adminYearDisplay">2026</div>
+                        <div class="month-name" id="adminMonthDisplay"></div>
+                        <div class="month-year" id="adminYearDisplay"></div>
                     </div>
                     <button class="month-nav-btn" onclick="navigatePeriod(1)" title="Next">›</button>
                 </div>
@@ -4322,7 +4322,14 @@
             },
             
             scheduledDays: [],
-            calendarEvents: [],
+            calendarEvents: [],          // worker-view calendar events (written by loadWorkerCalendarEvents)
+            adminCalendarEvents: [],     // admin-view calendar events (written by loadScheduledDaysForWeek/Month)
+            // Helper: find an event by id across both arrays (admin and worker views may hold disjoint sets)
+            findCalendarEvent(id) {
+                const intId = parseInt(id);
+                return (this.adminCalendarEvents || []).find(e => e.id === intId)
+                    || (this.calendarEvents || []).find(e => e.id === intId);
+            },
             calendarEventStatus: {},
                 calendarEventNotes: {},
                 calendarEventInvoiceNotes: {},
@@ -4375,8 +4382,9 @@
                             calendarOwner: sd.calendar_owner
                         }));
                         
-                        // Store all non-service-day calendar events
-                        this.calendarEvents = data.filter(e => !e.is_service_day).map(ev => ({
+                        // Store all non-service-day calendar events in the admin-view array
+                        // (separate from db.calendarEvents which is owned by the worker view loader)
+                        this.adminCalendarEvents = data.filter(e => !e.is_service_day).map(ev => ({
                             id: ev.id,
                             eventTitle: ev.event_title,
                             eventDate: ev.event_date,
@@ -4387,7 +4395,7 @@
                             quickComplete: ev.quick_complete || false
                         }));
                         
-                        console.log(`Loaded ${this.scheduledDays.length} scheduled days and ${this.calendarEvents.length} other events for ${MONTH_NAMES[selectedMonth]} ${selectedYear}`);
+                        console.log(`Loaded ${this.scheduledDays.length} scheduled days and ${this.adminCalendarEvents.length} other events for ${MONTH_NAMES[selectedMonth]} ${selectedYear}`);
                         
                         // Load event status from Supabase
                         await this.loadCalendarEventStatus();
@@ -4678,8 +4686,9 @@
                             calendarOwner: sd.calendar_owner
                         }));
                         
-                        // Store all non-service-day calendar events
-                        this.calendarEvents = data.filter(e => !e.is_service_day).map(ev => ({
+                        // Store all non-service-day calendar events in the admin-view array
+                        // (separate from db.calendarEvents which is owned by the worker view loader)
+                        this.adminCalendarEvents = data.filter(e => !e.is_service_day).map(ev => ({
                             id: ev.id,
                             eventTitle: ev.event_title,
                             eventDate: ev.event_date,
@@ -4690,7 +4699,7 @@
                             quickComplete: ev.quick_complete || false
                         }));
                         
-                        console.log(`Loaded ${this.scheduledDays.length} scheduled days and ${this.calendarEvents.length} other events for week starting ${startStr}`);
+                        console.log(`Loaded ${this.scheduledDays.length} scheduled days and ${this.adminCalendarEvents.length} other events for week starting ${startStr}`);
                         
                         // Load event status from Supabase
                         await this.loadCalendarEventStatus();
@@ -4702,7 +4711,7 @@
                 } catch (e) {
                     console.log('Error loading scheduled days:', e);
                     this.scheduledDays = [];
-                    this.calendarEvents = [];
+                    this.adminCalendarEvents = [];
                 }
             },
             
@@ -5798,6 +5807,7 @@
             setupInvoiceStatusRealtime();
             setupCustomersRealtime();
             setupWorkerCalendarEventsRealtime();
+            setupTankMovementsRealtime();
             setupWorkerCalendarVisibilityRefresh();
         }
         
@@ -5812,6 +5822,7 @@
         let _debounceSkippedInvoiceStatus = null;
         let _debounceCustomers = null;
         let _debounceWorkerCalendarEvents = null;
+        let _debounceTankMovements = null;
 
         function setupCalendarStatusRealtime() {
             supabase
@@ -6032,6 +6043,38 @@
                 .subscribe((status) => {
                     if (status === 'SUBSCRIBED') console.log('✅ Realtime: worker_calendar_events subscribed');
                     if (status === 'CHANNEL_ERROR') console.warn('⚠️ Realtime: worker_calendar_events subscription error');
+                });
+        }
+
+        // ─── Real-time: tank_movements ─────────────────────────────────────────────
+        // Triggers whenever a tank movement is added, edited, or deleted on any device,
+        // so other open admin views see it without needing a manual refresh.
+        function setupTankMovementsRealtime() {
+            supabase
+                .channel('tank_movements_changes')
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'tank_movements' }, async (payload) => {
+                    console.log('tank_movements realtime change:', payload.eventType, payload.new?.id || payload.old?.id);
+                    clearTimeout(_debounceTankMovements);
+                    _debounceTankMovements = setTimeout(async () => {
+                        await db.loadTankMovementsForMonth();
+                        // Re-render admin chronological list if visible
+                        if (document.getElementById('adminListContainer')?.style.display !== 'none') {
+                            renderAdminChronologicalList();
+                        }
+                        // Re-render admin runsheet (regular or ad-hoc) if visible — same guard
+                        // pattern as the pods handler so we don't destroy an in-progress invoice note
+                        if (!window._savingInvoiceNote && !window._typingInvoiceNote && document.getElementById('adminRunsheetContainer')?.style.display !== 'none') {
+                            if (currentAdminServiceDay === 'Ad-Hoc' && currentAdminDateFilter) {
+                                loadAdminAdHocRunsheet(currentAdminDateFilter);
+                            } else {
+                                loadAdminRunsheet();
+                            }
+                        }
+                    }, 5000);
+                })
+                .subscribe((status) => {
+                    if (status === 'SUBSCRIBED') console.log('✅ Realtime: tank_movements subscribed');
+                    if (status === 'CHANNEL_ERROR') console.warn('⚠️ Realtime: tank_movements subscription error');
                 });
         }
 
@@ -6632,7 +6675,7 @@
             const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
             const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
             const scheduledDaysArr = db.scheduledDays || [];
-            const calendarEventsArr = db.calendarEvents || [];
+            const calendarEventsArr = db.adminCalendarEvents || [];
             
             let html = '';
             
@@ -7367,7 +7410,7 @@
             const scheduledOnDate = scheduledDaysArr.filter(sd => sd.scheduledDate === dateStr);
 
             // Get calendar events early - needed for ad-hoc trigger logic below
-            const calendarEventsArr = db.calendarEvents || [];
+            const calendarEventsArr = db.adminCalendarEvents || [];
             const eventsOnDate = calendarEventsArr.filter(ev => ev.eventDate === dateStr);
             
             // Only show SCHEDULED service days on calendar
@@ -7643,7 +7686,7 @@
             const existing = document.getElementById('calendarEventDetailModal');
             if (existing) existing.remove();
 
-            const event = db.calendarEvents.find(e => e.id === parseInt(eventId));
+            const event = db.findCalendarEvent(eventId);
             if (!event) return;
 
             const status = db.getCalendarEventStatus(eventId);
@@ -7709,7 +7752,7 @@
 
         // Show modal for calendar event (to add notes or create ad-hoc)
         function showCalendarEventModal(eventId, dateStr) {
-            const event = db.calendarEvents.find(e => e.id === parseInt(eventId));
+            const event = db.findCalendarEvent(eventId);
             if (!event) {
                 showToast('Event not found', 'error');
                 return;
@@ -7881,9 +7924,13 @@
                 showToast('Failed to update setting', 'error');
                 return;
             }
-            // Update local cache
-            const ev = db.calendarEvents.find(e => e.id === parseInt(eventId));
-            if (ev) ev.quickComplete = value;
+            // Update local cache in BOTH arrays — the same event id may exist in both
+            // the admin and worker view arrays, and they must not drift apart
+            const intId = parseInt(eventId);
+            const adminEv = (db.adminCalendarEvents || []).find(e => e.id === intId);
+            if (adminEv) adminEv.quickComplete = value;
+            const workerEv = (db.calendarEvents || []).find(e => e.id === intId);
+            if (workerEv) workerEv.quickComplete = value;
             // Update the label next to the checkbox
             const toggle = document.getElementById('quickCompleteToggle');
             if (toggle) toggle.nextSibling.textContent = value ? ' ON' : ' OFF';
@@ -11333,7 +11380,7 @@
             }
 
             // ── SECTION 3: CALENDAR EVENTS (ticked/crossed only) ───────────────
-            const actionedEvents = (db.calendarEvents || [])
+            const actionedEvents = (db.adminCalendarEvents || [])
                 .filter(ev => {
                     const status = db.getCalendarEventStatus(ev.id);
                     if (status !== 'completed' && status !== 'cancelled') return false;
