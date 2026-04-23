@@ -9039,12 +9039,17 @@
                 eventsList.innerHTML = html;
             }
             
-            // Scroll within the list container so today is visible without moving the whole page
+            // Scroll within the list container so today is visible without moving the whole page.
+            // Account for the mobile day nav which is position:sticky inside this container —
+            // otherwise the today banner ends up tucked behind it.
             requestAnimationFrame(() => {
                 const listContainer = document.getElementById('workerListView');
                 const todayEl = eventsList.querySelector(`[data-date="${todayStr}"]`);
                 if (todayEl && listContainer) {
-                    listContainer.scrollTop = todayEl.offsetTop - listContainer.offsetTop;
+                    const dayNav = document.getElementById('workerMobileDayNav');
+                    // offsetParent is null when the element is display:none (desktop) — skip offset there
+                    const dayNavHeight = (dayNav && dayNav.offsetParent !== null) ? dayNav.offsetHeight : 0;
+                    listContainer.scrollTop = todayEl.offsetTop - listContainer.offsetTop - dayNavHeight - 8;
                 }
             });
         }
