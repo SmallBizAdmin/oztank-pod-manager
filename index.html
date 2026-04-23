@@ -5441,6 +5441,13 @@
         
         function getScheduleLabel(serviceMonths) {
             if (!serviceMonths || serviceMonths.length === 0) return null;
+            // Consecutive months = seasonal monthly, not bi-monthly
+            const sorted = [...serviceMonths].sort((a, b) => a - b);
+            const isConsecutive = sorted.every((m, i) => i === 0 || m === sorted[i-1] + 1);
+            if (isConsecutive && sorted.length < 12) {
+                const mn = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                return `Seasonal (${mn[sorted[0]-1]}–${mn[sorted[sorted.length-1]-1]})`;
+            }
             if (serviceMonths.length === 6) {
                 // Check if it's odd or even months
                 const isOdd = serviceMonths.every(m => m % 2 === 1);
