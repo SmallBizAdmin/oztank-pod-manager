@@ -5231,7 +5231,11 @@
                         sourceRunDay: tm.source_run_day,
                         calendarEventId: tm.calendar_event_id || null,
                         completedBy: tm.completed_by || null,
-                        invoiceNotes: tm.invoice_notes || null
+                        invoiceNotes: tm.invoice_notes || null,
+                        invoiced: tm.invoiced || false,
+                        checkedSent: tm.checked_sent || false,
+                        invoicedAt: tm.invoiced_at || null,
+                        invoicedBy: tm.invoiced_by || null
                     }));
                     
                     console.log(`Loaded ${this.tankMovements.length} tank movements`);
@@ -11685,21 +11689,52 @@
         }
         
         function getTankMovementInvoiceStatus(tmId) {
+            const tm = (db.tankMovements || []).find(t => t.id == tmId);
+            if (!tm) return { invoiced: false, checkedSent: false };
+            return {
+                invoiced: tm.invoiced || false,
+                checkedSent: tm.checkedSent || false,
+                invoicedAt: tm.invoicedAt || null,
+                invoicedBy: tm.invoicedBy || null
+            };
+        }
+
+        async function setTankMovementInvoiceStatus(tmId, invoiced, checkedSent) {
+            const invoicedAt = invoiced ? new Date().toISOString() : null;
+            const invoicedBy = invoiced ? (currentUser ? currentUser.email : 'Unknown') : null;
+            // Update local cache first for snappy UI
+            const tm = (db.tankMovements || []).find(t => t.id == tmId);
+            if (tm) {
+                tm.invoiced = invoiced;
+                tm.checkedSent = checkedSent;
+                tm.invoicedAt = invoicedAt;
+                tm.invoicedBy = invoicedBy;
+            }
+            // Persist to Supabase
             try {
-                const raw = localStorage.getItem(`tm_inv_${tmId}`);
-                return raw ? JSON.parse(raw) : { invoiced: false, checkedSent: false };
-            } catch (e) { return { invoiced: false, checkedSent: false }; }
+                const { error } = await supabase
+                    .from('tank_movements')
+                    .update({
+                        invoiced: invoiced,
+                        checked_sent: checkedSent,
+                        invoiced_at: invoicedAt,
+                        invoiced_by: invoicedBy
+                    })
+                    .eq('id', tmId);
+                if (error) throw error;
+                return true;
+            } catch (error) {
+                console.error('Error saving tank movement invoice status:', error);
+                showToast('Failed to save invoice status', 'error');
+                return false;
+            }
         }
 
-        function setTankMovementInvoiceStatus(tmId, invoiced, checkedSent) {
-            localStorage.setItem(`tm_inv_${tmId}`, JSON.stringify({ invoiced, checkedSent }));
-        }
-
-        function toggleTankMovementInvoice(tmId, field, value) {
+        async function toggleTankMovementInvoice(tmId, field, value) {
             const current = getTankMovementInvoiceStatus(tmId);
             const updated = { ...current, [field]: value };
             if (field === 'invoiced' && !value) updated.checkedSent = false;
-            setTankMovementInvoiceStatus(tmId, updated.invoiced, updated.checkedSent);
+            await setTankMovementInvoiceStatus(tmId, updated.invoiced, updated.checkedSent);
             // Refresh whichever view is active
             if (currentAdminServiceDay === 'Ad-Hoc') {
                 loadAdminAdHocRunsheet(currentAdminDateFilter);
