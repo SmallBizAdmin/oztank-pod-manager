@@ -2046,6 +2046,16 @@
             font-weight: 600;
         }
 
+        /* Unlinked Customer Warning Icon */
+        .unlinked-warning {
+            display: inline-block;
+            margin-left: 8px;
+            color: #dc2626;
+            font-size: 14px;
+            cursor: default;
+            vertical-align: middle;
+        }
+
         /* Signature Name Field */
         .signature-name-field {
             margin-bottom: 12px;
@@ -2735,6 +2745,19 @@
             </div>
         </div>
         <div class="container">
+            <!-- Unassigned PODs & Tank Movements (admin only) -->
+            <div id="unassignedSection" class="card" style="display: none; border: 2px solid #f59e0b; background: #fffbeb;">
+                <div style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="toggleUnassignedSection()">
+                    <h3 style="color: #92400e; margin: 0;">
+                        ⚠ Unassigned <span id="unassignedCount" style="background:#dc2626;color:white;padding:2px 10px;border-radius:10px;font-size:13px;margin-left:6px;">0</span>
+                    </h3>
+                    <span id="unassignedToggleIcon" style="font-size: 18px; color: #92400e;">▼</span>
+                </div>
+                <div id="unassignedBody" style="margin-top: 12px;">
+                    <div style="text-align: center; padding: 12px; color: #6b7280;">Loading...</div>
+                </div>
+            </div>
+
             <div class="card">
                 <div class="form-group">
                     <label>Search by Customer Name</label>
@@ -2759,6 +2782,27 @@
                 
                 <div id="searchPodsTable">
                     <!-- POD history table will be rendered here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Link Customer Modal (for unassigned PODs / tank movements) -->
+    <div id="linkCustomerModal" class="search-modal-overlay">
+        <div class="search-modal">
+            <div class="search-modal-header">
+                <h2>Link to Customer</h2>
+                <button class="search-modal-close" onclick="hideLinkCustomerModal()">×</button>
+            </div>
+            <div class="search-modal-body">
+                <div id="linkCustomerContext" style="padding: 10px; background: #fef3c7; border-radius: 6px; margin-bottom: 12px; font-size: 13px; color: #92400e;"></div>
+                <div class="search-input-container">
+                    <span class="search-icon">🔍</span>
+                    <input type="text" id="linkCustomerSearchInput" class="search-input" placeholder="Search customers (2+ characters)..." oninput="handleLinkCustomerSearch(this.value)">
+                </div>
+                <div id="linkCustomerResults" class="search-results" style="display: none;"></div>
+                <div id="linkCustomerHint" class="search-hint">
+                    Type at least 2 characters to search
                 </div>
             </div>
         </div>
@@ -4526,7 +4570,8 @@
                         tankServices: p.tank_services || null,
                         completedBy: p.completed_by || null,
                         completedAt: p.completed_at || null,
-                        invoiceNotes: p.invoice_notes || null
+                        invoiceNotes: p.invoice_notes || null,
+                        linkExcluded: p.link_excluded || false
                     }));
                     
                     // Also load scheduled days for the month
@@ -4582,7 +4627,8 @@
                         tankServices: p.tank_services || null,
                         completedBy: p.completed_by || null,
                         completedAt: p.completed_at || null,
-                        invoiceNotes: p.invoice_notes || null
+                        invoiceNotes: p.invoice_notes || null,
+                        linkExcluded: p.link_excluded || false
                     }));
                     
                     console.log(`Loaded ${this.pods.length} PODs for week starting ${startStr}`);
@@ -4637,7 +4683,8 @@
                         tankServices: p.tank_services || null,
                         completedBy: p.completed_by || null,
                         completedAt: p.completed_at || null,
-                        invoiceNotes: p.invoice_notes || null
+                        invoiceNotes: p.invoice_notes || null,
+                        linkExcluded: p.link_excluded || false
                     }));
                 } catch (error) {
                     console.error('Error loading PODs for specific month:', error);
@@ -4950,7 +4997,8 @@
                     completed_by: pod.completedBy || null,
                     completed_at: pod.completedAt || null,
                     tank_label: pod.tankLabel || null,
-                    tank_services: pod.tankServices || null
+                    tank_services: pod.tankServices || null,
+                    link_excluded: pod.linkExcluded || false
                 };
                 
                 // If offline, queue the POD for later sync
@@ -5235,7 +5283,8 @@
                         invoiced: tm.invoiced || false,
                         checkedSent: tm.checked_sent || false,
                         invoicedAt: tm.invoiced_at || null,
-                        invoicedBy: tm.invoiced_by || null
+                        invoicedBy: tm.invoiced_by || null,
+                        linkExcluded: tm.link_excluded || false
                     }));
                     
                     console.log(`Loaded ${this.tankMovements.length} tank movements`);
@@ -5261,7 +5310,8 @@
                     reason: movement.reason,
                     source_run_day: movement.sourceRunDay || null,
                     calendar_event_id: movement.calendarEventId || null,
-                    completed_by: movement.completedBy || null
+                    completed_by: movement.completedBy || null,
+                    link_excluded: movement.linkExcluded || false
                 };
                 
                 // If offline, queue for later sync
@@ -8100,6 +8150,8 @@
             document.getElementById('searchPodsResults').style.display = 'none';
             document.getElementById('searchPodsHint').style.display = 'block';
             document.getElementById('searchPodsHistoryContainer').style.display = 'none';
+            // Load unassigned PODs/tank movements section
+            loadUnassignedSection();
             // Focus the search input
             setTimeout(() => document.getElementById('searchPodsInput').focus(), 100);
         }
@@ -8298,7 +8350,8 @@
                         isQuickComplete: pod.is_quick_complete || false, isAdHoc: pod.is_ad_hoc || false,
                         sourceRunDay: pod.source_run_day, calendarEventId: pod.calendar_event_id || null, archived: pod.archived,
                         tankLabel: pod.tank_label || null,
-                        tankServices: pod.tank_services || null
+                        tankServices: pod.tank_services || null,
+                        linkExcluded: pod.link_excluded || false
                     };
                     showExistingPod(mappedPod);
                 }
@@ -8314,6 +8367,313 @@
             document.getElementById('searchPodsHint').style.display = 'block';
             document.getElementById('searchPodsInput').value = '';
             document.getElementById('searchPodsInput').focus();
+        }
+
+        // ─── Unassigned PODs & Tank Movements (Search POD page) ────────────────
+        // Pinned section listing every POD and tank movement where customer_id IS NULL
+        // and link_excluded = false. Admin-only.
+        let unassignedData = { pods: [], tankMovements: [] };
+        let unassignedCollapsed = false;
+
+        async function loadUnassignedSection() {
+            const section = document.getElementById('unassignedSection');
+            if (!section) return;
+
+            // Admin-only
+            const isAdminUser = currentUser && ADMIN_EMAILS.includes(currentUser.email.toLowerCase());
+            if (!isAdminUser) {
+                section.style.display = 'none';
+                return;
+            }
+
+            section.style.display = 'block';
+            document.getElementById('unassignedBody').innerHTML =
+                '<div style="text-align: center; padding: 12px; color: #6b7280;">Loading...</div>';
+
+            try {
+                // Fetch all unassigned, non-excluded PODs
+                const { data: pods, error: podsErr } = await supabase
+                    .from('pods')
+                    .select('*')
+                    .is('customer_id', null)
+                    .eq('link_excluded', false)
+                    .order('date', { ascending: false });
+                if (podsErr) throw podsErr;
+
+                // Fetch all unassigned, non-excluded tank movements
+                const { data: tms, error: tmsErr } = await supabase
+                    .from('tank_movements')
+                    .select('*')
+                    .is('customer_id', null)
+                    .eq('link_excluded', false)
+                    .order('date', { ascending: false });
+                if (tmsErr) throw tmsErr;
+
+                unassignedData.pods = (pods || []).map(p => ({
+                    id: p.id,
+                    customerName: p.customer_name,
+                    date: p.date,
+                    serviceType: p.service_type,
+                    runDay: p.run_day,
+                    completedBy: p.completed_by
+                }));
+                unassignedData.tankMovements = (tms || []).map(tm => ({
+                    id: tm.id,
+                    customerName: tm.customer_name,
+                    date: tm.date,
+                    movementType: tm.movement_type,
+                    tankNoPlaced: tm.tank_no_placed,
+                    tankNoPulled: tm.tank_no_pulled,
+                    runDay: tm.run_day,
+                    completedBy: tm.completed_by
+                }));
+
+                renderUnassignedSection();
+            } catch (error) {
+                console.error('Error loading unassigned:', error);
+                document.getElementById('unassignedBody').innerHTML =
+                    '<div style="text-align: center; padding: 12px; color: #dc2626;">Error loading unassigned items</div>';
+            }
+        }
+
+        function renderUnassignedSection() {
+            const body = document.getElementById('unassignedBody');
+            const countEl = document.getElementById('unassignedCount');
+            const toggleIcon = document.getElementById('unassignedToggleIcon');
+            if (!body || !countEl) return;
+
+            const total = unassignedData.pods.length + unassignedData.tankMovements.length;
+            countEl.textContent = total;
+
+            // If collapsed, hide body
+            if (unassignedCollapsed) {
+                body.style.display = 'none';
+                if (toggleIcon) toggleIcon.textContent = '▶';
+                return;
+            }
+            body.style.display = 'block';
+            if (toggleIcon) toggleIcon.textContent = '▼';
+
+            if (total === 0) {
+                body.innerHTML = '<div style="text-align: center; padding: 12px; color: #6b7280; font-size: 14px;">No unassigned items 🎉</div>';
+                return;
+            }
+
+            // Build rows — PODs first, then tank movements, both sorted by date desc (already from DB)
+            let html = '<div style="display: flex; flex-direction: column; gap: 8px;">';
+
+            unassignedData.pods.forEach(p => {
+                const typeIcon = p.serviceType === 'Delivery' ? '📦' : p.serviceType === 'Repairs' ? '🔨' : '🔧';
+                html += `
+                    <div style="background: white; border: 1px solid #fde68a; border-radius: 6px; padding: 10px;">
+                        <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px;">
+                            <span style="font-weight: 700; font-size: 16px; color: #111827;">${p.customerName || '(no name)'}</span>
+                            <span style="background: #f59e0b; color: white; padding: 2px 6px; border-radius: 8px; font-size: 10px;">POD</span>
+                            <span style="background: #e5e7eb; color: #374151; padding: 2px 6px; border-radius: 8px; font-size: 10px;">${typeIcon} ${p.serviceType || 'Service'}</span>
+                            <span style="color: #6b7280; font-size: 12px;">${formatDisplayDate(p.date)}</span>
+                            ${p.completedBy ? `<span style="color: #9ca3af; font-size: 11px;">👤 ${p.completedBy}</span>` : ''}
+                        </div>
+                        <div style="display: flex; gap: 8px;">
+                            <button onclick="showLinkCustomerModal('pod', ${p.id}, '${(p.customerName || '').replace(/'/g, "\\'")}')"
+                                style="flex: 1; background: #2563eb; color: white; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600;">
+                                🔗 Link to Customer
+                            </button>
+                            <button onclick="excludeUnassigned('pod', ${p.id})"
+                                style="flex: 1; background: #6b7280; color: white; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 13px;">
+                                Exclude
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+
+            unassignedData.tankMovements.forEach(tm => {
+                const tankInfo = tm.movementType === 'Swap'
+                    ? `Placed: ${tm.tankNoPlaced || '-'} · Pulled: ${tm.tankNoPulled || '-'}`
+                    : tm.movementType === 'Pull'
+                        ? `Pulled: ${tm.tankNoPulled || '-'}`
+                        : `Placed: ${tm.tankNoPlaced || '-'}`;
+                html += `
+                    <div style="background: white; border: 1px solid #bfdbfe; border-radius: 6px; padding: 10px;">
+                        <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px;">
+                            <span style="font-weight: 700; font-size: 16px; color: #111827;">${tm.customerName || '(no name)'}</span>
+                            <span style="background: #3b82f6; color: white; padding: 2px 6px; border-radius: 8px; font-size: 10px;">Tank Movement</span>
+                            <span style="background: #e5e7eb; color: #374151; padding: 2px 6px; border-radius: 8px; font-size: 10px;">${tm.movementType}</span>
+                            <span style="color: #6b7280; font-size: 12px;">${formatDisplayDate(tm.date)}</span>
+                            ${tm.completedBy ? `<span style="color: #9ca3af; font-size: 11px;">👤 ${tm.completedBy}</span>` : ''}
+                        </div>
+                        <div style="color: #6b7280; font-size: 12px; margin-bottom: 8px;">${tankInfo}</div>
+                        <div style="display: flex; gap: 8px;">
+                            <button onclick="showLinkCustomerModal('tm', ${tm.id}, '${(tm.customerName || '').replace(/'/g, "\\'")}')"
+                                style="flex: 1; background: #2563eb; color: white; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600;">
+                                🔗 Link to Customer
+                            </button>
+                            <button onclick="excludeUnassigned('tm', ${tm.id})"
+                                style="flex: 1; background: #6b7280; color: white; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 13px;">
+                                Exclude
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+
+            html += '</div>';
+            body.innerHTML = html;
+        }
+
+        function toggleUnassignedSection() {
+            unassignedCollapsed = !unassignedCollapsed;
+            renderUnassignedSection();
+        }
+
+        // ─── Link Customer Modal ────────────────────────────────────────────────
+        let linkContext = null; // { type: 'pod'|'tm', id: number, freetextName: string }
+
+        function showLinkCustomerModal(type, id, freetextName) {
+            linkContext = { type, id, freetextName };
+            document.getElementById('linkCustomerContext').innerHTML =
+                `Linking <strong>${freetextName || '(no name)'}</strong> to a customer record. This will replace the typed name with the customer's name.`;
+            document.getElementById('linkCustomerSearchInput').value = '';
+            document.getElementById('linkCustomerResults').style.display = 'none';
+            document.getElementById('linkCustomerResults').innerHTML = '';
+            document.getElementById('linkCustomerHint').style.display = 'block';
+            document.getElementById('linkCustomerHint').textContent = 'Type at least 2 characters to search';
+            document.getElementById('linkCustomerModal').classList.add('active');
+            setTimeout(() => document.getElementById('linkCustomerSearchInput').focus(), 100);
+        }
+
+        function hideLinkCustomerModal() {
+            document.getElementById('linkCustomerModal').classList.remove('active');
+            linkContext = null;
+        }
+
+        function handleLinkCustomerSearch(query) {
+            const resultsDiv = document.getElementById('linkCustomerResults');
+            const hintDiv = document.getElementById('linkCustomerHint');
+
+            if (query.length < 2) {
+                resultsDiv.style.display = 'none';
+                hintDiv.style.display = 'block';
+                hintDiv.textContent = 'Type at least 2 characters to search';
+                return;
+            }
+
+            const queryLower = query.toLowerCase();
+            const allMatches = db.customers.filter(c => c.name && c.name.toLowerCase().includes(queryLower));
+            allMatches.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+            const matches = allMatches.slice(0, 30);
+
+            hintDiv.style.display = 'none';
+
+            if (allMatches.length === 0) {
+                resultsDiv.style.display = 'block';
+                resultsDiv.innerHTML = '<div style="padding: 12px; color: #6b7280; text-align: center;">No customers found</div>';
+                return;
+            }
+
+            resultsDiv.style.display = 'block';
+            let html = '';
+            if (allMatches.length > 30) {
+                html += `<div style="padding: 8px 12px; background: #f3f4f6; font-size: 12px; color: #6b7280;">Showing 30 of ${allMatches.length} matches</div>`;
+            }
+            html += matches.map(c => `
+                <div class="search-result-item" onclick="linkUnassignedToCustomer(${c.id})" style="cursor: pointer;">
+                    <div class="search-result-name">${c.name}</div>
+                    <div class="search-result-meta">
+                        ${c.address || ''} ${c.runDay ? ` • Day: ${c.runDay}` : ''}
+                    </div>
+                </div>
+            `).join('');
+
+            resultsDiv.innerHTML = html;
+        }
+
+        async function linkUnassignedToCustomer(customerId) {
+            if (!linkContext) return;
+            const customer = db.customers.find(c => c.id === customerId);
+            if (!customer) {
+                showToast('Customer not found', 'error');
+                return;
+            }
+
+            const { type, id } = linkContext;
+            const tableName = type === 'pod' ? 'pods' : 'tank_movements';
+            const updateData = type === 'pod'
+                ? {
+                    customer_id: customerId,
+                    customer_name: customer.name,
+                    customer_address: customer.address || ''
+                }
+                : {
+                    customer_id: customerId,
+                    customer_name: customer.name
+                };
+
+            try {
+                const { error } = await supabase
+                    .from(tableName)
+                    .update(updateData)
+                    .eq('id', id);
+                if (error) throw error;
+
+                // Update local cache if present
+                if (type === 'pod') {
+                    const pod = db.pods.find(p => p.id == id);
+                    if (pod) {
+                        pod.customerId = customerId;
+                        pod.customerName = customer.name;
+                        pod.customerAddress = customer.address || '';
+                    }
+                } else {
+                    const tm = db.tankMovements.find(t => t.id == id);
+                    if (tm) {
+                        tm.customerId = customerId;
+                        tm.customerName = customer.name;
+                    }
+                }
+
+                // Remove from unassignedData
+                if (type === 'pod') {
+                    unassignedData.pods = unassignedData.pods.filter(p => p.id != id);
+                } else {
+                    unassignedData.tankMovements = unassignedData.tankMovements.filter(t => t.id != id);
+                }
+
+                hideLinkCustomerModal();
+                showToast(`Linked to ${customer.name}`, 'success');
+                renderUnassignedSection();
+            } catch (error) {
+                console.error('Error linking to customer:', error);
+                showToast('Failed to link: ' + error.message, 'error');
+            }
+        }
+
+        async function excludeUnassigned(type, id) {
+            const tableName = type === 'pod' ? 'pods' : 'tank_movements';
+            try {
+                const { error } = await supabase
+                    .from(tableName)
+                    .update({ link_excluded: true })
+                    .eq('id', id);
+                if (error) throw error;
+
+                // Update local cache if present
+                if (type === 'pod') {
+                    const pod = db.pods.find(p => p.id == id);
+                    if (pod) pod.linkExcluded = true;
+                    unassignedData.pods = unassignedData.pods.filter(p => p.id != id);
+                } else {
+                    const tm = db.tankMovements.find(t => t.id == id);
+                    if (tm) tm.linkExcluded = true;
+                    unassignedData.tankMovements = unassignedData.tankMovements.filter(t => t.id != id);
+                }
+
+                showToast('Excluded from linking', 'success');
+                renderUnassignedSection();
+            } catch (error) {
+                console.error('Error excluding:', error);
+                showToast('Failed to exclude: ' + error.message, 'error');
+            }
         }
 
         async function backToCustomerList() {
@@ -11368,7 +11728,7 @@
                                onchange="toggleCheckedSent(${pod.id}, null, null)" title="Checked & Sent">
                         </td>
                         <td style="padding: 12px;">
-                            ${customerName}${podBillingBadge}
+                            ${customerName}${unlinkedWarningIcon(pod)}${podBillingBadge}
                             <span style="background:#f59e0b;color:white;padding:2px 6px;border-radius:8px;font-size:10px;margin-left:8px;">Ad-Hoc</span>
                             ${calBadge}
                             ${podWorkerBadge}
@@ -11425,7 +11785,7 @@
                                 style="width:16px;height:16px;cursor:pointer;${!tmIsInvoiced ? 'opacity:0.4;' : ''}">
                         </td>
                         <td style="padding: 10px;">
-                            ${tm.customerName}${tmBillingBadge}
+                            ${tm.customerName}${unlinkedWarningIcon(tm)}${tmBillingBadge}
                             <div style="margin-top:4px;">
                                 <span style="background:#3b82f6;color:white;padding:2px 6px;border-radius:8px;font-size:10px;">Ad-Hoc</span>
                                 ${tm.completedBy ? `<span style="display:inline-block;margin-left:4px;background:${getWorkerColor(tm.completedBy)};color:white;padding:1px 6px;border-radius:8px;font-size:10px;">👤 ${tm.completedBy}</span>` : ''}
@@ -11625,7 +11985,7 @@
                             style="width:16px;height:16px;cursor:pointer;${!tmIsInvoiced ? 'opacity:0.4;' : ''}">
                     </td>
                     <td style="padding: 10px;">
-                        ${tm.customerName}
+                        ${tm.customerName}${unlinkedWarningIcon(tm)}
                         ${adHocBadge ? `<div style="margin-top: 4px;">${adHocBadge}</div>` : ''}
                         ${invoiceNoteInlineHtml('tm', tm.id, tm.invoiceNotes || null)}
                     </td>
@@ -11690,6 +12050,16 @@
             if (!raw) return { invoiced: false, checkedSent: false };
             if (typeof raw === 'boolean') return { invoiced: raw, checkedSent: false };
             return raw;
+        }
+
+        // Returns warning icon HTML for ad-hoc rows that are not linked to a customer
+        // and have not been deliberately excluded. Info-only — does nothing on tap.
+        function unlinkedWarningIcon(record) {
+            if (!record) return '';
+            const hasCustomer = record.customerId != null;
+            const excluded = record.linkExcluded === true;
+            if (hasCustomer || excluded) return '';
+            return '<span class="unlinked-warning" title="Not linked to a customer">⚠</span>';
         }
         
         function getTankMovementInvoiceStatus(tmId) {
@@ -12898,7 +13268,8 @@
                         sourceRunDay: pod.source_run_day,
                         archived: pod.archived,
                         tankLabel: pod.tank_label || null,
-                        tankServices: pod.tank_services || null
+                        tankServices: pod.tank_services || null,
+                        linkExcluded: pod.link_excluded || false
                     };
                     showExistingPod(mappedPod);
                 }
