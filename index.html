@@ -6150,7 +6150,11 @@
             const state = e.state;
             const viewId = state && state.viewId;
             if (viewId && document.getElementById(viewId)) {
-                showView(viewId, true);
+                if (viewId === 'homeView') {
+                    showHomeView(true); // Clears currentServiceDate on back-to-home
+                } else {
+                    showView(viewId, true);
+                }
                 // If returning to admin dashboard, close any open subpanel
                 // and restore whichever sub-view (calendar/list/bimonthly) the user was on
                 // before they drilled into a runsheet or invoice subview
@@ -6166,17 +6170,17 @@
                     }
                 }
             } else {
-                // No state = first entry, go home
-                showView('homeView', true);
+                // No state = first entry, go home (clears currentServiceDate)
+                showHomeView(true);
             }
         });
 
-        function showHomeView() {
+        function showHomeView(skipHistory) {
             // Clean up any existing other-workers-section before re-rendering
             const existingOther = document.querySelector('.other-workers-section');
             if (existingOther) existingOther.remove();
             
-            showView('homeView');
+            showView('homeView', skipHistory);
             currentServiceDate = null; // Clear service date when returning home
             updateWorkerPeriodDisplay(); // Sync worker period display
             renderRunDays(); // Refresh run days to show updated progress
