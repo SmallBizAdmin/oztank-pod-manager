@@ -6243,6 +6243,22 @@
             renderCustomerList();
         }
 
+        // Ensure a <select> contains the given value as an option (injecting it if missing).
+        // Used so non-standard carbsolve values (e.g. "11kg spcl + 2kg additive") preselect
+        // correctly on the POD form instead of silently falling back to "None".
+        function ensureCarbsolveOption(selectEl, value) {
+            if (!selectEl || !value) return;
+            const exists = Array.from(selectEl.options).some(o => o.value === value);
+            if (exists) return;
+            // Remove any previously-injected custom option (avoid leaking across customers)
+            Array.from(selectEl.querySelectorAll('option[data-custom="true"]')).forEach(o => o.remove());
+            const opt = document.createElement('option');
+            opt.value = value;
+            opt.textContent = value;
+            opt.dataset.custom = 'true';
+            selectEl.appendChild(opt);
+        }
+
         function showPodView(customer) {
             currentCustomer = customer;
             returnToRunDay = null; // Clear since we're opening from the regular runsheet
@@ -6309,8 +6325,11 @@
             if (currentCustomer.tankCount > 1) {
                 const tankEntries = getTankEntries(currentCustomer);
                 const customerCarbsolve = (currentCustomer.carbsolve || '').replace(/^(Carbsolve\s*[-:]\s*|Carb:\s*)/i, '').trim();
-                const makeCarbsolveOptions = (selected) => ['', '4kg', '4kg spcl', '7kg', '7kg spcl', '10kg', '11kg spcl', '14kg', '17kg', '21kg', '28kg']
-                    .map(v => `<option value="${v}" ${v === selected ? 'selected' : ''}>${v || 'None'}</option>`).join('');
+                const makeCarbsolveOptions = (selected) => {
+                    const standard = ['', '4kg', '4kg spcl', '7kg', '7kg spcl', '10kg', '11kg spcl', '14kg', '17kg', '21kg', '28kg'];
+                    const opts = (selected && !standard.includes(selected)) ? [...standard, selected] : standard;
+                    return opts.map(v => `<option value="${v}" ${v === selected ? 'selected' : ''}>${v || 'None'}</option>`).join('');
+                };
                 tankServicesRows.innerHTML = tankEntries.map(t => {
                     // Per-tank carbsolve from tank_labels, fall back to customer-level
                     const defaultCarb = t.carbsolve || customerCarbsolve;
@@ -6334,6 +6353,7 @@
                 if (carbsolveContainer) carbsolveContainer.style.display = isDelivery ? 'none' : 'block';
                 const customerCarbsolve = (currentCustomer.carbsolve || '').replace(/^(Carbsolve\s*[-:]\s*|Carb:\s*)/i, '').trim();
                 const carbsolveSelect = document.getElementById('podCarbsolveDisplay');
+                ensureCarbsolveOption(carbsolveSelect, customerCarbsolve);
                 carbsolveSelect.value = customerCarbsolve;
                 carbsolveSelect.style.borderColor = '#d1d5db';
                 carbsolveSelect.title = customerCarbsolve ? `Default: ${customerCarbsolve}` : 'No default set';
@@ -6506,8 +6526,11 @@
                 const customerCarbsolve = (currentCustomer.carbsolve || '').replace(/^(Carbsolve\s*[-:]\s*|Carb:\s*)/i, '').trim();
                 // Use saved tankServices if present, else default all serviced with per-tank carbsolve
                 const savedServices = pod.tankServices || tankEntries.map(t => ({ tankLabel: t.label, serviced: true, carbsolve: t.carbsolve || customerCarbsolve }));
-                const carbsolveOptions = (sel) => ['', '4kg', '4kg spcl', '7kg', '7kg spcl', '10kg', '11kg spcl', '14kg', '17kg', '21kg', '28kg']
-                    .map(v => `<option value="${v}" ${v === sel ? 'selected' : ''}>${v || 'None'}</option>`).join('');
+                const carbsolveOptions = (sel) => {
+                    const standard = ['', '4kg', '4kg spcl', '7kg', '7kg spcl', '10kg', '11kg spcl', '14kg', '17kg', '21kg', '28kg'];
+                    const opts = (sel && !standard.includes(sel)) ? [...standard, sel] : standard;
+                    return opts.map(v => `<option value="${v}" ${v === sel ? 'selected' : ''}>${v || 'None'}</option>`).join('');
+                };
                 tankServicesRowsEdit.innerHTML = tankEntries.map(t => {
                     const saved = savedServices.find(s => s.tankLabel === t.label) || { serviced: true, carbsolve: t.carbsolve || customerCarbsolve };
                     return `<div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid #f3f4f6;" data-tank-label="${t.label}">
@@ -6534,6 +6557,8 @@
                 const customerCarbsolve = (currentCustomer.carbsolve || '').replace(/^(Carbsolve\s*[-:]\s*|Carb:\s*)/i, '').trim();
                 const savedCarbsolve = (pod.carbsolve || customerCarbsolve).replace(/^(Carbsolve\s*[-:]\s*|Carb:\s*)/i, '').trim();
                 const carbsolveSelect = document.getElementById('podCarbsolveDisplay');
+                ensureCarbsolveOption(carbsolveSelect, customerCarbsolve);
+                ensureCarbsolveOption(carbsolveSelect, savedCarbsolve);
                 carbsolveSelect.value = savedCarbsolve;
                 carbsolveSelect.style.borderColor = (savedCarbsolve && savedCarbsolve !== customerCarbsolve) ? '#f97316' : '#d1d5db';
                 carbsolveSelect.title = customerCarbsolve ? `Default: ${customerCarbsolve}` : 'No default set';
