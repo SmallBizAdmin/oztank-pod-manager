@@ -7732,6 +7732,11 @@
 
         // Tick button handler — opens the ad-hoc modal with a Confirm Complete option
         function handleEventTick(eventId, dateStr) {
+            // Pin the work date to the calendar event's own date. This flow never
+            // passes through showHomeView(), so without this currentServiceDate can
+            // still hold a stale future date from a prior date navigation and leak
+            // into the POD/tank-movement save (line ~10707 / ~14031 fallbacks).
+            if (dateStr) currentServiceDate = dateStr;
             showCalendarEventModal(eventId, dateStr);
         }
 
@@ -10797,6 +10802,7 @@
                     if (currentCalendarEventId) {
                         await db.saveCalendarEventStatus(currentCalendarEventId, 'completed');
                         currentCalendarEventId = null;
+                        currentServiceDate = null; // Drop pinned event date so it can't leak into a later non-calendar save
                         renderAdminCalendar();
                         loadWorkerCalendarEvents();
                         if (document.getElementById('adminListContainer').style.display !== 'none') {
