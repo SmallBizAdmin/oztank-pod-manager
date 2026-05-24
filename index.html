@@ -10755,9 +10755,11 @@
             const podId = currentEditingPodId || Date.now();
             // O/N extraction: only for new ad-hoc PODs linked to a calendar event.
             // Skipped on edit (currentEditingPodId set) so existing value is preserved.
+            // Uses db.findCalendarEvent which parseInts the id and searches both
+            // adminCalendarEvents (admin view) and calendarEvents (worker view).
             let orderNumber = null;
             if (!currentEditingPodId && currentCalendarEventId) {
-                const linkedEv = (db.adminCalendarEvents || []).find(e => e.id === currentCalendarEventId);
+                const linkedEv = db.findCalendarEvent(currentCalendarEventId);
                 if (linkedEv && linkedEv.eventTitle) {
                     orderNumber = extractOrderNumber(linkedEv.eventTitle);
                 }
@@ -14083,9 +14085,11 @@
             const effectiveCustomerName = selectedTankMovementCustomer ? selectedTankMovementCustomer.name : freetextName;
 
             // O/N extraction: from linked calendar event title, new tank movements only.
+            // Uses db.findCalendarEvent which parseInts the id and searches both
+            // adminCalendarEvents (admin view) and calendarEvents (worker view).
             let tmOrderNumber = null;
             if (tankMovementCalendarEventId) {
-                const linkedEv = (db.adminCalendarEvents || []).find(e => e.id === tankMovementCalendarEventId);
+                const linkedEv = db.findCalendarEvent(tankMovementCalendarEventId);
                 if (linkedEv && linkedEv.eventTitle) {
                     tmOrderNumber = extractOrderNumber(linkedEv.eventTitle);
                 }
