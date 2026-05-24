@@ -5021,6 +5021,7 @@
                     link_excluded: pod.linkExcluded || false,
                     order_number: pod.orderNumber || null
                 };
+                console.log('[ON-DIAG savePOD] pod.orderNumber:', pod.orderNumber, 'podData.order_number:', podData.order_number);
                 
                 // If offline, queue the POD for later sync
                 if (!isOnline) {
@@ -10758,12 +10759,17 @@
             // Uses db.findCalendarEvent which parseInts the id and searches both
             // adminCalendarEvents (admin view) and calendarEvents (worker view).
             let orderNumber = null;
+            console.log('[ON-DIAG pod] currentEditingPodId:', currentEditingPodId, 'currentCalendarEventId:', currentCalendarEventId, 'typeof:', typeof currentCalendarEventId);
+            console.log('[ON-DIAG pod] adminCalendarEvents.length:', (db.adminCalendarEvents||[]).length, 'calendarEvents.length:', (db.calendarEvents||[]).length);
             if (!currentEditingPodId && currentCalendarEventId) {
                 const linkedEv = db.findCalendarEvent(currentCalendarEventId);
+                console.log('[ON-DIAG pod] linkedEv found:', !!linkedEv, 'eventTitle:', linkedEv && linkedEv.eventTitle);
                 if (linkedEv && linkedEv.eventTitle) {
                     orderNumber = extractOrderNumber(linkedEv.eventTitle);
+                    console.log('[ON-DIAG pod] extracted orderNumber:', orderNumber);
                 }
             }
+            console.log('[ON-DIAG pod] FINAL orderNumber on pod object:', orderNumber);
             const pod = {
                 id: podId,
                 customerId: currentCustomer.id, // Will be null for freetext ad-hoc
