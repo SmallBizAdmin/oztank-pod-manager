@@ -3754,7 +3754,23 @@
             if (!waste) return false;
             return BILLING_WASTE_FLAGS.some(f => waste.toLowerCase().includes(f));
         }
-        
+
+        // Extract an order number from a calendar event title.
+        // Recognises the literal "O/N" (case-insensitive) followed by optional separator
+        // (space, colon, hash, dash) and captures everything that follows to end-of-string, trimmed.
+        // Examples:
+        //   "Del - 20 Oven Burger Windsor O/N 6064689" -> "6064689"
+        //   "Service O/N: PO4471"                      -> "PO4471"
+        //   "Repair o/n PO 12345"                      -> "PO 12345"
+        // Returns null if no O/N marker is present or capture is empty.
+        function extractOrderNumber(title) {
+            if (!title) return null;
+            const m = String(title).match(/\bO\/N\s*[:#\-]?\s*(.+?)\s*$/i);
+            if (!m) return null;
+            const captured = m[1].trim();
+            return captured.length > 0 ? captured : null;
+        }
+
         // Format date as YYYY-MM-DD without UTC conversion (fixes timezone issues)
         function formatDateLocal(date) {
             const year = date.getFullYear();
@@ -4572,7 +4588,8 @@
                         completedBy: p.completed_by || null,
                         completedAt: p.completed_at || null,
                         invoiceNotes: p.invoice_notes || null,
-                        linkExcluded: p.link_excluded || false
+                        linkExcluded: p.link_excluded || false,
+                        orderNumber: p.order_number || null
                     }));
                     
                     // Also load scheduled days for the month
@@ -4629,7 +4646,8 @@
                         completedBy: p.completed_by || null,
                         completedAt: p.completed_at || null,
                         invoiceNotes: p.invoice_notes || null,
-                        linkExcluded: p.link_excluded || false
+                        linkExcluded: p.link_excluded || false,
+                        orderNumber: p.order_number || null
                     }));
                     
                     console.log(`Loaded ${this.pods.length} PODs for week starting ${startStr}`);
@@ -4685,7 +4703,8 @@
                         completedBy: p.completed_by || null,
                         completedAt: p.completed_at || null,
                         invoiceNotes: p.invoice_notes || null,
-                        linkExcluded: p.link_excluded || false
+                        linkExcluded: p.link_excluded || false,
+                        orderNumber: p.order_number || null
                     }));
                 } catch (error) {
                     console.error('Error loading PODs for specific month:', error);
@@ -4999,7 +5018,8 @@
                     completed_at: pod.completedAt || null,
                     tank_label: pod.tankLabel || null,
                     tank_services: pod.tankServices || null,
-                    link_excluded: pod.linkExcluded || false
+                    link_excluded: pod.linkExcluded || false,
+                    order_number: pod.orderNumber || null
                 };
                 
                 // If offline, queue the POD for later sync
@@ -5285,7 +5305,8 @@
                         checkedSent: tm.checked_sent || false,
                         invoicedAt: tm.invoiced_at || null,
                         invoicedBy: tm.invoiced_by || null,
-                        linkExcluded: tm.link_excluded || false
+                        linkExcluded: tm.link_excluded || false,
+                        orderNumber: tm.order_number || null
                     }));
                     
                     console.log(`Loaded ${this.tankMovements.length} tank movements`);
@@ -5312,7 +5333,8 @@
                     source_run_day: movement.sourceRunDay || null,
                     calendar_event_id: movement.calendarEventId || null,
                     completed_by: movement.completedBy || null,
-                    link_excluded: movement.linkExcluded || false
+                    link_excluded: movement.linkExcluded || false,
+                    order_number: movement.orderNumber || null
                 };
                 
                 // If offline, queue for later sync
@@ -8382,7 +8404,8 @@
                         sourceRunDay: pod.source_run_day, calendarEventId: pod.calendar_event_id || null, archived: pod.archived,
                         tankLabel: pod.tank_label || null,
                         tankServices: pod.tank_services || null,
-                        linkExcluded: pod.link_excluded || false
+                        linkExcluded: pod.link_excluded || false,
+                        orderNumber: pod.order_number || null
                     };
                     showExistingPod(mappedPod);
                 }
@@ -10730,6 +10753,15 @@
             const isRentalOnly = notesValue.toLowerCase().includes('no service required');
             
             const podId = currentEditingPodId || Date.now();
+            // O/N extraction: only for new ad-hoc PODs linked to a calendar event.
+            // Skipped on edit (currentEditingPodId set) so existing value is preserved.
+            let orderNumber = null;
+            if (!currentEditingPodId && currentCalendarEventId) {
+                const linkedEv = (db.adminCalendarEvents || []).find(e => e.id === currentCalendarEventId);
+                if (linkedEv && linkedEv.eventTitle) {
+                    orderNumber = extractOrderNumber(linkedEv.eventTitle);
+                }
+            }
             const pod = {
                 id: podId,
                 customerId: currentCustomer.id, // Will be null for freetext ad-hoc
@@ -10754,7 +10786,8 @@
                 completedBy: currentUser ? (currentUser.name || currentUser.email) : 'Unknown',
                 completedAt: nowUTC.toISOString(),
                 tankLabel: null,
-                tankServices: tankServices
+                tankServices: tankServices,
+                orderNumber: orderNumber
             };
 
             console.log('Saving POD:', pod);
@@ -11702,6 +11735,9 @@
                     const podBillingBadge = podBillingValue
                         ? `<span style="background: #fff7ed; color: #c2410c; border: 1px solid #fdba74; padding: 2px 7px; border-radius: 8px; font-size: 10px; font-weight: 600; margin-left: 6px;">📋 ${podBillingValue}</span>`
                         : '';
+                    const podOrderNumberBadge = pod.orderNumber
+                        ? `<span style="background: #14532d; color: white; padding: 2px 7px; border-radius: 8px; font-size: 10px; font-weight: 600; margin-left: 6px;">O/N ${pod.orderNumber}</span>`
+                        : '';
                     const productsStr = (() => {
                         if (!pod.products || pod.products.length === 0) return '-';
                         const saleItems = pod.products.filter(p => p.type !== 'repair');
@@ -11760,7 +11796,7 @@
                                onchange="toggleCheckedSent(${pod.id}, null, null)" title="Checked & Sent">
                         </td>
                         <td style="padding: 12px;">
-                            ${customerName}${unlinkedWarningIcon(pod)}${podBillingBadge}
+                            ${customerName}${unlinkedWarningIcon(pod)}${podBillingBadge}${podOrderNumberBadge}
                             <span style="background:#f59e0b;color:white;padding:2px 6px;border-radius:8px;font-size:10px;margin-left:8px;">Ad-Hoc</span>
                             ${calBadge}
                             ${podWorkerBadge}
@@ -11804,6 +11840,9 @@
                     const tmBillingBadge = tmBillingValue
                         ? `<span style="background: #fff7ed; color: #c2410c; border: 1px solid #fdba74; padding: 2px 7px; border-radius: 8px; font-size: 10px; font-weight: 600; margin-left: 6px;">📋 ${tmBillingValue}</span>`
                         : '';
+                    const tmOrderNumberBadge = tm.orderNumber
+                        ? `<span style="background: #14532d; color: white; padding: 2px 7px; border-radius: 8px; font-size: 10px; font-weight: 600; margin-left: 6px;">O/N ${tm.orderNumber}</span>`
+                        : '';
                     tr.innerHTML = `
                         <td style="padding: 10px; text-align: center;"><span style="color: #16a34a; font-size: 18px;">✓</span></td>
                         <td style="padding: 10px; text-align: center;" onclick="event.stopPropagation();">
@@ -11817,7 +11856,7 @@
                                 style="width:16px;height:16px;cursor:pointer;${!tmIsInvoiced ? 'opacity:0.4;' : ''}">
                         </td>
                         <td style="padding: 10px;">
-                            ${tm.customerName}${unlinkedWarningIcon(tm)}${tmBillingBadge}
+                            ${tm.customerName}${unlinkedWarningIcon(tm)}${tmBillingBadge}${tmOrderNumberBadge}
                             <div style="margin-top:4px;">
                                 <span style="background:#3b82f6;color:white;padding:2px 6px;border-radius:8px;font-size:10px;">Ad-Hoc</span>
                                 ${tm.completedBy ? `<span style="display:inline-block;margin-left:4px;background:${getWorkerColor(tm.completedBy)};color:white;padding:1px 6px;border-radius:8px;font-size:10px;">👤 ${tm.completedBy}</span>` : ''}
@@ -13301,7 +13340,8 @@
                         archived: pod.archived,
                         tankLabel: pod.tank_label || null,
                         tankServices: pod.tank_services || null,
-                        linkExcluded: pod.link_excluded || false
+                        linkExcluded: pod.link_excluded || false,
+                        orderNumber: pod.order_number || null
                     };
                     showExistingPod(mappedPod);
                 }
@@ -14041,7 +14081,16 @@
             const effectiveRunDay = 'Ad-Hoc';
             const effectiveCustomerId = selectedTankMovementCustomer ? selectedTankMovementCustomer.id : null;
             const effectiveCustomerName = selectedTankMovementCustomer ? selectedTankMovementCustomer.name : freetextName;
-            
+
+            // O/N extraction: from linked calendar event title, new tank movements only.
+            let tmOrderNumber = null;
+            if (tankMovementCalendarEventId) {
+                const linkedEv = (db.adminCalendarEvents || []).find(e => e.id === tankMovementCalendarEventId);
+                if (linkedEv && linkedEv.eventTitle) {
+                    tmOrderNumber = extractOrderNumber(linkedEv.eventTitle);
+                }
+            }
+
             const movement = {
                 id: Date.now(),
                 customerId: effectiveCustomerId,
@@ -14056,7 +14105,8 @@
                 reason: reason,
                 sourceRunDay: tankMovementSourceRunDay,
                 calendarEventId: tankMovementCalendarEventId || null,
-                completedBy: currentUser ? (currentUser.name || currentUser.email) : null
+                completedBy: currentUser ? (currentUser.name || currentUser.email) : null,
+                orderNumber: tmOrderNumber
             };
             
             try {
