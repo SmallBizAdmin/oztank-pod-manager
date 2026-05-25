@@ -3031,7 +3031,7 @@
         <div class="search-modal">
             <div class="search-modal-header">
                 <h2 id="customerSearchModalTitle">Ad-Hoc Service</h2>
-                <button class="search-modal-close" onclick="hideCustomerSearchModal()">×</button>
+                <button class="search-modal-close" onclick="cancelCustomerSearchModal()">×</button>
             </div>
             <div class="search-modal-body">
                 <div class="search-input-container">
@@ -6255,12 +6255,24 @@
             
             showView('homeView', skipHistory);
             currentServiceDate = null; // Clear service date when returning home
+            // Clear POD-entry state so abandoned ad-hoc / calendar-event flows can't leak into a later save
+            currentCalendarEventId = null;
+            isAdHocService = false;
+            adHocCustomerName = '';
+            adHocServiceType = 'Service';
+            adHocSourceRunDay = null;
             updateWorkerPeriodDisplay(); // Sync worker period display
             renderRunDays(); // Refresh run days to show updated progress
         }
 
         function showCustomerListView(runDay) {
             currentRunDay = runDay;
+            // Clear POD-entry state so abandoned ad-hoc / calendar-event flows can't leak into a later save
+            currentCalendarEventId = null;
+            isAdHocService = false;
+            adHocCustomerName = '';
+            adHocServiceType = 'Service';
+            adHocSourceRunDay = null;
             showView('customerListView');
             renderCustomerList();
         }
@@ -8736,6 +8748,8 @@
                 isAdHocService = false;
                 adHocCustomerName = '';
                 adHocServiceType = 'Service';
+                adHocSourceRunDay = null;
+                currentCalendarEventId = null;
                 showHomeView();
             } else if (returnToRunDay) {
                 // If we came from viewing a POD on a specific runsheet, go back there
@@ -13161,6 +13175,15 @@
         
         function hideCustomerSearchModal() {
             document.getElementById('customerSearchModal').classList.remove('active');
+        }
+
+        function cancelCustomerSearchModal() {
+            // Called when the user closes the modal without picking a customer.
+            // Clears state pinned by showCustomerSearchModal so an abandoned pick can't leak into a later save.
+            hideCustomerSearchModal();
+            currentCalendarEventId = null;
+            adHocServiceType = 'Service';
+            adHocSourceRunDay = null;
         }
         
         // Customer History Modal Functions
