@@ -3643,27 +3643,35 @@
         
         // Sync a queued POD
         async function syncQueuedPod(podData) {
-            // Check if POD already exists (in case of duplicate queue)
-            const { data: existing } = await supabase
-                .from('pods')
-                .select('id')
-                .eq('customer_id', podData.customer_id)
-                .eq('date', podData.date)
-                .maybeSingle();
+            // Check if POD already exists for this customer+date.
+            // If yes, the live save already landed — drop the queued copy (do NOT overwrite,
+            // since the queued podData may be stale and would clobber later edits).
+            if (podData.customer_id) {
+                const { data: existing } = await supabase
+                    .from('pods')
+                    .select('id')
+                    .eq('customer_id', podData.customer_id)
+                    .eq('date', podData.date)
+                    .maybeSingle();
+                
+                if (existing) {
+                    console.log('syncQueuedPod: POD already exists in DB, dropping queued duplicate', existing.id);
+                    return;
+                }
+            }
             
-            if (existing) {
-                // Update existing
-                const { error } = await supabase
-                    .from('pods')
-                    .update(podData)
-                    .eq('id', existing.id);
-                if (error) throw error;
-            } else {
-                // Insert new
-                const { error } = await supabase
-                    .from('pods')
-                    .insert([podData]);
-                if (error) throw error;
+            // Insert new — DB unique constraint is the final guard
+            const { error } = await supabase
+                .from('pods')
+                .insert([podData]);
+            if (error) {
+                // 23505 = duplicate slipped past the existence check (race condition).
+                // Treat as success — the live save already landed.
+                if (error.code === '23505') {
+                    console.log('syncQueuedPod: DB constraint caught duplicate, dropping queued copy');
+                    return;
+                }
+                throw error;
             }
         }
         
@@ -5045,7 +5053,23 @@
                     const { data, error } = await supabase
                         .from('pods')
                         .upsert(podData);
-                    if (error) throw error;
+                    if (error) {
+                        // 23505 = unique_violation on pods_customer_date_unique index.
+                        // Means a POD already exists for this customer+date — treat as success
+                        // and keep the local cache in sync so the UI shows the tick.
+                        if (error.code === '23505') {
+                            console.log('savePOD: duplicate caught by DB constraint for customer_id=' + podData.customer_id + ' date=' + podData.date);
+                            const existingIndex = this.pods.findIndex(p => p.id === pod.id);
+                            if (existingIndex >= 0) {
+                                this.pods[existingIndex] = pod;
+                            } else {
+                                this.pods.push(pod);
+                            }
+                            this._syncProgressPod(pod);
+                            return true;
+                        }
+                        throw error;
+                    }
                     
                     // Update cache after successful save
                     const existingIndex = this.pods.findIndex(p => p.id === pod.id);
@@ -5060,7 +5084,35 @@
                 } catch (error) {
                     console.error('Error saving POD:', error);
                     
-                    // If save fails, queue for later
+                    // Before queueing, check whether the write actually landed despite the client-side error.
+                    // Flaky mobile networks often drop the response after a successful write, which previously
+                    // caused this catch to queue a duplicate that would then replay later.
+                    if (podData.customer_id) {
+                        try {
+                            const { data: existing } = await supabase
+                                .from('pods')
+                                .select('id')
+                                .eq('customer_id', podData.customer_id)
+                                .eq('date', podData.date)
+                                .maybeSingle();
+                            if (existing) {
+                                console.log('savePOD: write succeeded despite client error, skipping queue');
+                                const existingIndex = this.pods.findIndex(p => p.id === pod.id);
+                                if (existingIndex >= 0) {
+                                    this.pods[existingIndex] = pod;
+                                } else {
+                                    this.pods.push(pod);
+                                }
+                                this._syncProgressPod(pod);
+                                return true;
+                            }
+                        } catch (verifyError) {
+                            // Verification itself failed — fall through to queue as before
+                            console.log('savePOD: could not verify, queueing for sync');
+                        }
+                    }
+                    
+                    // If save genuinely failed (or we couldn't verify), queue for later
                     addToOfflineQueue({ type: 'pod', data: podData });
                     showToast('⚠️ POD queued for sync (connection issue)', 'error');
                     return true; // Return true since it's queued
