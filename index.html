@@ -7225,11 +7225,10 @@
                 return;
             }
             
-            // Calculate stats
+            // Calculate stats — based on the Invoiced tick only
             const total = invoicesOnDate.length;
-            const pending = invoicesOnDate.filter(i => !i.invoiced).length;
-            const invoiced = invoicesOnDate.filter(i => i.invoiced && !i.freight_added).length;
-            const complete = invoicesOnDate.filter(i => i.invoiced && i.freight_added).length;
+            const invoiced = invoicesOnDate.filter(i => i.invoiced).length;
+            const pending = total - invoiced;
             
             statsContainer.innerHTML = `
                 <div style="background: #f3f4f6; padding: 10px; border-radius: 8px; text-align: center;">
@@ -7243,10 +7242,6 @@
                 <div style="background: #dbeafe; padding: 10px; border-radius: 8px; text-align: center;">
                     <div style="font-size: 20px; font-weight: 700; color: #2563eb;">${invoiced}</div>
                     <div style="font-size: 11px; color: #1e40af;">Invoiced</div>
-                </div>
-                <div style="background: #dcfce7; padding: 10px; border-radius: 8px; text-align: center;">
-                    <div style="font-size: 20px; font-weight: 700; color: #16a34a;">${complete}</div>
-                    <div style="font-size: 11px; color: #166534;">Complete</div>
                 </div>
             `;
             
