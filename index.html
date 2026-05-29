@@ -7250,69 +7250,67 @@
                 </div>
             `;
             
-            // Render invoice entries
-            let html = '';
-            
-            invoicesOnDate.forEach(inv => {
-                const statusBg = inv.invoiced && inv.freight_added ? '#dcfce7' : 
-                                 inv.invoiced ? '#dbeafe' : '#fef9c3';
-                const statusBorder = inv.invoiced && inv.freight_added ? '#16a34a' : 
-                                     inv.invoiced ? '#3b82f6' : '#f59e0b';
-                
-                html += `
-                    <div style="background: ${statusBg}; border-left: 4px solid ${statusBorder}; padding: 16px; border-radius: 8px; margin-bottom: 12px;">
-                        <div style="font-weight: 600; color: #111827; margin-bottom: 12px; font-size: 15px;">
-                            ${inv.event_title}
-                        </div>
-                        
-                        <div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: center; margin-bottom: 12px;">
-                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                                <input type="checkbox" 
-                                       ${inv.invoiced ? 'checked' : ''} 
-                                       onchange="toggleInvoiceField(${inv.id}, 'invoiced', this.checked)"
-                                       style="width: 18px; height: 18px; cursor: pointer;">
-                                <span style="font-weight: 500;">Invoiced</span>
-                            </label>
-                            
-                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                                <input type="checkbox" 
-                                       ${inv.freight_added ? 'checked' : ''} 
-                                       onchange="toggleInvoiceField(${inv.id}, 'freight_added', this.checked)"
-                                       style="width: 18px; height: 18px; cursor: pointer;">
-                                <span style="font-weight: 500;">Freight Added</span>
-                            </label>
+            // Render invoice entries — ad-hoc-style amber table
+            let rowsHtml = '';
 
-                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                                <input type="checkbox" 
-                                       ${inv.checked_sent ? 'checked' : ''} 
-                                       ${!inv.invoiced ? 'disabled' : ''}
-                                       onchange="toggleInvoiceField(${inv.id}, 'checked_sent', this.checked)"
-                                       style="width: 18px; height: 18px; cursor: pointer; ${!inv.invoiced ? 'opacity:0.4;' : ''}">
-                                <span style="font-weight: 500; ${!inv.invoiced ? 'color:#9ca3af;' : ''}">Checked & Sent</span>
-                            </label>
-                        </div>
-                        
-                        <div style="display: flex; gap: 8px; align-items: center;">
-                            <input type="text" 
-                                   id="invNotes_${inv.id}"
-                                   value="${(inv.notes || '').replace(/"/g, '&quot;')}"
-                                   placeholder="Add notes..."
-                                   style="flex: 1; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
-                            <button onclick="saveInvoiceNotes(${inv.id})" 
-                                    style="background: #374151; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 14px;">
-                                Save
-                            </button>
-                        </div>
-                        
-                        ${inv.invoiced_at ? `<div style="font-size: 11px; color: #6b7280; margin-top: 8px;">
-                            Invoiced: ${new Date(inv.invoiced_at).toLocaleString('en-AU', { dateStyle: 'short', timeStyle: 'short' })}
-                            ${inv.invoiced_by ? ' by ' + inv.invoiced_by : ''}
-                        </div>` : ''}
-                    </div>
+            invoicesOnDate.forEach(inv => {
+                const invoicedAtStr = inv.invoiced_at
+                    ? `<div style="font-size: 11px; color: #6b7280; margin-top: 6px;">Invoiced: ${new Date(inv.invoiced_at).toLocaleString('en-AU', { dateStyle: 'short', timeStyle: 'short' })}${inv.invoiced_by ? ' by ' + inv.invoiced_by : ''}</div>`
+                    : '';
+                rowsHtml += `
+                    <tr style="border-bottom: 1px solid #fde68a; background: #fffbeb; vertical-align: top;">
+                        <td style="padding: 12px; text-align: center;" onclick="event.stopPropagation();">
+                            <input type="checkbox" ${inv.invoiced ? 'checked' : ''}
+                                onchange="toggleInvoiceField(${inv.id}, 'invoiced', this.checked)"
+                                style="width:16px;height:16px;cursor:pointer;">
+                        </td>
+                        <td style="padding: 12px; text-align: center;" onclick="event.stopPropagation();">
+                            <input type="checkbox" ${inv.freight_added ? 'checked' : ''}
+                                onchange="toggleInvoiceField(${inv.id}, 'freight_added', this.checked)"
+                                style="width:16px;height:16px;cursor:pointer;">
+                        </td>
+                        <td style="padding: 12px; text-align: center;" onclick="event.stopPropagation();">
+                            <input type="checkbox" ${inv.checked_sent ? 'checked' : ''} ${!inv.invoiced ? 'disabled' : ''}
+                                onchange="toggleInvoiceField(${inv.id}, 'checked_sent', this.checked)"
+                                title="Checked & Sent"
+                                style="width:16px;height:16px;cursor:pointer;${!inv.invoiced ? 'opacity:0.4;' : ''}">
+                        </td>
+                        <td style="padding: 12px;">
+                            <div style="font-weight: 600; color: #111827;">${inv.event_title}</div>
+                            ${invoicedAtStr}
+                        </td>
+                        <td style="padding: 12px;">
+                            <div style="display: flex; gap: 8px; align-items: center;">
+                                <input type="text"
+                                       id="invNotes_${inv.id}"
+                                       value="${(inv.notes || '').replace(/"/g, '&quot;')}"
+                                       placeholder="Add notes..."
+                                       style="flex: 1; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
+                                <button onclick="saveInvoiceNotes(${inv.id})"
+                                        style="background: #374151; color: white; border: none; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 13px;">
+                                    Save
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
                 `;
             });
-            
-            container.innerHTML = html;
+
+            container.innerHTML = `
+                <h3 style="margin: 8px 0 12px; color: #92400e;">📄 Monthly Invoices</h3>
+                <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+                    <thead>
+                        <tr style="background: #fef3c7;">
+                            <th style="padding: 10px; text-align: center; border-bottom: 2px solid #f59e0b; width: 50px;">Inv</th>
+                            <th style="padding: 10px; text-align: center; border-bottom: 2px solid #f59e0b; width: 70px;">Freight</th>
+                            <th style="padding: 10px; text-align: center; border-bottom: 2px solid #f59e0b; width: 60px;">Chk'd</th>
+                            <th style="padding: 10px; text-align: left; border-bottom: 2px solid #f59e0b;">Company</th>
+                            <th style="padding: 10px; text-align: left; border-bottom: 2px solid #f59e0b;">Notes</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rowsHtml}</tbody>
+                </table>
+            `;
         }
         
         async function toggleInvoiceField(id, field, value) {
