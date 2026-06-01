@@ -63,6 +63,11 @@
             color: white;
         }
         
+        .offline-bar.failed {
+            background: #dc2626;
+            color: white;
+        }
+        
         .offline-queue-badge {
             background: rgba(0,0,0,0.2);
             padding: 2px 8px;
@@ -3513,13 +3518,23 @@
             const text = document.getElementById('offlineText');
             const badge = document.getElementById('offlineQueueBadge');
             const queue = getOfflineQueue();
+            const failed = getFailedSyncItems();
             
-            if (!isOnline) {
-                bar.classList.add('visible');
+            if (failed.length > 0) {
+                // Highest-priority state: something exhausted its retries and did NOT sync.
+                // The worker must know, because nothing will retry it automatically.
+                bar.classList.add('visible', 'failed');
                 bar.classList.remove('syncing');
                 document.body.classList.add('has-offline-bar');
+                icon.textContent = '⚠️';
+                text.textContent = `${failed.length} item${failed.length > 1 ? 's' : ''} couldn\u2019t sync — please tell the office`;
+                badge.style.display = 'none';
+            } else if (!isOnline) {
+                bar.classList.add('visible');
+                bar.classList.remove('syncing', 'failed');
+                document.body.classList.add('has-offline-bar');
                 icon.textContent = '📴';
-                text.textContent = 'Offline - changes will sync when connected';
+                text.textContent = 'Saved on your phone — will sync when you\u2019re back online. No need to redo.';
                 if (queue.length > 0) {
                     badge.style.display = 'inline';
                     badge.textContent = `${queue.length} pending`;
@@ -3528,15 +3543,36 @@
                 }
             } else if (queue.length > 0) {
                 bar.classList.add('visible', 'syncing');
+                bar.classList.remove('failed');
                 document.body.classList.add('has-offline-bar');
                 icon.textContent = '🔄';
-                text.textContent = 'Syncing...';
+                text.textContent = 'Syncing your work\u2026';
                 badge.style.display = 'inline';
                 badge.textContent = `${queue.length} pending`;
             } else {
-                bar.classList.remove('visible', 'syncing');
+                bar.classList.remove('visible', 'syncing', 'failed');
                 document.body.classList.remove('has-offline-bar');
             }
+        }
+        
+        // Failed-sync store: items that exhausted retries. Kept separate from the queue
+        // so they are NOT silently dropped — they surface in the banner until cleared.
+        const FAILED_KEY = 'ozTankFailedSync';
+        function getFailedSyncItems() {
+            try {
+                return JSON.parse(localStorage.getItem(FAILED_KEY) || '[]');
+            } catch (e) {
+                return [];
+            }
+        }
+        function addFailedSyncItem(item) {
+            const failed = getFailedSyncItems();
+            failed.push({ ...item, failedAt: new Date().toISOString() });
+            localStorage.setItem(FAILED_KEY, JSON.stringify(failed));
+        }
+        function clearFailedSyncItems() {
+            localStorage.removeItem(FAILED_KEY);
+            updateOfflineUI();
         }
         
         // Get offline queue
@@ -3622,6 +3658,10 @@
                     failedItem.retryCount = (failedItem.retryCount || 0) + 1;
                     if (failedItem.retryCount < 3) {
                         queue.push(failedItem);
+                    } else {
+                        // Retries exhausted. Do NOT drop silently — move to the failed
+                        // store so it surfaces in the banner for the worker/office.
+                        addFailedSyncItem(failedItem);
                     }
                     localStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
                 }
@@ -3709,6 +3749,16 @@
             isOnline = false;
             updateOfflineUI();
         });
+        
+        // Periodic drain while the app is open. The 'online' event is unreliable on
+        // mobile (it can fire on a dead route, or not fire when a degraded connection
+        // recovers). processOfflineQueue self-guards on !isOnline, missing supabase, and
+        // empty queue, so this is a no-op except when there is genuinely work to flush.
+        setInterval(() => {
+            if (isOnline && getOfflineQueue().length > 0) {
+                processOfflineQueue();
+            }
+        }, 45000);
         
         // Initial UI update
         document.addEventListener('DOMContentLoaded', () => {
@@ -5955,6 +6005,14 @@
             setupWorkerCalendarEventsRealtime();
             setupTankMovementsRealtime();
             setupWorkerCalendarVisibilityRefresh();
+            
+            // Connectivity recovery: the browser 'online' event only fires on a live
+            // offline→online transition while the app is open. A worker who force-quits
+            // on a dead connection and relaunches once back in coverage never sees that
+            // event, so the queue would otherwise sit undrained. Drain on init to catch it.
+            if (isOnline) {
+                setTimeout(() => processOfflineQueue(), 1500);
+            }
         }
         
         // Realtime subscription so status/notes changes on any device instantly reflect everywhere
