@@ -4466,6 +4466,7 @@
             calendarEventStatus: {},
                 calendarEventNotes: {},
                 calendarEventInvoiceNotes: {},
+                calendarEventPhotos: {},
             calendarSyncSettings: null,
             invoiceEntries: [],
             
@@ -4859,11 +4860,12 @@
                 try {
                     const { data, error } = await supabase
                         .from('calendar_event_status')
-                        .select('event_id, status, notes, actioned_by, actioned_at, invoice_notes');
+                        .select('event_id, status, notes, actioned_by, actioned_at, invoice_notes, photos');
                     if (error) throw error;
                     this.calendarEventStatus = {};
                     this.calendarEventNotes = {};
                     this.calendarEventInvoiceNotes = {};
+                    this.calendarEventPhotos = {};
                     (data || []).forEach(row => {
                         if (row.status) this.calendarEventStatus[row.event_id] = {
                             status: row.status,
@@ -4872,11 +4874,13 @@
                         };
                         if (row.notes) this.calendarEventNotes[row.event_id] = row.notes;
                         if (row.invoice_notes) this.calendarEventInvoiceNotes[row.event_id] = row.invoice_notes;
+                        if (row.photos && Array.isArray(row.photos) && row.photos.length) this.calendarEventPhotos[row.event_id] = row.photos;
                     });
                 } catch (e) {
                     console.warn('loadCalendarEventStatus error:', e);
                     this.calendarEventStatus = {};
                     this.calendarEventNotes = {};
+                    this.calendarEventPhotos = {};
                 }
             },
             
@@ -4934,6 +4938,27 @@
                     if (error) throw error;
                 } catch (e) {
                     console.warn('saveCalendarEventNotes error:', e);
+                }
+            },
+
+            getCalendarEventPhotos(eventId) {
+                return this.calendarEventPhotos[eventId] || [];
+            },
+
+            async saveCalendarEventPhotos(eventId, photos) {
+                try {
+                    const arr = Array.isArray(photos) ? photos.filter(Boolean) : [];
+                    if (arr.length) {
+                        this.calendarEventPhotos[eventId] = arr;
+                    } else {
+                        delete this.calendarEventPhotos[eventId];
+                    }
+                    const { error } = await supabase
+                        .from('calendar_event_status')
+                        .upsert({ event_id: eventId, photos: arr.length ? arr : null, updated_at: new Date().toISOString() }, { onConflict: 'event_id' });
+                    if (error) throw error;
+                } catch (e) {
+                    console.warn('saveCalendarEventPhotos error:', e);
                 }
             },
             
@@ -8051,6 +8076,8 @@
             {
                 // ── Single workflow: Quick Complete (notes mandatory) ───────
                 const storedNotes = db.getCalendarEventNotes(eventId);
+                // Seed photo staging from stored photos
+                calEventPhotoStaging['quick'] = (db.getCalendarEventPhotos(eventId) || []).slice();
                 // Three states: has doc → view/edit | completed no doc → untick | pending → notes+confirm
                 const completedNoDoc = !hasDoc && status === 'completed';
                 modal.innerHTML = `
@@ -8065,6 +8092,7 @@
                                 <div style="font-size: 13px; color: #6b7280;">${dateStr} ${event.calendarOwner ? '• 👤 ' + event.calendarOwner : ''}</div>
                                 <div style="margin-top: 8px;"><span style="color: ${statusColor}; font-weight: 600;">${statusText}</span></div>
                                 ${event.description && event.description.trim() && event.description.trim() !== event.eventTitle.trim() ? `<div style="margin-top: 8px; padding: 8px 10px; background: #f0f9ff; border-left: 3px solid #3b82f6; border-radius: 4px; font-size: 12px; color: #374151;">${event.description.trim().replace(/\n/g, '<br>')}</div>` : ''}
+                                ${(() => { const ph = db.getCalendarEventPhotos(eventId); const editable = !hasDoc && status !== 'completed'; return (!editable && ph && ph.length) ? `<div style="margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px;">${ph.map(src => `<img src="${src}" onclick="window.open('${src}','_blank')" style="width: 64px; height: 64px; object-fit: cover; border-radius: 6px; border: 1px solid #d1d5db; cursor: pointer;">`).join('')}</div>` : ''; })()}
                             </div>
 
                             <div style="display: flex; flex-direction: column; gap: 10px;">
@@ -8081,6 +8109,7 @@
                                     <label style="font-size: 13px; font-weight: 600; color: #374151;">Notes <span style="color: #dc2626;">*</span></label>
                                     <textarea id="calEventQuickNotesInput" placeholder="Enter notes (required)…" style="min-height: 90px; margin-top: 4px;">${storedNotes}</textarea>
                                 </div>
+                                ${calEventPhotoBlockHtml('quick', eventId)}
                                 <button class="btn" onclick="saveCalendarEventQuickComplete('${eventId}')" style="padding: 16px; font-size: 16px; background: #16a34a; font-weight: 700;">
                                     ✓ Confirm Complete
                                 </button>
@@ -8105,6 +8134,7 @@
             }
 
             document.body.appendChild(modal);
+            renderCalEventPhotoStrip('quick');
         }
 
         async function untickCalendarEvent(eventId) {
@@ -8166,6 +8196,7 @@
                 return;
             }
             await db.saveCalendarEventNotes(eventId, notes);
+            await db.saveCalendarEventPhotos(eventId, calEventPhotoStaging['quick'] || []);
             await db.saveCalendarEventStatus(eventId, 'completed');
             const warn = document.getElementById('calEventCompleteWarnModal');
             if (warn) warn.remove();
@@ -8179,12 +8210,74 @@
             }
         }
         
+        // ── Reusable photo block for calendar events ────────────────────
+        // Staging arrays of base64 data URLs, keyed by a context id ('quick' | 'notes')
+        const calEventPhotoStaging = {};
+
+        function calEventPhotoBlockHtml(ctx, eventId) {
+            return `
+                <div class="form-group" style="margin-bottom: 0; margin-top: 12px;">
+                    <label style="font-size: 13px; font-weight: 600; color: #374151;">Photos</label>
+                    <div id="calEventPhotoStrip_${ctx}" style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px;"></div>
+                    <div style="display: flex; gap: 8px; margin-top: 8px;">
+                        <label class="btn" style="flex: 1; padding: 12px; font-size: 14px; background: #4f46e5; text-align: center; cursor: pointer; margin: 0;">
+                            📷 Take Photo
+                            <input type="file" accept="image/*" capture="environment" style="display: none;"
+                                onchange="handleCalEventPhotoAdd('${ctx}', this)">
+                        </label>
+                        <label class="btn" style="flex: 1; padding: 12px; font-size: 14px; background: #6b7280; text-align: center; cursor: pointer; margin: 0;">
+                            🖼 Upload
+                            <input type="file" accept="image/*" multiple style="display: none;"
+                                onchange="handleCalEventPhotoAdd('${ctx}', this)">
+                        </label>
+                    </div>
+                </div>`;
+        }
+
+        function renderCalEventPhotoStrip(ctx) {
+            const strip = document.getElementById('calEventPhotoStrip_' + ctx);
+            if (!strip) return;
+            const photos = calEventPhotoStaging[ctx] || [];
+            strip.innerHTML = photos.map((src, i) => `
+                <div style="position: relative; width: 72px; height: 72px;">
+                    <img src="${src}" style="width: 72px; height: 72px; object-fit: cover; border-radius: 6px; border: 1px solid #d1d5db;">
+                    <button type="button" onclick="removeCalEventPhoto('${ctx}', ${i})"
+                        style="position: absolute; top: -6px; right: -6px; width: 22px; height: 22px; border-radius: 50%; border: none; background: #dc2626; color: white; font-size: 14px; line-height: 1; cursor: pointer; padding: 0;">×</button>
+                </div>
+            `).join('');
+        }
+
+        async function handleCalEventPhotoAdd(ctx, input) {
+            const files = Array.from(input.files || []);
+            if (!files.length) return;
+            calEventPhotoStaging[ctx] = calEventPhotoStaging[ctx] || [];
+            for (const file of files) {
+                try {
+                    const compressed = await compressImage(file, 1280, 0.7);
+                    calEventPhotoStaging[ctx].push(compressed);
+                } catch (err) {
+                    console.error('Error compressing image:', err);
+                    showToast('Error processing image', 'error');
+                }
+            }
+            input.value = '';
+            renderCalEventPhotoStrip(ctx);
+        }
+
+        function removeCalEventPhoto(ctx, index) {
+            if (!calEventPhotoStaging[ctx]) return;
+            calEventPhotoStaging[ctx].splice(index, 1);
+            renderCalEventPhotoStrip(ctx);
+        }
+
         function showCalendarEventNotes(eventId, dateStr) {
             const existingModal = document.getElementById('calendarEventChooserModal');
             if (existingModal) existingModal.remove();
             
             // Get existing notes from Supabase-backed cache
             const storedNotes = db.getCalendarEventNotes(eventId);
+            // Seed photo staging from stored photos
+            calEventPhotoStaging['notes'] = (db.getCalendarEventPhotos(eventId) || []).slice();
             
             const modal = document.createElement('div');
             modal.id = 'calendarEventNotesModal';
@@ -8200,17 +8293,20 @@
                             <label>Notes for this event</label>
                             <textarea id="calEventNotesInput" placeholder="Enter notes..." style="min-height: 120px;">${storedNotes}</textarea>
                         </div>
-                        <button class="btn btn-success" onclick="saveCalendarEventNotes('${eventId}')">💾 Save Notes</button>
+                        ${calEventPhotoBlockHtml('notes', eventId)}
+                        <button class="btn btn-success" onclick="saveCalendarEventNotes('${eventId}')" style="margin-top: 12px;">💾 Save Notes</button>
                         <button class="btn btn-secondary" onclick="document.getElementById('calendarEventNotesModal').remove()" style="margin-top: 8px;">Cancel</button>
                     </div>
                 </div>
             `;
             document.body.appendChild(modal);
+            renderCalEventPhotoStrip('notes');
         }
         
         async function saveCalendarEventNotes(eventId) {
             const notes = document.getElementById('calEventNotesInput').value.trim();
             await db.saveCalendarEventNotes(eventId, notes || null);
+            await db.saveCalendarEventPhotos(eventId, calEventPhotoStaging['notes'] || []);
             await db.saveCalendarEventStatus(eventId, 'completed');
             document.getElementById('calendarEventNotesModal').remove();
             showToast('Notes saved', 'success');
