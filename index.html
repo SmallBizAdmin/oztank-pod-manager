@@ -8039,18 +8039,6 @@
             const linkedPod = db.pods.find(p => p.calendarEventId == eventId);
             const linkedTM = db.tankMovements.find(tm => tm.calendarEventId == eventId);
             const hasDoc = !!(linkedPod || linkedTM);
-            
-            // Admin toggle to flip quick_complete on this event
-            const adminToggleHtml = isAdmin ? `
-                <div style="margin-top: 12px; padding: 8px 12px; background: #f3f4f6; border-radius: 6px; display: flex; align-items: center; justify-content: space-between; gap: 8px;">
-                    <span style="font-size: 12px; color: #6b7280; font-weight: 600;">⚡ Quick Complete mode</span>
-                    <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 12px; color: #374151;">
-                        <input type="checkbox" id="quickCompleteToggle" ${event.quickComplete ? 'checked' : ''}
-                            onchange="setCalendarEventQuickComplete(${eventId}, this.checked)"
-                            style="width: 16px; height: 16px; cursor: pointer;">
-                        ${event.quickComplete ? 'ON' : 'OFF'}
-                    </label>
-                </div>` : '';
 
             // Create a modal overlay
             const existingModal = document.getElementById('calendarEventChooserModal');
@@ -8060,8 +8048,8 @@
             modal.id = 'calendarEventChooserModal';
             modal.className = 'search-modal-overlay active';
 
-            if (event.quickComplete) {
-                // ── Workflow 2: Quick Complete ──────────────────────────────
+            {
+                // ── Single workflow: Quick Complete (notes mandatory) ───────
                 const storedNotes = db.getCalendarEventNotes(eventId);
                 // Three states: has doc → view/edit | completed no doc → untick | pending → notes+confirm
                 const completedNoDoc = !hasDoc && status === 'completed';
@@ -8077,7 +8065,6 @@
                                 <div style="font-size: 13px; color: #6b7280;">${dateStr} ${event.calendarOwner ? '• 👤 ' + event.calendarOwner : ''}</div>
                                 <div style="margin-top: 8px;"><span style="color: ${statusColor}; font-weight: 600;">${statusText}</span></div>
                                 ${event.description && event.description.trim() && event.description.trim() !== event.eventTitle.trim() ? `<div style="margin-top: 8px; padding: 8px 10px; background: #f0f9ff; border-left: 3px solid #3b82f6; border-radius: 4px; font-size: 12px; color: #374151;">${event.description.trim().replace(/\n/g, '<br>')}</div>` : ''}
-                                ${adminToggleHtml}
                             </div>
 
                             <div style="display: flex; flex-direction: column; gap: 10px;">
@@ -8091,8 +8078,8 @@
                                 </button>
                                 ` : `
                                 <div class="form-group" style="margin-bottom: 0;">
-                                    <label style="font-size: 13px; font-weight: 600; color: #374151;">Notes</label>
-                                    <textarea id="calEventQuickNotesInput" placeholder="Enter notes (optional)…" style="min-height: 90px; margin-top: 4px;">${storedNotes}</textarea>
+                                    <label style="font-size: 13px; font-weight: 600; color: #374151;">Notes <span style="color: #dc2626;">*</span></label>
+                                    <textarea id="calEventQuickNotesInput" placeholder="Enter notes (required)…" style="min-height: 90px; margin-top: 4px;">${storedNotes}</textarea>
                                 </div>
                                 <button class="btn" onclick="saveCalendarEventQuickComplete('${eventId}')" style="padding: 16px; font-size: 16px; background: #16a34a; font-weight: 700;">
                                     ✓ Confirm Complete
@@ -8115,48 +8102,6 @@
                         </div>
                     </div>
                 `;
-            } else {
-                // ── Workflow 1: Full Documentation ──────────────────────────
-                modal.innerHTML = `
-                    <div class="search-modal" style="max-width: 380px;">
-                        <div class="search-modal-header" style="background: #374151;">
-                            <h2>📋 Calendar Event</h2>
-                            <button class="search-modal-close" onclick="document.getElementById('calendarEventChooserModal').remove()">×</button>
-                        </div>
-                        <div class="search-modal-body">
-                            <div style="margin-bottom: 16px; padding: 12px; background: #f9fafb; border-radius: 8px;">
-                                <div style="font-weight: 700; font-size: 16px; color: #111827; margin-bottom: 4px;">${event.eventTitle}</div>
-                                <div style="font-size: 13px; color: #6b7280;">${dateStr} ${event.calendarOwner ? '• 👤 ' + event.calendarOwner : ''}</div>
-                                <div style="margin-top: 8px;"><span style="color: ${statusColor}; font-weight: 600;">${statusText}</span></div>
-                                ${event.description && event.description.trim() && event.description.trim() !== event.eventTitle.trim() ? `<div style="margin-top: 8px; padding: 8px 10px; background: #f0f9ff; border-left: 3px solid #3b82f6; border-radius: 4px; font-size: 12px; color: #374151;">${event.description.trim().replace(/\n/g, '<br>')}</div>` : ''}
-                                ${adminToggleHtml}
-                            </div>
-                            ${hasDoc ? `
-                            <div style="display: flex; flex-direction: column; gap: 10px;">
-                                <button class="btn" onclick="document.getElementById('calendarEventChooserModal').remove(); ${linkedPod ? `viewPODFromOverview(${linkedPod.id})` : `viewTankMovementDetail(${linkedTM.id})`};" style="padding: 16px; font-size: 16px; background: #4f46e5; font-weight: 700;">
-                                    📋 View / Edit Documentation
-                                </button>
-                            </div>
-                            ` : `
-                            <p style="font-size: 13px; color: #6b7280; margin-bottom: 10px;">Select what was completed for this event:</p>
-                            <div style="display: flex; flex-direction: column; gap: 10px;">
-                                <button class="btn btn-adhoc" onclick="document.getElementById('calendarEventChooserModal').remove(); showCustomerSearchModal(null, 'Service', ${eventId});" style="padding: 16px; font-size: 16px;">
-                                    🔧 Service
-                                </button>
-                                <button class="btn" onclick="document.getElementById('calendarEventChooserModal').remove(); showCustomerSearchModal(null, 'Delivery', ${eventId});" style="padding: 16px; font-size: 16px; background: #10b981;">
-                                    📦 Delivery
-                                </button>
-                                <button class="btn" onclick="document.getElementById('calendarEventChooserModal').remove(); showCustomerSearchModal(null, 'Repairs', ${eventId});" style="padding: 16px; font-size: 16px; background: #ef4444;">
-                                    🔨 Repairs
-                                </button>
-                                <button class="btn" onclick="document.getElementById('calendarEventChooserModal').remove(); showTankMovementModal(null, ${eventId});" style="padding: 16px; font-size: 16px; background: #0891b2;">
-                                    🔄 Tank Movement
-                                </button>
-                            </div>
-                            `}
-                        </div>
-                    </div>
-                `;
             }
 
             document.body.appendChild(modal);
@@ -8174,39 +8119,64 @@
         }
 
         async function saveCalendarEventQuickComplete(eventId) {
-            const notes = document.getElementById('calEventQuickNotesInput').value.trim();
-            await db.saveCalendarEventNotes(eventId, notes || null);
+            const notesEl = document.getElementById('calEventQuickNotesInput');
+            const notes = notesEl.value.trim();
+            if (!notes) {
+                showToast('Notes are required to complete this event', 'error');
+                notesEl.style.borderColor = '#dc2626';
+                notesEl.focus();
+                return;
+            }
+            // Show warning confirmation before committing
+            const existingWarn = document.getElementById('calEventCompleteWarnModal');
+            if (existingWarn) existingWarn.remove();
+            const warn = document.createElement('div');
+            warn.id = 'calEventCompleteWarnModal';
+            warn.className = 'search-modal-overlay active';
+            warn.style.zIndex = '10001';
+            warn.innerHTML = `
+                <div class="search-modal" style="max-width: 360px;">
+                    <div class="search-modal-header" style="background: #b45309;">
+                        <h2>⚠ Before you confirm</h2>
+                        <button class="search-modal-close" onclick="document.getElementById('calEventCompleteWarnModal').remove()">×</button>
+                    </div>
+                    <div class="search-modal-body">
+                        <p style="font-size: 14px; color: #374151; line-height: 1.5; margin-bottom: 16px;">
+                            If a <strong>service, delivery, repair or tank movement</strong> was carried out, please go back and select the appropriate form instead.
+                        </p>
+                        <div style="display: flex; flex-direction: column; gap: 10px;">
+                            <button class="btn" onclick="document.getElementById('calEventCompleteWarnModal').remove()" style="padding: 14px; font-size: 15px; background: #6b7280; font-weight: 700;">
+                                ↩ Go Back
+                            </button>
+                            <button class="btn" onclick="commitCalendarEventQuickComplete('${eventId}')" style="padding: 14px; font-size: 15px; background: #16a34a; font-weight: 700;">
+                                ✓ Confirm Submit
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(warn);
+        }
+
+        async function commitCalendarEventQuickComplete(eventId) {
+            const notesEl = document.getElementById('calEventQuickNotesInput');
+            const notes = notesEl ? notesEl.value.trim() : '';
+            if (!notes) {
+                showToast('Notes are required to complete this event', 'error');
+                return;
+            }
+            await db.saveCalendarEventNotes(eventId, notes);
             await db.saveCalendarEventStatus(eventId, 'completed');
-            document.getElementById('calendarEventChooserModal').remove();
+            const warn = document.getElementById('calEventCompleteWarnModal');
+            if (warn) warn.remove();
+            const chooser = document.getElementById('calendarEventChooserModal');
+            if (chooser) chooser.remove();
             showToast('✓ Marked complete', 'success');
             renderAdminCalendar();
             loadWorkerCalendarEvents();
             if (document.getElementById('adminListContainer').style.display !== 'none') {
                 renderAdminChronologicalList();
             }
-        }
-
-        async function setCalendarEventQuickComplete(eventId, value) {
-            // Update DB
-            const { error } = await supabase
-                .from('worker_calendar_events')
-                .update({ quick_complete: value })
-                .eq('id', eventId);
-            if (error) {
-                showToast('Failed to update setting', 'error');
-                return;
-            }
-            // Update local cache in BOTH arrays — the same event id may exist in both
-            // the admin and worker view arrays, and they must not drift apart
-            const intId = parseInt(eventId);
-            const adminEv = (db.adminCalendarEvents || []).find(e => e.id === intId);
-            if (adminEv) adminEv.quickComplete = value;
-            const workerEv = (db.calendarEvents || []).find(e => e.id === intId);
-            if (workerEv) workerEv.quickComplete = value;
-            // Update the label next to the checkbox
-            const toggle = document.getElementById('quickCompleteToggle');
-            if (toggle) toggle.nextSibling.textContent = value ? ' ON' : ' OFF';
-            showToast(`Quick Complete ${value ? 'enabled' : 'disabled'}`, 'success');
         }
         
         function showCalendarEventNotes(eventId, dateStr) {
