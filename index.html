@@ -7468,6 +7468,47 @@
         // ==================== END MONTHLY INVOICES ====================
         
         // ==================== INVOICE NOTES ====================
+        // Notes are stored in the existing invoice_notes text column as a JSON array
+        // of { email, text, ts } entries. Legacy plain-text notes are read as a single
+        // unattributed entry so nothing previously saved is lost.
+        function parseInvoiceNotes(raw) {
+            if (!raw) return [];
+            if (typeof raw !== 'string') {
+                // Already an array/object (defensive)
+                return Array.isArray(raw) ? raw : [];
+            }
+            const trimmed = raw.trim();
+            if (!trimmed) return [];
+            if (trimmed.charAt(0) === '[') {
+                try {
+                    const arr = JSON.parse(trimmed);
+                    if (Array.isArray(arr)) {
+                        return arr.filter(e => e && typeof e.text === 'string')
+                                  .map(e => ({ email: e.email || null, text: e.text, ts: e.ts || null }));
+                    }
+                } catch (e) { /* fall through to legacy */ }
+            }
+            // Legacy plain-text note → single unattributed entry
+            return [{ email: null, text: trimmed, ts: null }];
+        }
+
+        function serializeInvoiceNotes(arr) {
+            if (!arr || !arr.length) return null;
+            return JSON.stringify(arr);
+        }
+
+        function escHtml(s) {
+            return String(s || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
+        function invoiceNoteThreadHtml(notes) {
+            if (!notes || !notes.length) return '';
+            return notes.map(n => {
+                const who = n.email ? escHtml(n.email) : 'Unknown';
+                return `<div style="margin-bottom:2px;">📝 <span style="font-weight:700;">${who}</span> — ${escHtml(n.text)}</div>`;
+            }).join('');
+        }
+
         function openInvoiceNoteEditor(type, elId) {
             const ta = document.getElementById(`invnote_ta_${type}_${elId}`);
             if (!ta) return;
@@ -7476,22 +7517,44 @@
         }
 
         async function saveInvoiceNote(type, id, value) {
-            const note = value.trim();
+            const text = value.trim();
             const elId = String(id).replace(/[|]/g, '__');
             const ta = document.getElementById(`invnote_ta_${type}_${elId}`);
             const displayEl = document.getElementById(`invnote_display_${type}_${elId}`);
+            const myEmail = currentUser ? (currentUser.email || null) : null;
 
             if (ta) ta.style.display = 'none';
 
+            // Load the current stored thread, then merge this user's entry (edit-own-in-place)
+            const existingRaw = getStoredInvoiceNote(type, id);
+            const notes = parseInvoiceNotes(existingRaw);
+            const mineIdx = myEmail ? notes.findIndex(n => n.email && n.email.toLowerCase() === myEmail.toLowerCase()) : -1;
+
+            if (text) {
+                const entry = { email: myEmail, text, ts: new Date().toISOString() };
+                if (mineIdx >= 0) notes[mineIdx] = entry;   // edit own in place
+                else notes.push(entry);                      // append as reply
+            } else {
+                // Empty submission removes only this user's own entry
+                if (mineIdx >= 0) notes.splice(mineIdx, 1);
+            }
+
+            const serialized = serializeInvoiceNotes(notes);
+
+            // Re-render the inline display + reset textarea content for this user
             if (displayEl) {
-                if (note) {
-                    displayEl.innerHTML = `📝 ${note.replace(/</g,'&lt;').replace(/>/g,'&gt;')}`;
-                    displayEl.style.cssText = 'font-size:13px;color:#d97706;font-weight:600;font-style:italic;';
+                const threadHtml = invoiceNoteThreadHtml(notes);
+                if (threadHtml) {
+                    displayEl.innerHTML = threadHtml;
                     displayEl.style.display = 'block';
                 } else {
                     displayEl.innerHTML = '';
                     displayEl.style.display = 'none';
                 }
+            }
+            if (ta) {
+                const updatedMine = myEmail ? notes.find(n => n.email && n.email.toLowerCase() === myEmail.toLowerCase()) : null;
+                ta.value = updatedMine ? updatedMine.text : '';
             }
 
             let table, pkCol;
@@ -7506,24 +7569,24 @@
                     const [customerId, serviceDate] = String(id).split('|');
                     const { error } = await supabase
                         .from('skipped_invoice_status')
-                        .upsert({ customer_id: customerId, service_date: serviceDate, invoice_notes: note || null },
+                        .upsert({ customer_id: customerId, service_date: serviceDate, invoice_notes: serialized },
                                  { onConflict: 'customer_id,service_date' });
                     if (error) throw error;
                     const key = `${customerId}|${serviceDate}`;
                     if (!db.skippedInvoiceNotes) db.skippedInvoiceNotes = {};
-                    db.skippedInvoiceNotes[key] = note || null;
+                    db.skippedInvoiceNotes[key] = serialized;
                 } else {
-                    const { error } = await supabase.from(table).update({ invoice_notes: note || null }).eq(pkCol, id);
+                    const { error } = await supabase.from(table).update({ invoice_notes: serialized }).eq(pkCol, id);
                     if (error) throw error;
                     if (type === 'pod') {
                         const pod = db.pods.find(p => p.id == id);
-                        if (pod) pod.invoiceNotes = note || null;
+                        if (pod) pod.invoiceNotes = serialized;
                     } else if (type === 'tm') {
                         const tm = db.tankMovements.find(t => t.id == id);
-                        if (tm) tm.invoiceNotes = note || null;
+                        if (tm) tm.invoiceNotes = serialized;
                     } else if (type === 'cal') {
                         if (!db.calendarEventInvoiceNotes) db.calendarEventInvoiceNotes = {};
-                        db.calendarEventInvoiceNotes[id] = note || null;
+                        db.calendarEventInvoiceNotes[id] = serialized;
                     }
                 }
                 showToast('✓ Note saved', 'success');
@@ -7536,23 +7599,44 @@
             }
         }
 
+        // Read the current stored raw invoice_notes value from local state for any type
+        function getStoredInvoiceNote(type, id) {
+            if (type === 'pod') {
+                const pod = db.pods.find(p => p.id == id);
+                return pod ? (pod.invoiceNotes || null) : null;
+            } else if (type === 'tm') {
+                const tm = db.tankMovements.find(t => t.id == id);
+                return tm ? (tm.invoiceNotes || null) : null;
+            } else if (type === 'cal') {
+                return (db.calendarEventInvoiceNotes || {})[id] || null;
+            } else if (type === 'skip') {
+                return (db.skippedInvoiceNotes || {})[String(id)] || null;
+            }
+            return null;
+        }
+
         function invoicePencilBtn(type, id) {
             const elId = String(id).replace(/[|]/g, '__');
             return `<button onclick="event.stopPropagation();openInvoiceNoteEditor('${type}','${elId}')" style="background:none;border:none;cursor:pointer;color:#d1d5db;font-size:13px;padding:2px 4px;line-height:1;" title="Add invoice note">✏️</button>`;
         }
 
         function invoiceNoteInlineHtml(type, id, note) {
-            const hasNote = !!(note && note.trim());
-            const safeNote = hasNote ? note.replace(/</g,'&lt;').replace(/>/g,'&gt;') : '';
+            const notes = parseInvoiceNotes(note);
+            const threadHtml = invoiceNoteThreadHtml(notes);
+            const hasNotes = notes.length > 0;
             const elId = String(id).replace(/[|]/g, '__');
+            // Pre-fill textarea with only the current user's own existing entry
+            const myEmail = currentUser ? (currentUser.email || null) : null;
+            const mine = myEmail ? notes.find(n => n.email && n.email.toLowerCase() === myEmail.toLowerCase()) : null;
+            const myText = mine ? escHtml(mine.text) : '';
             return `<div style="margin-top:5px;" onclick="event.stopPropagation();">
-                <div id="invnote_display_${type}_${elId}" style="${hasNote ? '' : 'display:none;'}font-size:13px;color:#d97706;font-weight:600;font-style:italic;">📝 ${safeNote}</div>
+                <div id="invnote_display_${type}_${elId}" style="${hasNotes ? '' : 'display:none;'}font-size:13px;color:#d97706;font-style:italic;">${threadHtml}</div>
                 <textarea id="invnote_ta_${type}_${elId}" rows="2"
                     style="display:none;width:100%;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px;resize:vertical;margin-top:4px;"
-                    placeholder="Invoice note..."
+                    placeholder="Your invoice note / reply..."
                     onclick="event.stopPropagation();"
                     onfocus="window._typingInvoiceNote=true;"
-                    onblur="saveInvoiceNote('${type}','${id}',this.value)">${safeNote}</textarea>
+                    onblur="saveInvoiceNote('${type}','${id}',this.value)">${myText}</textarea>
             </div>`;
         }
         // ==================== END INVOICE NOTES ====================
