@@ -7369,16 +7369,11 @@
                             ${invoicedAtStr}
                         </td>
                         <td style="padding: 12px;">
-                            <div style="display: flex; gap: 8px; align-items: center;">
-                                <input type="text"
-                                       id="invNotes_${inv.id}"
-                                       value="${(inv.notes || '').replace(/"/g, '&quot;')}"
-                                       placeholder="Add notes..."
-                                       style="flex: 1; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
-                                <button onclick="saveInvoiceNotes(${inv.id})"
-                                        style="background: #374151; color: white; border: none; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 13px;">
-                                    Save
-                                </button>
+                            <div style="display: flex; gap: 8px; align-items: flex-start;">
+                                ${invoicePencilBtn('inv', inv.id)}
+                                <div style="flex:1;">
+                                    ${invoiceNoteInlineHtml('inv', inv.id, inv.notes || null)}
+                                </div>
                             </div>
                         </td>
                     </tr>
@@ -7561,6 +7556,7 @@
             if (type === 'pod') { table = 'pods'; pkCol = 'id'; }
             else if (type === 'cal') { table = 'calendar_event_status'; pkCol = 'event_id'; }
             else if (type === 'tm') { table = 'tank_movements'; pkCol = 'id'; }
+            else if (type === 'inv') { table = 'monthly_invoice_entries'; pkCol = 'id'; }
 
             try {
                 window._savingInvoiceNote = true;
@@ -7575,6 +7571,15 @@
                     const key = `${customerId}|${serviceDate}`;
                     if (!db.skippedInvoiceNotes) db.skippedInvoiceNotes = {};
                     db.skippedInvoiceNotes[key] = serialized;
+                } else if (type === 'inv') {
+                    // monthly_invoice_entries uses the `notes` column, not invoice_notes
+                    const { error } = await supabase
+                        .from('monthly_invoice_entries')
+                        .update({ notes: serialized, updated_at: new Date().toISOString() })
+                        .eq('id', id);
+                    if (error) throw error;
+                    const item = (db.invoiceEntries || []).find(i => i.id == id);
+                    if (item) item.notes = serialized;
                 } else {
                     const { error } = await supabase.from(table).update({ invoice_notes: serialized }).eq(pkCol, id);
                     if (error) throw error;
@@ -7611,6 +7616,9 @@
                 return (db.calendarEventInvoiceNotes || {})[id] || null;
             } else if (type === 'skip') {
                 return (db.skippedInvoiceNotes || {})[String(id)] || null;
+            } else if (type === 'inv') {
+                const item = (db.invoiceEntries || []).find(i => i.id == id);
+                return item ? (item.notes || null) : null;
             }
             return null;
         }
