@@ -6462,10 +6462,13 @@
                 // Current or future month - use service date if set, otherwise today
                 const workDate = currentServiceDate || formatDateLocal(new Date());
                 
-                // Check if POD already exists for this customer on the work date
+                // Check if POD already exists for this customer on the work date.
+                // Exclude ad-hoc PODs (e.g. Repairs) so they don't surface on the
+                // regular runsheet service line for the same customer/date.
                 let existingPod = db.pods.find(pod => 
                     pod.customerId === customer.id && 
-                    pod.date === workDate
+                    pod.date === workDate &&
+                    !pod.isAdHoc
                 );
                 
                 if (existingPod) {
