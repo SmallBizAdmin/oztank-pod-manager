@@ -11687,6 +11687,29 @@
             });
         }
         
+        // Find counterpart PODs for a customer on a date for the "combinable PODs"
+        // flag. wantAdHoc=true returns ad-hoc/calendar PODs (to flag on a runsheet
+        // row); wantAdHoc=false returns runsheet PODs incl. quick-complete (to flag
+        // on an ad-hoc row). Matches on customerId only — freetext/null-customerId
+        // PODs are intentionally ignored.
+        function findCounterpartPods(customerId, dateStr, wantAdHoc) {
+            if (!customerId) return [];
+            return db.pods.filter(p =>
+                p.customerId === customerId &&
+                p.date === dateStr &&
+                (wantAdHoc ? !!p.isAdHoc : !p.isAdHoc)
+            );
+        }
+
+        // Build the amber "also exists today" badge from counterpart PODs.
+        // counterpartKind: 'Ad-hoc' or 'Runsheet'. Types are drawn from the
+        // counterpart PODs' serviceType (deduped).
+        function combinablePodBadge(counterparts, counterpartKind) {
+            if (!counterparts || counterparts.length === 0) return '';
+            const types = [...new Set(counterparts.map(p => p.serviceType || 'Service'))].join(', ');
+            return `<span style="background:#ffedd5;color:#9a3412;border:1px solid #fb923c;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:600;margin-left:6px;white-space:nowrap;" title="Same customer has both a runsheet and an ad-hoc/calendar POD today — combine onto one invoice">🔗 ${counterpartKind} (${types}) also exists today</span>`;
+        }
+
         function loadAdminRunsheet() {
             const serviceDayName = document.getElementById('adminServiceDaySelect').value;
             const selectedDate = document.getElementById('adminDateSelect').value;
@@ -11847,7 +11870,7 @@
                     : '';
                 const customerNameDisplay = isSkipped 
                     ? `<span style="text-decoration: line-through; color: #9ca3af;">${customer.name}</span> <span style="background: #fee2e2; color: #991b1b; padding: 2px 6px; border-radius: 8px; font-size: 10px;">${skipReason || 'Skipped'}</span>${billingBadge}`
-                    : customer.name + scheduleBadgeHtml + billingBadge;
+                    : customer.name + scheduleBadgeHtml + billingBadge + combinablePodBadge(findCounterpartPods(customer.id, selectedDate, true), 'Ad-hoc');
                 
                 // Status column
                 let statusDisplay;
@@ -12136,6 +12159,7 @@
                             <span style="background:#f59e0b;color:white;padding:2px 6px;border-radius:8px;font-size:10px;margin-left:8px;">Ad-Hoc</span>
                             ${calBadge}
                             ${podWorkerBadge}
+                            ${combinablePodBadge(findCounterpartPods(pod.customerId, selectedDate, false), 'Runsheet')}
                             ${invoiceNoteInlineHtml('pod', pod.id, pod.invoiceNotes || null)}
                         </td>
                         <td style="padding: 12px;">${typeIcon} ${pod.serviceType || 'Service'}</td>
