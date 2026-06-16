@@ -7568,7 +7568,7 @@
                     const [customerId, serviceDate] = String(id).split('|');
                     const { error } = await supabase
                         .from('skipped_invoice_status')
-                        .upsert({ customer_id: customerId, service_date: serviceDate, invoice_notes: serialized },
+                        .upsert({ customer_id: customerId, service_date: serviceDate, invoice_notes: serialized, updated_at: new Date().toISOString() },
                                  { onConflict: 'customer_id,service_date' });
                     if (error) throw error;
                     const key = `${customerId}|${serviceDate}`;
@@ -7584,7 +7584,7 @@
                     const item = (db.invoiceEntries || []).find(i => i.id == id);
                     if (item) item.notes = serialized;
                 } else {
-                    const { error } = await supabase.from(table).update({ invoice_notes: serialized }).eq(pkCol, id);
+                    const { error } = await supabase.from(table).update({ invoice_notes: serialized, updated_at: new Date().toISOString() }).eq(pkCol, id);
                     if (error) throw error;
                     if (type === 'pod') {
                         const pod = db.pods.find(p => p.id == id);
