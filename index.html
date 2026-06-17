@@ -8243,6 +8243,26 @@
                         <div style="margin-bottom: 12px; padding: 8px 10px; background: #fefce8; border-radius: 6px; font-size: 12px; color: #6b7280; font-style: italic; border-left: 3px solid #f59e0b;">
                             📝 ${storedNotes}
                         </div>` : ''}
+                        ${(() => {
+                            // Steve-only: pre-link this event to a customer (recurring by title)
+                            const canLink = currentUser && (currentUser.email || '').toLowerCase() === 'steve.oztank@gmail.com';
+                            if (!canLink) return '';
+                            const linkedId = db.getCalendarEventLink(eventId, event.eventTitle);
+                            const linkedCust = linkedId != null ? db.customers.find(c => c.id === linkedId) : null;
+                            const fromTitle = db.isCalendarEventLinkFromTitle(eventId, event.eventTitle);
+                            const evTitleJs = String(event.eventTitle || '')
+                                .replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;').replace(/\n/g, ' ');
+                            if (linkedCust) {
+                                return `<div style="margin-bottom: 12px; padding: 10px 12px; background: #eff6ff; border-radius: 6px; border-left: 3px solid #2563eb;">
+                                    <div style="font-size: 11px; color: #6b7280; margin-bottom: 4px;">🔗 Linked customer${fromTitle ? ' <span style="color:#6b7280;">(↻ recurring by title)</span>' : ' (this event only)'}</div>
+                                    <div style="font-size: 13px; font-weight: 600; color: #1e40af;">${linkedCust.name}</div>
+                                    <button onclick="document.getElementById('calendarEventDetailModal').remove(); linkCalendarEventCustomer('${eventId}', '${evTitleJs}', 'calendar')" style="margin-top: 8px; background: #fff; color: #2563eb; border: 1px solid #93c5fd; padding: 4px 10px; border-radius: 6px; cursor: pointer; font-size: 11px;">✎ Change link</button>
+                                </div>`;
+                            }
+                            return `<div style="margin-bottom: 12px;">
+                                <button onclick="document.getElementById('calendarEventDetailModal').remove(); linkCalendarEventCustomer('${eventId}', '${evTitleJs}', 'calendar')" style="width: 100%; background: #1e3a8a; color: white; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 12px;">🔗 Link customer (for billing)</button>
+                            </div>`;
+                        })()}
                         <div style="display: flex; gap: 10px; margin-top: 4px;">
                             <button class="event-tick-btn${tickActive ? ' active' : ''}"
                                 style="flex: 1; height: 48px; font-size: 20px; border-radius: 8px;"
@@ -12444,14 +12464,14 @@
                                 ? `<span style="font-size:10px;color:#6b7280;margin-left:6px;" title="Auto-linked by event title — recurs for future events with this title">↻ recurring</span>`
                                 : '';
                             const changeBtn = canLinkCal
-                                ? `<a href="#" onclick="event.preventDefault(); event.stopPropagation(); linkCalendarEventCustomer('${ev.id}', '${evTitleJs}')" style="font-size:10px;color:#2563eb;margin-left:8px;">✎ change</a>`
+                                ? `<a href="#" onclick="event.preventDefault(); event.stopPropagation(); linkCalendarEventCustomer('${ev.id}', '${evTitleJs}', 'adhoc')" style="font-size:10px;color:#2563eb;margin-left:8px;">✎ change</a>`
                                 : '';
                             linkRowHtml = `<div style="font-size:12px;margin-top:5px;">
                                 <span style="background:#dbeafe;color:#1e40af;padding:2px 7px;border-radius:8px;font-size:11px;font-weight:600;">🔗 ${linkedCust.name}</span>${recurringTag}${billingBadge}${comboBadge}${changeBtn}
                             </div>`;
                         } else if (canLinkCal) {
                             linkRowHtml = `<div style="margin-top:5px;">
-                                <button onclick="event.stopPropagation(); linkCalendarEventCustomer('${ev.id}', '${evTitleJs}')" style="background:#1e3a8a;color:white;border:none;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:11px;">🔗 Link customer</button>
+                                <button onclick="event.stopPropagation(); linkCalendarEventCustomer('${ev.id}', '${evTitleJs}', 'adhoc')" style="background:#1e3a8a;color:white;border:none;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:11px;">🔗 Link customer</button>
                             </div>`;
                         }
                     }
@@ -13641,13 +13661,15 @@
         // starting a POD. Gated to steve.oztank@gmail.com.
         let linkingCalendarEventId = null;
         let linkingCalendarEventTitle = null;
-        function linkCalendarEventCustomer(eventId, eventTitle) {
+        let linkingCalendarSource = null; // 'adhoc' | 'calendar' — where to re-render after save
+        function linkCalendarEventCustomer(eventId, eventTitle, source) {
             if (!currentUser || (currentUser.email || '').toLowerCase() !== 'steve.oztank@gmail.com') {
                 showToast('Only Steve can link customers to calendar events', 'error');
                 return;
             }
             linkingCalendarEventId = eventId;
             linkingCalendarEventTitle = eventTitle || null;
+            linkingCalendarSource = source || 'adhoc';
             const titleEl = document.getElementById('customerSearchModalTitle');
             if (titleEl) titleEl.textContent = '🔗 Link Customer to Event';
             // Hide the freetext "new customer" option — link must be an exact existing customer
@@ -13692,6 +13714,7 @@
             // Ensure freetext "new customer" option is visible (link mode hides it)
             linkingCalendarEventId = null;
             linkingCalendarEventTitle = null;
+            linkingCalendarSource = null;
             const ftSec = document.querySelector('#customerSearchModal .freetext-section');
             const ftDiv = document.querySelector('#customerSearchModal .search-divider');
             if (ftSec) ftSec.style.display = '';
@@ -13711,6 +13734,7 @@
             currentCalendarEventId = null;
             linkingCalendarEventId = null;
             linkingCalendarEventTitle = null;
+            linkingCalendarSource = null;
             adHocServiceType = 'Service';
             adHocSourceRunDay = null;
         }
@@ -13994,8 +14018,10 @@
             // future event with the same title is auto-linked. Re-render — no POD.
             if (linkingCalendarEventId != null) {
                 const evTitle = linkingCalendarEventTitle;
+                const src = linkingCalendarSource;
                 linkingCalendarEventId = null;
                 linkingCalendarEventTitle = null;
+                linkingCalendarSource = null;
                 hideCustomerSearchModal();
                 // Restore freetext section for next normal use
                 const ftSec = document.querySelector('#customerSearchModal .freetext-section');
@@ -14004,7 +14030,11 @@
                 if (ftDiv) ftDiv.style.display = '';
                 db.saveCalendarTitleLink(evTitle, customer.id).then(() => {
                     showToast(`Linked "${evTitle}" → ${customer.name}`, 'success');
-                    loadAdminAdHocRunsheet(currentAdminDateFilter);
+                    if (src === 'calendar') {
+                        renderAdminCalendar();
+                    } else {
+                        loadAdminAdHocRunsheet(currentAdminDateFilter);
+                    }
                 });
                 return;
             }
