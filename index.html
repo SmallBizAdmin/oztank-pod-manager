@@ -8273,6 +8273,9 @@
                                 onclick="document.getElementById('calendarEventDetailModal').remove(); handleEventCross('${eventId}')"
                                 title="Mark not done">✗</button>
                         </div>
+                        ${(currentUser && (currentUser.email || '').toLowerCase() === 'steve.oztank@gmail.com' && (status === 'completed' || status === 'cancelled')) ? `
+                        <button onclick="resetCalendarEventToNeutral('${eventId}')" style="width: 100%; margin-top: 10px; background: #fff; color: #6b7280; border: 1px solid #d1d5db; padding: 8px 12px; border-radius: 8px; cursor: pointer; font-size: 12px;" title="Revert to untouched (clears tick/cross)">↺ Reset to neutral</button>
+                        ` : ''}
                     </div>
                 </div>
             `;
@@ -8414,6 +8417,20 @@
 
             document.body.appendChild(modal);
             if (canQuick) renderCalEventPhotoStrip('quick');
+            // Steve-only: add "Reset to neutral" for any ticked/crossed event,
+            // injected after append so it works across all modal branches.
+            if (currentUser && (currentUser.email || '').toLowerCase() === 'steve.oztank@gmail.com'
+                && (status === 'completed' || status === 'cancelled')) {
+                const body = modal.querySelector('.search-modal-body');
+                if (body) {
+                    const resetBtn = document.createElement('button');
+                    resetBtn.textContent = '↺ Reset to neutral';
+                    resetBtn.title = 'Revert to untouched (clears tick/cross)';
+                    resetBtn.style.cssText = 'width:100%;margin-top:12px;background:#fff;color:#6b7280;border:1px solid #d1d5db;padding:10px 12px;border-radius:8px;cursor:pointer;font-size:13px;';
+                    resetBtn.onclick = () => resetCalendarEventToNeutral(eventId);
+                    body.appendChild(resetBtn);
+                }
+            }
         }
 
         async function untickCalendarEvent(eventId) {
@@ -8424,6 +8441,32 @@
             loadWorkerCalendarEvents();
             if (document.getElementById('adminListContainer').style.display !== 'none') {
                 renderAdminChronologicalList();
+            }
+        }
+
+        // Steve-only: revert a ticked OR crossed event back to untouched/neutral.
+        // Not bound to a specific modal — closes any open event modal, clears the
+        // status (and the cross reason note), and refreshes all views.
+        async function resetCalendarEventToNeutral(eventId) {
+            if (!currentUser || (currentUser.email || '').toLowerCase() !== 'steve.oztank@gmail.com') {
+                showToast('Only Steve can reset events', 'error');
+                return;
+            }
+            ['calendarEventDetailModal', 'calendarEventChooserModal'].forEach(id => {
+                const m = document.getElementById(id);
+                if (m) m.remove();
+            });
+            await db.saveCalendarEventStatus(eventId, null);
+            // Clear any cross-out reason note so the event is genuinely untouched
+            await db.saveCalendarEventNotes(eventId, '');
+            showToast('Event reset to neutral', 'success');
+            renderAdminCalendar();
+            loadWorkerCalendarEvents();
+            if (document.getElementById('adminListContainer') && document.getElementById('adminListContainer').style.display !== 'none') {
+                renderAdminChronologicalList();
+            }
+            if (currentAdminServiceDay === 'Ad-Hoc' && currentAdminDateFilter) {
+                loadAdminAdHocRunsheet(currentAdminDateFilter);
             }
         }
 
