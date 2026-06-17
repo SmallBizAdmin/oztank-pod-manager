@@ -4871,12 +4871,13 @@
                 try {
                     const { data, error } = await supabase
                         .from('calendar_event_status')
-                        .select('event_id, status, notes, actioned_by, actioned_at, invoice_notes, photos');
+                        .select('event_id, status, notes, actioned_by, actioned_at, invoice_notes, photos, linked_customer_id');
                     if (error) throw error;
                     this.calendarEventStatus = {};
                     this.calendarEventNotes = {};
                     this.calendarEventInvoiceNotes = {};
                     this.calendarEventPhotos = {};
+                    this.calendarEventLinks = {};
                     (data || []).forEach(row => {
                         if (row.status) this.calendarEventStatus[row.event_id] = {
                             status: row.status,
@@ -4886,12 +4887,14 @@
                         if (row.notes) this.calendarEventNotes[row.event_id] = row.notes;
                         if (row.invoice_notes) this.calendarEventInvoiceNotes[row.event_id] = row.invoice_notes;
                         if (row.photos && Array.isArray(row.photos) && row.photos.length) this.calendarEventPhotos[row.event_id] = row.photos;
+                        if (row.linked_customer_id != null) this.calendarEventLinks[row.event_id] = row.linked_customer_id;
                     });
                 } catch (e) {
                     console.warn('loadCalendarEventStatus error:', e);
                     this.calendarEventStatus = {};
                     this.calendarEventNotes = {};
                     this.calendarEventPhotos = {};
+                    this.calendarEventLinks = {};
                 }
             },
             
@@ -4970,6 +4973,38 @@
                     if (error) throw error;
                 } catch (e) {
                     console.warn('saveCalendarEventPhotos error:', e);
+                }
+            },
+
+            getCalendarEventLink(eventId) {
+                if (!this.calendarEventLinks) return null;
+                return this.calendarEventLinks[eventId] ?? null;
+            },
+
+            // Store an exact customer reference against a calendar event (for
+            // billing prompts on crossed-out events). customerId = null clears it.
+            async saveCalendarEventLink(eventId, customerId) {
+                try {
+                    if (!this.calendarEventLinks) this.calendarEventLinks = {};
+                    const linkedBy = currentUser ? (currentUser.name || currentUser.email) : 'Unknown';
+                    const linkedAt = new Date().toISOString();
+                    if (customerId != null) {
+                        this.calendarEventLinks[eventId] = customerId;
+                        const { error } = await supabase
+                            .from('calendar_event_status')
+                            .upsert({ event_id: eventId, linked_customer_id: customerId, linked_by: linkedBy, linked_at: linkedAt, updated_at: linkedAt }, { onConflict: 'event_id' });
+                        if (error) throw error;
+                    } else {
+                        delete this.calendarEventLinks[eventId];
+                        const { error } = await supabase
+                            .from('calendar_event_status')
+                            .update({ linked_customer_id: null, linked_by: null, linked_at: null, updated_at: new Date().toISOString() })
+                            .eq('event_id', eventId);
+                        if (error) throw error;
+                    }
+                } catch (e) {
+                    console.warn('saveCalendarEventLink error:', e);
+                    showToast('Could not save customer link', 'error');
                 }
             },
             
@@ -12309,8 +12344,39 @@
                     const workerBadge = ev.calendarOwner
                         ? `<span style="display:inline-block;margin-left:8px;background:${workerColor};color:white;padding:1px 6px;border-radius:8px;font-size:10px;">👤 ${ev.calendarOwner}</span>`
                         : '';
+
+                    // Linked-customer billing prompt (for free-text events with no POD).
+                    // The link reference is stored exactly (by customer id); badges show
+                    // to everyone, the link/change action is Steve-only.
+                    const canLinkCal = currentUser && (currentUser.email || '').toLowerCase() === 'steve.oztank@gmail.com';
+                    let linkRowHtml = '';
+                    if (!linkedPod) {
+                        const linkedCustId = db.getCalendarEventLink(ev.id);
+                        const linkedCust = linkedCustId != null ? db.customers.find(c => c.id === linkedCustId) : null;
+                        if (linkedCust) {
+                            const billingValue = (linkedCust.invoiceType && isBillingWaste(linkedCust.invoiceType))
+                                ? linkedCust.invoiceType
+                                : (isBillingWaste(linkedCust.waste) ? linkedCust.waste : null);
+                            const billingBadge = billingValue
+                                ? `<span style="background:#fff7ed;color:#c2410c;border:1px solid #fdba74;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:600;margin-left:6px;">📋 ${billingValue}</span>`
+                                : '';
+                            const comboBadge = combinablePodBadge(findCounterpartPods(linkedCust.id, selectedDate, false), 'Runsheet');
+                            const changeBtn = canLinkCal
+                                ? `<a href="#" onclick="event.preventDefault(); event.stopPropagation(); linkCalendarEventCustomer('${ev.id}')" style="font-size:10px;color:#2563eb;margin-left:8px;">✎ change</a>`
+                                : '';
+                            linkRowHtml = `<div style="font-size:12px;margin-top:5px;">
+                                <span style="background:#dbeafe;color:#1e40af;padding:2px 7px;border-radius:8px;font-size:11px;font-weight:600;">🔗 ${linkedCust.name}</span>${billingBadge}${comboBadge}${changeBtn}
+                            </div>`;
+                        } else if (canLinkCal) {
+                            linkRowHtml = `<div style="margin-top:5px;">
+                                <button onclick="event.stopPropagation(); linkCalendarEventCustomer('${ev.id}')" style="background:#1e3a8a;color:white;border:none;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:11px;">🔗 Link customer</button>
+                            </div>`;
+                        }
+                    }
+
                     const companyCell = `<span style="font-weight:500;">${ev.eventTitle}</span>${workerBadge}
-                        ${linkedPod ? `<div style="font-size:11px;color:#92400e;margin-top:4px;">📋 POD: ${linkedPod.customerName || ''}${linkedPod.notes ? ' — ' + linkedPod.notes : ''}</div>` : ''}`;
+                        ${linkedPod ? `<div style="font-size:11px;color:#92400e;margin-top:4px;">📋 POD: ${linkedPod.customerName || ''}${linkedPod.notes ? ' — ' + linkedPod.notes : ''}</div>` : ''}
+                        ${linkRowHtml}`;
 
                     const typeCell = linkedPod ? (linkedPod.serviceType || 'Service') : 'Free text';
                     const carbCell = linkedPod ? (linkedPod.carbsolve || '-') : '-';
@@ -13487,6 +13553,32 @@
             showTankMovementModal(null);
         }
         
+        // ── Calendar-event → customer linking (Steve only) ──────────────────
+        // Opens the existing customer search modal in "link mode": picking a
+        // customer stores an exact reference on the calendar event instead of
+        // starting a POD. Gated to steve.oztank@gmail.com.
+        let linkingCalendarEventId = null;
+        function linkCalendarEventCustomer(eventId) {
+            if (!currentUser || (currentUser.email || '').toLowerCase() !== 'steve.oztank@gmail.com') {
+                showToast('Only Steve can link customers to calendar events', 'error');
+                return;
+            }
+            linkingCalendarEventId = eventId;
+            const titleEl = document.getElementById('customerSearchModalTitle');
+            if (titleEl) titleEl.textContent = '🔗 Link Customer to Event';
+            // Hide the freetext "new customer" option — link must be an exact existing customer
+            const freetext = document.querySelector('#customerSearchModal .freetext-section');
+            const divider = document.querySelector('#customerSearchModal .search-divider');
+            if (freetext) freetext.style.display = 'none';
+            if (divider) divider.style.display = 'none';
+            document.getElementById('customerSearchModal').classList.add('active');
+            document.getElementById('customerSearchInput').value = '';
+            document.getElementById('freetextCustomerName').value = '';
+            document.getElementById('searchResults').style.display = 'none';
+            document.getElementById('searchHint').style.display = 'block';
+            setTimeout(() => document.getElementById('customerSearchInput').focus(), 100);
+        }
+
         function showCustomerSearchModal(sourceRunDay = null, type = 'Service', calendarEventId = null) {
             // Prevent ad-hoc services in historical months
             if (isPastMonth()) {
@@ -13513,6 +13605,12 @@
             document.getElementById('freetextCustomerName').value = '';
             document.getElementById('searchResults').style.display = 'none';
             document.getElementById('searchHint').style.display = 'block';
+            // Ensure freetext "new customer" option is visible (link mode hides it)
+            linkingCalendarEventId = null;
+            const ftSec = document.querySelector('#customerSearchModal .freetext-section');
+            const ftDiv = document.querySelector('#customerSearchModal .search-divider');
+            if (ftSec) ftSec.style.display = '';
+            if (ftDiv) ftDiv.style.display = '';
             
             setTimeout(() => document.getElementById('customerSearchInput').focus(), 100);
         }
@@ -13526,6 +13624,7 @@
             // Clears state pinned by showCustomerSearchModal so an abandoned pick can't leak into a later save.
             hideCustomerSearchModal();
             currentCalendarEventId = null;
+            linkingCalendarEventId = null;
             adHocServiceType = 'Service';
             adHocSourceRunDay = null;
         }
@@ -13802,6 +13901,24 @@
             const customer = db.customers.find(c => c.id === customerId);
             if (!customer) {
                 showToast('Customer not found', 'error');
+                return;
+            }
+            
+            // Link mode: store an exact customer reference on the calendar event,
+            // then re-render — do NOT start a POD.
+            if (linkingCalendarEventId != null) {
+                const eid = linkingCalendarEventId;
+                linkingCalendarEventId = null;
+                hideCustomerSearchModal();
+                // Restore freetext section for next normal use
+                const ftSec = document.querySelector('#customerSearchModal .freetext-section');
+                const ftDiv = document.querySelector('#customerSearchModal .search-divider');
+                if (ftSec) ftSec.style.display = '';
+                if (ftDiv) ftDiv.style.display = '';
+                db.saveCalendarEventLink(eid, customer.id).then(() => {
+                    showToast(`Linked to ${customer.name}`, 'success');
+                    loadAdminAdHocRunsheet(currentAdminDateFilter);
+                });
                 return;
             }
             
