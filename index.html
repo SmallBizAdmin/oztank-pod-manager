@@ -8774,7 +8774,55 @@
                     .order('date', { ascending: false });
                 
                 if (error) throw error;
-                
+
+                // Tank movements for this customer (separate table)
+                let tankMovements = [];
+                try {
+                    const { data: tmData, error: tmError } = await supabase
+                        .from('tank_movements')
+                        .select('*')
+                        .eq('customer_id', customerId)
+                        .order('date', { ascending: false });
+                    if (tmError) throw tmError;
+                    tankMovements = tmData || [];
+                } catch (tmErr) {
+                    console.warn('Search PODs: tank movements load failed:', tmErr);
+                }
+
+                // Cancelled (crossed-out) calendar events directly linked to this customer.
+                // Instance links only: calendar_event_status.linked_customer_id = customerId.
+                // Date/title come from worker_calendar_events (joined on event_id).
+                let cancelledEvents = [];
+                try {
+                    const { data: ceStatus, error: ceError } = await supabase
+                        .from('calendar_event_status')
+                        .select('event_id, status, actioned_by, actioned_at')
+                        .eq('linked_customer_id', customerId)
+                        .eq('status', 'cancelled');
+                    if (ceError) throw ceError;
+                    const statusRows = ceStatus || [];
+                    if (statusRows.length) {
+                        const eventIds = statusRows.map(r => r.event_id);
+                        const { data: ceMeta } = await supabase
+                            .from('worker_calendar_events')
+                            .select('event_id, event_date, event_title')
+                            .in('event_id', eventIds);
+                        const metaByEvent = {};
+                        (ceMeta || []).forEach(m => { metaByEvent[m.event_id] = m; });
+                        cancelledEvents = statusRows.map(r => {
+                            const m = metaByEvent[r.event_id] || {};
+                            return {
+                                event_id: r.event_id,
+                                date: m.event_date || r.actioned_at || null,
+                                title: m.event_title || '(event removed)',
+                                actioned_by: r.actioned_by || null
+                            };
+                        }).filter(e => e.date);
+                    }
+                } catch (ceErr) {
+                    console.warn('Search PODs: cancelled calendar events load failed:', ceErr);
+                }
+
                 // Stats
                 const totalPods = pods.length;
                 const servicesCompleted = pods.filter(p => p.tank_serviced === 'yes' || (p.is_quick_complete && p.tank_serviced !== 'no')).length;
@@ -8804,11 +8852,18 @@
                 `;
                 
                 // Build table similar to admin runsheet
-                if (pods.length === 0) {
+                if (pods.length === 0 && tankMovements.length === 0 && cancelledEvents.length === 0) {
                     document.getElementById('searchPodsTable').innerHTML = '<div class="card" style="text-align: center; color: #6b7280; padding: 20px;">No service history found</div>';
                     return;
                 }
-                
+
+                // Merge all three sources into one date-sorted list (newest first)
+                const historyRows = [];
+                pods.forEach(p => historyRows.push({ kind: 'pod', date: p.date, sortTime: new Date(p.date).getTime() || 0, pod: p }));
+                tankMovements.forEach(tm => historyRows.push({ kind: 'tm', date: tm.date, sortTime: new Date(tm.date).getTime() || 0, tm }));
+                cancelledEvents.forEach(ev => historyRows.push({ kind: 'cancelled', date: ev.date, sortTime: new Date(ev.date).getTime() || 0, ev }));
+                historyRows.sort((a, b) => b.sortTime - a.sortTime);
+
                 let tableHtml = '<div class="card" style="overflow-x: auto;"><table style="width: 100%; border-collapse: collapse; font-size: 13px;">';
                 tableHtml += `<thead><tr style="background: #1e3a8a; color: white;">
                     <th style="padding: 10px 8px; text-align: left;">Date</th>
@@ -8820,9 +8875,57 @@
                     <th style="padding: 10px 8px; text-align: left;">All Notes</th>
                 </tr></thead><tbody>`;
                 
-                pods.forEach((pod, idx) => {
-                    const date = new Date(pod.date);
-                    const formattedDate = date.toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' });
+                historyRows.forEach((row, idx) => {
+                    const date = new Date(row.date);
+                    const formattedDate = isNaN(date.getTime()) ? '-' : date.toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' });
+                    const bgColor = idx % 2 === 0 ? 'white' : '#f9fafb';
+
+                    // ── Tank movement row ──
+                    if (row.kind === 'tm') {
+                        const tm = row.tm;
+                        const mvType = tm.movement_type || 'Movement';
+                        const placed = tm.tank_no_placed;
+                        const pulled = tm.tank_no_pulled;
+                        const tankInfo = [
+                            pulled ? `Pulled: ${pulled}` : null,
+                            placed ? `Placed: ${placed}` : null
+                        ].filter(Boolean).join(' • ') || '-';
+                        const tmNotesParts = [];
+                        if (tm.carbsolve) tmNotesParts.push(`<strong>Carbsolve:</strong> ${tm.carbsolve}`);
+                        if (tm.reason) tmNotesParts.push(`<strong>Reason:</strong> ${tm.reason}`);
+                        const tmNotes = tmNotesParts.join('<br>') || '-';
+                        tableHtml += `<tr style="background: ${bgColor}; border-bottom: 1px solid #e5e7eb;"
+                                          onmouseover="this.style.background='#eff6ff'" onmouseout="this.style.background='${bgColor}'">
+                            <td style="padding: 10px 8px; white-space: nowrap;">${formattedDate}</td>
+                            <td style="padding: 10px 8px;">-</td>
+                            <td style="padding: 10px 8px;">🔄 ${mvType}</td>
+                            <td style="padding: 10px 8px;">-</td>
+                            <td style="padding: 10px 8px;"><span style="background: #ede9fe; color: #5b21b6; padding: 2px 8px; border-radius: 12px; font-size: 11px;">Tank Move</span></td>
+                            <td style="padding: 10px 8px; font-size: 12px;">${tankInfo}</td>
+                            <td style="padding: 10px 8px; font-size: 12px;">${tmNotes}</td>
+                        </tr>`;
+                        return;
+                    }
+
+                    // ── Cancelled calendar event row ──
+                    if (row.kind === 'cancelled') {
+                        const ev = row.ev;
+                        const by = ev.actioned_by ? `<strong>Cancelled by:</strong> ${ev.actioned_by}` : '-';
+                        tableHtml += `<tr style="background: ${bgColor}; border-bottom: 1px solid #e5e7eb;"
+                                          onmouseover="this.style.background='#fef2f2'" onmouseout="this.style.background='${bgColor}'">
+                            <td style="padding: 10px 8px; white-space: nowrap;">${formattedDate}</td>
+                            <td style="padding: 10px 8px;">-</td>
+                            <td style="padding: 10px 8px;">📅 ${ev.title || 'Calendar Event'}</td>
+                            <td style="padding: 10px 8px;">-</td>
+                            <td style="padding: 10px 8px;"><span style="background: #fee2e2; color: #991b1b; padding: 2px 8px; border-radius: 12px; font-size: 11px;">✗ Cancelled</span></td>
+                            <td style="padding: 10px 8px; font-size: 12px;">-</td>
+                            <td style="padding: 10px 8px; font-size: 12px;">${by}</td>
+                        </tr>`;
+                        return;
+                    }
+
+                    // ── POD row (service / delivery / repair / ad-hoc / calendar-sourced) ──
+                    const pod = row.pod;
                     const isRentalOnly = pod.isRentalOnly || 
                         (pod.notes || '').toLowerCase().includes('no service required') ||
                         (pod.service_notes || '').toLowerCase().includes('no service required'); // legacy
@@ -8841,13 +8944,12 @@
                     let statusBadge = '';
                     if (isRentalOnly) statusBadge = '<span style="background: #fef3c7; color: #92400e; padding: 2px 8px; border-radius: 12px; font-size: 11px;">Rental Only</span>';
                     else if (isQuick) statusBadge = '<span style="background: #dbeafe; color: #1e40af; padding: 2px 8px; border-radius: 12px; font-size: 11px;">Quick</span>';
+                    if (pod.is_ad_hoc) statusBadge += ' <span style="background: #f3e8ff; color: #7e22ce; padding: 2px 8px; border-radius: 12px; font-size: 11px;">Ad-Hoc</span>';
                     
                     // Tank serviced
                     let servicedDisplay = '-';
                     if (pod.tank_serviced === 'yes') servicedDisplay = '<span style="color: #16a34a;">✓ Yes</span>';
                     else if (pod.tank_serviced === 'no') servicedDisplay = '<span style="color: #dc2626;">✗ No</span>';
-                    
-                    const bgColor = idx % 2 === 0 ? 'white' : '#f9fafb';
                     
                     tableHtml += `<tr style="background: ${bgColor}; cursor: pointer; border-bottom: 1px solid #e5e7eb;" 
                                       onclick="viewSearchPodDetail('${pod.id}', ${customerId})"
