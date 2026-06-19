@@ -3824,6 +3824,25 @@
             return BILLING_WASTE_FLAGS.some(f => waste.toLowerCase().includes(f));
         }
 
+        // "Bills under" arrangement: a customer with invoiceUnderId always gets
+        // invoiced under another customer (the parent). Lines stay tickable; these
+        // badges just make the relationship visible on the runsheet.
+        // Child-side badge: shown on the customer that bills under someone else.
+        function billsUnderChildBadge(customer) {
+            if (!customer || customer.invoiceUnderId == null) return '';
+            const parent = db.customers.find(c => c.id === customer.invoiceUnderId);
+            const parentName = parent ? parent.name : `#${customer.invoiceUnderId}`;
+            return `<span style="background:#ede9fe;color:#5b21b6;border:1px solid #c4b5fd;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:600;margin-left:6px;" title="Always invoiced under ${parentName}">🧾 bills under ${parentName}</span>`;
+        }
+        // Parent-side badge: shown on a customer that others bill under.
+        function billsUnderParentBadge(customer) {
+            if (!customer) return '';
+            const children = db.customers.filter(c => c.invoiceUnderId === customer.id);
+            if (children.length === 0) return '';
+            const names = children.map(c => c.name).join(', ');
+            return `<span style="background:#ede9fe;color:#5b21b6;border:1px solid #c4b5fd;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:600;margin-left:6px;" title="${names}">🧾 +${children.length} billed here</span>`;
+        }
+
         // Extract an order number from a calendar event title.
         // Recognises the literal "O/N" (case-insensitive) followed by optional separator
         // (space, colon, hash, dash) and captures everything that follows to end-of-string, trimmed.
@@ -4307,6 +4326,7 @@
                         specialInstructions: c.special_instructions,
                         businessGroup: c.business_group,
                         invoiceType: c.invoice_type,
+                        invoiceUnderId: c.invoice_under_id,
                         order: c.order,
                         serviceMonths: c.service_months, // Array of months [1,3,5,7,9,11] for bi-monthly, null for monthly
                         tankCount: c.tank_count || 1,
@@ -6339,6 +6359,7 @@
                             specialInstructions: c.special_instructions,
                             businessGroup: c.business_group,
                             invoiceType: c.invoice_type,
+                            invoiceUnderId: c.invoice_under_id,
                             order: c.order,
                             serviceMonths: c.service_months,
                             tankCount: c.tank_count || 1,
@@ -12143,9 +12164,10 @@
                 const billingBadge = billingValue
                     ? `<span style="background: #fff7ed; color: #c2410c; border: 1px solid #fdba74; padding: 2px 7px; border-radius: 8px; font-size: 10px; font-weight: 600; margin-left: 6px;">📋 ${billingValue}</span>`
                     : '';
+                const billsUnderBadges = billsUnderChildBadge(customer) + billsUnderParentBadge(customer);
                 const customerNameDisplay = isSkipped 
-                    ? `<span style="text-decoration: line-through; color: #9ca3af;">${customer.name}</span> <span style="background: #fee2e2; color: #991b1b; padding: 2px 6px; border-radius: 8px; font-size: 10px;">${skipReason || 'Skipped'}</span>${billingBadge}`
-                    : customer.name + scheduleBadgeHtml + billingBadge + combinablePodBadge(findCounterpartPods(customer.id, selectedDate, true), 'Ad-hoc');
+                    ? `<span style="text-decoration: line-through; color: #9ca3af;">${customer.name}</span> <span style="background: #fee2e2; color: #991b1b; padding: 2px 6px; border-radius: 8px; font-size: 10px;">${skipReason || 'Skipped'}</span>${billingBadge}${billsUnderBadges}`
+                    : customer.name + scheduleBadgeHtml + billingBadge + billsUnderBadges + combinablePodBadge(findCounterpartPods(customer.id, selectedDate, true), 'Ad-hoc');
                 
                 // Status column
                 let statusDisplay;
@@ -12435,7 +12457,7 @@
                                onchange="toggleCheckedSent(${pod.id}, null, null)" title="Checked & Sent">`}
                         </td>
                         <td style="padding: 12px;">
-                            ${customerName}${unlinkedWarningIcon(pod)}${podBillingBadge}${podOrderNumberBadge}
+                            ${customerName}${unlinkedWarningIcon(pod)}${podBillingBadge}${customer ? billsUnderChildBadge(customer) + billsUnderParentBadge(customer) : ''}${podOrderNumberBadge}
                             <span style="background:#f59e0b;color:white;padding:2px 6px;border-radius:8px;font-size:10px;margin-left:8px;">Ad-Hoc</span>
                             ${calBadge}
                             ${podWorkerBadge}
@@ -12501,7 +12523,7 @@
                                 style="width:16px;height:16px;cursor:pointer;${!tmIsInvoiced ? 'opacity:0.4;' : ''}">`}
                         </td>
                         <td style="padding: 10px;">
-                            ${tm.customerName}${unlinkedWarningIcon(tm)}${tmBillingBadge}${tmOrderNumberBadge}
+                            ${tm.customerName}${unlinkedWarningIcon(tm)}${tmBillingBadge}${tmCustomer ? billsUnderChildBadge(tmCustomer) + billsUnderParentBadge(tmCustomer) : ''}${tmOrderNumberBadge}
                             <div style="margin-top:4px;">
                                 <span style="background:#3b82f6;color:white;padding:2px 6px;border-radius:8px;font-size:10px;">Ad-Hoc</span>
                                 ${tm.completedBy ? `<span style="display:inline-block;margin-left:4px;background:${getWorkerColor(tm.completedBy)};color:white;padding:1px 6px;border-radius:8px;font-size:10px;">👤 ${tm.completedBy}</span>` : ''}
@@ -12622,7 +12644,7 @@
                                 ? `<a href="#" onclick="event.preventDefault(); event.stopPropagation(); linkCalendarEventCustomer('${ev.id}', '${evTitleJs}', 'adhoc')" style="font-size:10px;color:#2563eb;margin-left:8px;">✎ change</a>`
                                 : '';
                             linkRowHtml = `<div style="font-size:12px;margin-top:5px;">
-                                <span style="background:#dbeafe;color:#1e40af;padding:2px 7px;border-radius:8px;font-size:11px;font-weight:600;">🔗 ${linkedCust.name}</span>${recurringTag}${billingBadge}${comboBadge}${changeBtn}
+                                <span style="background:#dbeafe;color:#1e40af;padding:2px 7px;border-radius:8px;font-size:11px;font-weight:600;">🔗 ${linkedCust.name}</span>${recurringTag}${billingBadge}${billsUnderChildBadge(linkedCust)}${billsUnderParentBadge(linkedCust)}${comboBadge}${changeBtn}
                             </div>`;
                         } else if (canLinkCal) {
                             linkRowHtml = `<div style="margin-top:5px;">
