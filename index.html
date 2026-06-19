@@ -4330,7 +4330,8 @@
                         order: c.order,
                         serviceMonths: c.service_months, // Array of months [1,3,5,7,9,11] for bi-monthly, null for monthly
                         tankCount: c.tank_count || 1,
-                        tankLabels: c.tank_labels || null
+                        tankLabels: c.tank_labels || null,
+                        tankOwnership: c.tank_ownership || 'rental'
                     }));
                     
                     // Load service days
@@ -5759,6 +5760,23 @@
                 return val === undefined ? null : val;
             },
 
+            // True only for explicitly user-owned tanks (default 'rental')
+            isCustomerUserOwned(customerId) {
+                const c = this.customers.find(x => x.id === customerId);
+                return c ? c.tankOwnership === 'user_owned' : false;
+            },
+
+            // Resolve whether a skip should be treated as Rental Only.
+            // Explicit flag wins. When unset (null), user-owned tanks default
+            // to plain skipped (false); rental tanks fall back to the notes
+            // heuristic ('no service required').
+            resolveSkipIsRental(customerId, date, skipReason) {
+                const flag = this.getSkipIsRentalOnly(customerId, date);
+                if (flag !== null) return flag === true;
+                if (this.isCustomerUserOwned(customerId)) return false;
+                return !!(skipReason && skipReason.toLowerCase().includes('no service required'));
+            },
+
             // For historical/admin views: check if skipped on any date within a given month
             isCustomerSkippedInMonth(customerId, month, year) {
                 const prefix = `${customerId}-${year}-${String(month + 1).padStart(2, '0')}`;
@@ -6363,7 +6381,8 @@
                             order: c.order,
                             serviceMonths: c.service_months,
                             tankCount: c.tank_count || 1,
-                            tankLabels: c.tank_labels || null
+                            tankLabels: c.tank_labels || null,
+                            tankOwnership: c.tank_ownership || 'rental'
                         }));
                         // Re-render all views that depend on customer data
                         renderRunDays();
@@ -7801,9 +7820,7 @@
             const key = `${customerId}-${skipDate}`;
             const skip = db.monthlySkips[key];
             if (!skip) return;
-            const skipRentalFlag = db.getSkipIsRentalOnly(customerId, skipDate);
-            const autoDetect = (db.getSkipReason(customerId, skipDate) || '').toLowerCase().includes('no service required');
-            const currentIsRental = skipRentalFlag === true || (skipRentalFlag === null && autoDetect);
+            const currentIsRental = db.resolveSkipIsRental(customerId, skipDate, db.getSkipReason(customerId, skipDate));
             // Toggle: if currently rental → set explicitly false; if not → set explicitly true
             const newValue = currentIsRental ? false : true;
             const { error } = await supabase
@@ -12006,6 +12023,16 @@
             return `<span style="background:#ffedd5;color:#9a3412;border:1px solid #fb923c;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:600;margin-left:6px;white-space:nowrap;" title="Same customer has both a runsheet and an ad-hoc/calendar POD today — combine onto one invoice">🔗 ${counterpartKind} (${types}) also exists today</span>`;
         }
 
+        // User-owned tank badge. Rental (the standard) shows nothing.
+        // Accepts a customer object or a customerId.
+        function userOwnedBadge(customerOrId) {
+            const c = (customerOrId && typeof customerOrId === 'object')
+                ? customerOrId
+                : db.customers.find(x => x.id === customerOrId);
+            if (!c || c.tankOwnership !== 'user_owned') return '';
+            return `<span style="background:#ede9fe;color:#5b21b6;border:1px solid #c4b5fd;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:600;margin-left:6px;white-space:nowrap;" title="Customer-owned tank (not a rental)">🏷️ User-owned</span>`;
+        }
+
         function loadAdminRunsheet() {
             const serviceDayName = document.getElementById('adminServiceDaySelect').value;
             const selectedDate = document.getElementById('adminDateSelect').value;
@@ -12166,8 +12193,8 @@
                     : '';
                 const billsUnderBadges = billsUnderChildBadge(customer) + billsUnderParentBadge(customer);
                 const customerNameDisplay = isSkipped 
-                    ? `<span style="text-decoration: line-through; color: #9ca3af;">${customer.name}</span> <span style="background: #fee2e2; color: #991b1b; padding: 2px 6px; border-radius: 8px; font-size: 10px;">${skipReason || 'Skipped'}</span>${billingBadge}${billsUnderBadges}`
-                    : customer.name + scheduleBadgeHtml + billingBadge + billsUnderBadges + combinablePodBadge(findCounterpartPods(customer.id, selectedDate, true), 'Ad-hoc');
+                    ? `<span style="text-decoration: line-through; color: #9ca3af;">${customer.name}</span> <span style="background: #fee2e2; color: #991b1b; padding: 2px 6px; border-radius: 8px; font-size: 10px;">${skipReason || 'Skipped'}</span>${billingBadge}${billsUnderBadges}${userOwnedBadge(customer)}`
+                    : customer.name + scheduleBadgeHtml + billingBadge + billsUnderBadges + userOwnedBadge(customer) + combinablePodBadge(findCounterpartPods(customer.id, selectedDate, true), 'Ad-hoc');
                 
                 // Status column
                 let statusDisplay;
@@ -12254,9 +12281,7 @@
                         statusBadgeHtml = `<div style="text-align:center;"><span style="background: #dcfce7; color: #166534; padding: 2px 8px; border-radius: 8px; font-size: 10px; font-weight: 600;">${badgeLabel}</span>${podAttrib}<div style="display:flex;align-items:center;justify-content:center;gap:4px;margin-top:3px;">${rentalToggleBtn}${podPencil}</div></div>`;
                     }
                 } else if (isSkipped) {
-                    const skipRentalFlag = db.getSkipIsRentalOnly(customer.id, selectedDate);
-                    const isRentalSkip = skipRentalFlag === true
-                        || (skipRentalFlag === null && skipReason && skipReason.toLowerCase().includes('no service required'));
+                    const isRentalSkip = db.resolveSkipIsRental(customer.id, selectedDate, skipReason);
                     const skipToggleBtn = isAdminUser
                         ? `<button onclick="event.stopPropagation(); toggleSkipRentalOnly(${customer.id}, '${selectedDate}')" style="background:none;border:none;cursor:pointer;font-size:11px;color:#9ca3af;padding:2px 4px;" title="Toggle Rental Only">${isRentalSkip ? '↩ Set Skipped' : '🏠 Set Rental Only'}</button>`
                         : '';
@@ -12457,7 +12482,7 @@
                                onchange="toggleCheckedSent(${pod.id}, null, null)" title="Checked & Sent">`}
                         </td>
                         <td style="padding: 12px;">
-                            ${customerName}${unlinkedWarningIcon(pod)}${podBillingBadge}${customer ? billsUnderChildBadge(customer) + billsUnderParentBadge(customer) : ''}${podOrderNumberBadge}
+                            ${customerName}${unlinkedWarningIcon(pod)}${podBillingBadge}${customer ? billsUnderChildBadge(customer) + billsUnderParentBadge(customer) : ''}${podOrderNumberBadge}${customer ? userOwnedBadge(customer) : ''}
                             <span style="background:#f59e0b;color:white;padding:2px 6px;border-radius:8px;font-size:10px;margin-left:8px;">Ad-Hoc</span>
                             ${calBadge}
                             ${podWorkerBadge}
@@ -12523,7 +12548,7 @@
                                 style="width:16px;height:16px;cursor:pointer;${!tmIsInvoiced ? 'opacity:0.4;' : ''}">`}
                         </td>
                         <td style="padding: 10px;">
-                            ${tm.customerName}${unlinkedWarningIcon(tm)}${tmBillingBadge}${tmCustomer ? billsUnderChildBadge(tmCustomer) + billsUnderParentBadge(tmCustomer) : ''}${tmOrderNumberBadge}
+                            ${tm.customerName}${unlinkedWarningIcon(tm)}${tmBillingBadge}${tmCustomer ? billsUnderChildBadge(tmCustomer) + billsUnderParentBadge(tmCustomer) : ''}${tmOrderNumberBadge}${tmCustomer ? userOwnedBadge(tmCustomer) : ''}
                             <div style="margin-top:4px;">
                                 <span style="background:#3b82f6;color:white;padding:2px 6px;border-radius:8px;font-size:10px;">Ad-Hoc</span>
                                 ${tm.completedBy ? `<span style="display:inline-block;margin-left:4px;background:${getWorkerColor(tm.completedBy)};color:white;padding:1px 6px;border-radius:8px;font-size:10px;">👤 ${tm.completedBy}</span>` : ''}
@@ -12761,7 +12786,7 @@
                             style="width:16px;height:16px;cursor:pointer;${!tmIsInvoiced ? 'opacity:0.4;' : ''}">
                     </td>
                     <td style="padding: 10px;">
-                        ${tm.customerName}${unlinkedWarningIcon(tm)}
+                        ${tm.customerName}${unlinkedWarningIcon(tm)}${userOwnedBadge(tm.customerId)}
                         ${adHocBadge ? `<div style="margin-top: 4px;">${adHocBadge}</div>` : ''}
                         ${invoiceNoteInlineHtml('tm', tm.id, tm.invoiceNotes || null)}
                     </td>
