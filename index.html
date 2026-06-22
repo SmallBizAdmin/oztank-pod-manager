@@ -3089,6 +3089,14 @@
                     <textarea id="editCustomerSpecialInstructions" placeholder="Enter special instructions (shown prominently)..." style="min-height: 80px; border-color: #f59e0b;"></textarea>
                     <p style="font-size: 12px; color: #f59e0b; margin-top: 4px;">Important instructions displayed prominently to workers</p>
                 </div>
+                <div class="form-group" id="editCustomerOwnershipGroup" style="display: none;">
+                    <label style="font-weight: 600;">🏷️ Tank Ownership</label>
+                    <select id="editCustomerOwnership" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 16px;">
+                        <option value="rental">Rental (standard)</option>
+                        <option value="user_owned">User-owned</option>
+                    </select>
+                    <p style="font-size: 12px; color: #6b7280; margin-top: 4px;">User-owned tanks show a 🏷️ badge on invoicing lines and default skips to plain Skipped.</p>
+                </div>
                 <div class="form-group">
                     <label style="font-weight: 600;">📅 Service Schedule</label>
                     <select id="editCustomerSchedule" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 16px;">
@@ -5122,7 +5130,8 @@
                             special_instructions: customer.specialInstructions,
                             business_group: customer.businessGroup,
                             order: customer.order,
-                            service_months: customer.serviceMonths
+                            service_months: customer.serviceMonths,
+                            tank_ownership: customer.tankOwnership || 'rental'
                         });
                     if (error) throw error;
                     return true;
@@ -14313,6 +14322,18 @@
             document.getElementById('editCustomerCode').value = customer.code || '';
             document.getElementById('editCustomerNotes').value = customer.notes || '';
             document.getElementById('editCustomerSpecialInstructions').value = customer.specialInstructions || '';
+
+            // Tank ownership: steve-only, single-tank only (per-tank deferred for multi-tank)
+            const ownershipGroup = document.getElementById('editCustomerOwnershipGroup');
+            const ownershipSelect = document.getElementById('editCustomerOwnership');
+            const isSteve = currentUser && (currentUser.email || '').toLowerCase() === 'steve.oztank@gmail.com';
+            const isSingleTank = (customer.tankCount || 1) <= 1;
+            if (isSteve && isSingleTank) {
+                ownershipSelect.value = customer.tankOwnership === 'user_owned' ? 'user_owned' : 'rental';
+                ownershipGroup.style.display = 'block';
+            } else {
+                ownershipGroup.style.display = 'none';
+            }
             
             // Load service schedule
             const scheduleSelect = document.getElementById('editCustomerSchedule');
@@ -14396,6 +14417,14 @@
             customer.notes = notes;
             customer.specialInstructions = specialInstructions;
             customer.serviceMonths = serviceMonths;
+
+            // Tank ownership: only writable by steve on single-tank customers.
+            const ownershipGroup = document.getElementById('editCustomerOwnershipGroup');
+            const isSteveSave = currentUser && (currentUser.email || '').toLowerCase() === 'steve.oztank@gmail.com';
+            if (isSteveSave && ownershipGroup && ownershipGroup.style.display !== 'none') {
+                const ownVal = document.getElementById('editCustomerOwnership').value;
+                customer.tankOwnership = ownVal === 'user_owned' ? 'user_owned' : 'rental';
+            }
             
             try {
                 await db.saveCustomer(customer);
