@@ -7527,7 +7527,7 @@
                                 style="width:16px;height:16px;cursor:pointer;${!inv.invoiced ? 'opacity:0.4;' : ''}">
                         </td>
                         <td style="padding: 12px;">
-                            <div style="font-weight: 600; color: #111827;">${inv.event_title}</div>
+                            <div style="font-weight: 600; color: #111827;">${inv.event_title}${invoiceEntryCustomerBadges(inv)}</div>
                             ${invoicedAtStr}
                         </td>
                         <td style="padding: 12px;">
@@ -12040,6 +12040,35 @@
                 : db.customers.find(x => x.id === customerOrId);
             if (!c || c.tankOwnership !== 'user_owned') return '';
             return `<span style="background:#ede9fe;color:#5b21b6;border:1px solid #c4b5fd;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:600;margin-left:6px;white-space:nowrap;" title="Customer-owned tank (not a rental)">🏷️ User-owned</span>`;
+        }
+
+        // Resolve the linked customer for a monthly invoice entry and render the
+        // same badge set used on admin runsheet/calendar rows:
+        //   📋 billing flag (Blanket / DEL ONLY / etc.)  → from invoiceType/waste
+        //   🧾 bills-under (child + parent)
+        //   🏷️ user-owned tank
+        // Invoice entries carry an `event_title` (e.g. "10th; Chippa Evans Head")
+        // and optionally an `event_id`, so we resolve via the same per-instance
+        // then title-rule link mechanism the calendar view uses. Returns '' when
+        // the entry isn't linked to a customer yet.
+        function invoiceEntryCustomerBadges(inv) {
+            if (!inv) return '';
+            const linkedCustId = db.getCalendarEventLink(inv.event_id, inv.event_title);
+            if (linkedCustId == null) return '';
+            const cust = db.customers.find(c => c.id === linkedCustId);
+            if (!cust) return '';
+
+            const billingValue = (cust.invoiceType && isBillingWaste(cust.invoiceType))
+                ? cust.invoiceType
+                : (isBillingWaste(cust.waste) ? cust.waste : null);
+            const billingBadge = billingValue
+                ? `<span style="background:#fff7ed;color:#c2410c;border:1px solid #fdba74;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:600;margin-left:6px;">📋 ${billingValue}</span>`
+                : '';
+
+            return billingBadge
+                + billsUnderChildBadge(cust)
+                + billsUnderParentBadge(cust)
+                + userOwnedBadge(cust);
         }
 
         function loadAdminRunsheet() {
