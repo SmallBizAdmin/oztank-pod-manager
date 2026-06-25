@@ -5033,16 +5033,34 @@
                 }
             },
 
+            // Resolve a title→customer rule by LONGEST-PREFIX match, so freight
+            // or other notes appended to the END of an event title don't break
+            // the link (e.g. "Inv - Phoenix Hotel ALH +frght 20 2 months sent").
+            // The match must end on a word boundary so "abc" can't hit "abcd".
+            resolveTitleLinkCustomer(eventTitle) {
+                if (eventTitle == null || !this.calendarTitleLinks) return null;
+                const norm = this.normalizeEventTitle(eventTitle);
+                if (!norm) return null;
+                // exact hit first (fast path)
+                if (this.calendarTitleLinks[norm] != null) return this.calendarTitleLinks[norm];
+                // otherwise the longest stored key that is a prefix of this title
+                let bestKey = null;
+                for (const key in this.calendarTitleLinks) {
+                    if (!norm.startsWith(key)) continue;
+                    const next = norm.charAt(key.length);            // '' = exact end
+                    if (next !== '' && /[a-z0-9]/.test(next)) continue; // require a boundary
+                    if (bestKey === null || key.length > bestKey.length) bestKey = key;
+                }
+                return bestKey != null ? this.calendarTitleLinks[bestKey] : null;
+            },
+
             // Resolve the customer id for an event. A specific per-instance link
             // (calendarEventLinks, keyed by event_id) OVERRIDES the title rule.
             getCalendarEventLink(eventId, eventTitle) {
                 const inst = this.calendarEventLinks ? this.calendarEventLinks[eventId] : undefined;
                 if (inst != null) return inst;
-                if (eventTitle != null && this.calendarTitleLinks) {
-                    const key = this.normalizeEventTitle(eventTitle);
-                    if (this.calendarTitleLinks[key] != null) return this.calendarTitleLinks[key];
-                }
-                return null;
+                const c = this.resolveTitleLinkCustomer(eventTitle);
+                return c != null ? c : null;
             },
 
             // True when the resolved link came from the title rule (not a
@@ -5050,10 +5068,7 @@
             isCalendarEventLinkFromTitle(eventId, eventTitle) {
                 const inst = this.calendarEventLinks ? this.calendarEventLinks[eventId] : undefined;
                 if (inst != null) return false;
-                if (eventTitle != null && this.calendarTitleLinks) {
-                    return this.calendarTitleLinks[this.normalizeEventTitle(eventTitle)] != null;
-                }
-                return false;
+                return this.resolveTitleLinkCustomer(eventTitle) != null;
             },
 
             // Save a recurring title→customer rule. So a future event with the
