@@ -8885,6 +8885,31 @@
                     console.warn('Search PODs: cancelled calendar events load failed:', ceErr);
                 }
 
+                // Run-day skips for this customer (customer_monthly_skips). The
+                // customer was skipped for a reason (renos etc.) so there is no POD.
+                // Whether it was still invoiced lives in skipped_invoice_status.
+                let skips = [];
+                try {
+                    const { data: skipData, error: skipError } = await supabase
+                        .from('customer_monthly_skips')
+                        .select('skip_date, reason, skipped_by, is_rental_only')
+                        .eq('customer_id', customerId)
+                        .order('skip_date', { ascending: false });
+                    if (skipError) throw skipError;
+                    skips = skipData || [];
+                    if (skips.length) {
+                        const { data: sisRows } = await supabase
+                            .from('skipped_invoice_status')
+                            .select('service_date, invoiced, checked_sent')
+                            .eq('customer_id', customerId);
+                        const sisByDate = {};
+                        (sisRows || []).forEach(r => { sisByDate[r.service_date] = r; });
+                        skips.forEach(s => { s._inv = sisByDate[s.skip_date] || null; });
+                    }
+                } catch (skipErr) {
+                    console.warn('Search PODs: skips load failed:', skipErr);
+                }
+
                 // Stats
                 const totalPods = pods.length;
                 const servicesCompleted = pods.filter(p => p.tank_serviced === 'yes' || (p.is_quick_complete && p.tank_serviced !== 'no')).length;
@@ -8911,10 +8936,14 @@
                         <div class="customer-stat-value">${totalProducts}</div>
                         <div class="customer-stat-label">Products</div>
                     </div>
+                    <div class="customer-stat-card">
+                        <div class="customer-stat-value">${skips.length}</div>
+                        <div class="customer-stat-label">Skipped</div>
+                    </div>
                 `;
                 
                 // Build table similar to admin runsheet
-                if (pods.length === 0 && tankMovements.length === 0 && cancelledEvents.length === 0) {
+                if (pods.length === 0 && tankMovements.length === 0 && cancelledEvents.length === 0 && skips.length === 0) {
                     document.getElementById('searchPodsTable').innerHTML = '<div class="card" style="text-align: center; color: #6b7280; padding: 20px;">No service history found</div>';
                     return;
                 }
@@ -8924,6 +8953,7 @@
                 pods.forEach(p => historyRows.push({ kind: 'pod', date: p.date, sortTime: new Date(p.date).getTime() || 0, pod: p }));
                 tankMovements.forEach(tm => historyRows.push({ kind: 'tm', date: tm.date, sortTime: new Date(tm.date).getTime() || 0, tm }));
                 cancelledEvents.forEach(ev => historyRows.push({ kind: 'cancelled', date: ev.date, sortTime: new Date(ev.date).getTime() || 0, ev }));
+                skips.forEach(s => historyRows.push({ kind: 'skip', date: s.skip_date, sortTime: new Date(s.skip_date).getTime() || 0, skip: s }));
                 historyRows.sort((a, b) => b.sortTime - a.sortTime);
 
                 let tableHtml = '<div class="card" style="overflow-x: auto;"><table style="width: 100%; border-collapse: collapse; font-size: 13px;">';
@@ -8982,6 +9012,30 @@
                             <td style="padding: 10px 8px;"><span style="background: #fee2e2; color: #991b1b; padding: 2px 8px; border-radius: 12px; font-size: 11px;">✗ Cancelled</span></td>
                             <td style="padding: 10px 8px; font-size: 12px;">-</td>
                             <td style="padding: 10px 8px; font-size: 12px;">${by}</td>
+                        </tr>`;
+                        return;
+                    }
+
+                    // ── Skipped run-day row (no POD; customer skipped for a reason) ──
+                    if (row.kind === 'skip') {
+                        const s = row.skip;
+                        const inv = s._inv;
+                        let invBadge = '';
+                        if (inv && inv.invoiced) invBadge = '<span style="background:#dcfce7;color:#166534;padding:2px 8px;border-radius:12px;font-size:11px;">Invoiced</span>';
+                        else if (inv) invBadge = '<span style="background:#fef9c3;color:#854d0e;padding:2px 8px;border-radius:12px;font-size:11px;">Not invoiced</span>';
+                        const skipNotes = [];
+                        if (s.reason) skipNotes.push(`<strong>Reason:</strong> ${s.reason}`);
+                        if (s.is_rental_only) skipNotes.push('<strong>Rental only</strong>');
+                        if (s.skipped_by) skipNotes.push(`<strong>Skipped by:</strong> ${s.skipped_by}`);
+                        tableHtml += `<tr style="background: ${bgColor}; border-bottom: 1px solid #e5e7eb;"
+                                          onmouseover="this.style.background='#fffbeb'" onmouseout="this.style.background='${bgColor}'">
+                            <td style="padding: 10px 8px; white-space: nowrap;">${formattedDate}</td>
+                            <td style="padding: 10px 8px;">-</td>
+                            <td style="padding: 10px 8px;">⏭️ Skipped</td>
+                            <td style="padding: 10px 8px;"><span style="color: #dc2626;">✗ No</span></td>
+                            <td style="padding: 10px 8px;"><span style="background: #ffedd5; color: #9a3412; padding: 2px 8px; border-radius: 12px; font-size: 11px;">Skipped</span> ${invBadge}</td>
+                            <td style="padding: 10px 8px; font-size: 12px;">-</td>
+                            <td style="padding: 10px 8px; font-size: 12px;">${skipNotes.join('<br>') || '-'}</td>
                         </tr>`;
                         return;
                     }
