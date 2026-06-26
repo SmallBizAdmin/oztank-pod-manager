@@ -1548,7 +1548,7 @@
             color: #991b1b;
             border-left-color: #ef4444;
         }
-        .calendar-service-day.employee-stephen {
+        .calendar-service-day.employee-david {
             /* Tangerine - Orange */
             background: #ffedd5;
             color: #9a3412;
@@ -1704,7 +1704,7 @@
         .legend-dot.employee-matt { background: #d1e7dd; border-color: #51a36e; }
         .legend-dot.employee-michael { background: #fce7f3; border-color: #ec4899; }
         .legend-dot.employee-red { background: #fee2e2; border-color: #ef4444; }
-        .legend-dot.employee-stephen { background: #ffedd5; border-color: #f97316; }
+        .legend-dot.employee-david { background: #ffedd5; border-color: #f97316; }
 
         /* Period Toggle (Week/Month) */
         .period-toggle {
@@ -2880,7 +2880,7 @@
                         <div class="legend-item"><span class="legend-dot employee-matt"></span> Matt</div>
                         <div class="legend-item"><span class="legend-dot employee-michael"></span> Michael</div>
                         <div class="legend-item"><span class="legend-dot employee-red"></span> Red</div>
-                        <div class="legend-item"><span class="legend-dot employee-stephen"></span> Stephen</div>
+                        <div class="legend-item"><span class="legend-dot employee-david"></span> David</div>
                     </div>
                 </div>
             </div>
@@ -3278,7 +3278,7 @@
             'michael.oztank85@gmail.com',
             'officegroup.oztank@gmail.com',
             'red.oztank@gmail.com',
-            'stephenp.oztank@gmail.com',
+            'david.oztank@gmail.com',
             'steve.oztank@gmail.com',
             'deanna.oztank@gmail.com'
         ];
@@ -9833,7 +9833,7 @@
                 const dateStr = formatDateLocal(date);
                 const isToday = dateStr === todayStr;
                 const isPast = dateStr < todayStr;
-                const workerOrder = ['Matt', 'Drew', 'Michael', 'Allan', 'Stephen', 'Red'];
+                const workerOrder = ['Matt', 'Drew', 'Michael', 'Allan', 'David', 'Red'];
                 const events = (byDate[dateStr] || []).slice().sort((a, b) => {
                     const ai = workerOrder.indexOf(a.calendar_owner);
                     const bi = workerOrder.indexOf(b.calendar_owner);
@@ -10028,7 +10028,7 @@
             }
             
             // Fixed worker order
-            const workerOrder = ['Matt', 'Drew', 'Michael', 'Allan', 'Stephen', 'Red'];
+            const workerOrder = ['Matt', 'Drew', 'Michael', 'Allan', 'David', 'Red'];
             
             // When viewing all workers: group by DATE first, then worker within each date
             // When a specific worker is selected: group by date only (no worker headers needed)
@@ -10243,7 +10243,7 @@
                 'matt': '#d1e7dd',     // Sage - Muted green
                 'michael': '#fce7f3',  // Pink
                 'red': '#fee2e2',      // Tomato - Red
-                'stephen': '#ffedd5'   // Tangerine - Orange
+                'david': '#ffedd5'   // Tangerine - Orange
             };
             return (worker && colors[worker.toLowerCase()]) || '#f3f4f6';
         }
@@ -10314,7 +10314,7 @@
             }
         }
         
-        const WORKER_ORDER = ['Matt', 'Drew', 'Michael', 'Allan', 'Stephen', 'Red'];
+        const WORKER_ORDER = ['Matt', 'Drew', 'Michael', 'Allan', 'David', 'Red'];
         function workerRank(owner) {
             if (!owner) return 999;
             const o = owner.toLowerCase();
@@ -10330,7 +10330,7 @@
                 'matt': '#51a36e',     // Sage - Muted green
                 'michael': '#ec4899',  // Pink
                 'red': '#ef4444',      // Tomato - Red
-                'stephen': '#f97316'   // Tangerine - Orange
+                'david': '#f97316'   // Tangerine - Orange
             };
             return (worker && colors[worker.toLowerCase()]) || '#6b7280';
         }
