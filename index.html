@@ -3603,13 +3603,25 @@
             }
         }
         
-        // Add item to offline queue
+        // Add item to offline queue.
+        // Returns true if the item was safely persisted, false if it could NOT be
+        // stored (e.g. localStorage quota exceeded by photo-heavy PODs). Never throws,
+        // so callers can react instead of crashing the save flow mid-write.
         function addToOfflineQueue(item) {
             const queue = getOfflineQueue();
             queue.push({ ...item, queuedAt: new Date().toISOString() });
-            localStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
+            try {
+                localStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
+            } catch (e) {
+                // Most likely QuotaExceededError. The work is NOT saved and NOT queued —
+                // the worker must know so they don't navigate away and lose it.
+                console.error('❌ Could not queue offline item (storage full?):', e);
+                showToast('⚠️ Storage full — this entry was NOT saved. Please free space or tell the office before leaving this screen.', 'error');
+                return false;
+            }
             updateOfflineUI();
             console.log('📥 Added to offline queue:', item.type);
+            return true;
         }
         
         // Remove item from queue by index
@@ -3667,6 +3679,17 @@
                     } else if (item.type === 'deletePod') {
                         await syncQueuedDeletePod(item.data);
                         processed++;
+                    } else if (item.type === 'calEventUpsert') {
+                        await syncQueuedCalEventUpsert(item.data);
+                        processed++;
+                    } else if (item.type === 'calEventUpdate') {
+                        await syncQueuedCalEventUpdate(item.data);
+                        processed++;
+                    } else {
+                        // Unknown type: never drop it silently. Throw so it follows the
+                        // normal retry path and, if it keeps failing, surfaces in the
+                        // failed-sync banner instead of vanishing.
+                        throw new Error('Unknown offline queue item type: ' + item.type);
                     }
                     removeFromQueue(0); // Always remove first item since we process in order
                 } catch (e) {
@@ -3742,6 +3765,23 @@
             if (error) throw error;
         }
         
+        // Sync a queued calendar_event_status upsert (status set, notes, photos, link set)
+        async function syncQueuedCalEventUpsert(payload) {
+            const { error } = await supabase
+                .from('calendar_event_status')
+                .upsert(payload, { onConflict: 'event_id' });
+            if (error) throw error;
+        }
+
+        // Sync a queued calendar_event_status update (clearing status/link on an existing row)
+        async function syncQueuedCalEventUpdate({ eventId, patch }) {
+            const { error } = await supabase
+                .from('calendar_event_status')
+                .update(patch)
+                .eq('event_id', eventId);
+            if (error) throw error;
+        }
+
         // Sync a queued POD delete
         async function syncQueuedDeletePod(deleteData) {
             const { error } = await supabase
@@ -4931,25 +4971,37 @@
             
             async saveCalendarEventStatus(eventId, status) {
                 // status: 'completed', 'cancelled', or null to clear
-                try {
-                    const actionedBy = currentUser ? (currentUser.name || currentUser.email) : 'Unknown';
-                    const actionedAt = new Date().toISOString();
-                    if (status) {
-                        this.calendarEventStatus[eventId] = { status, actioned_by: actionedBy, actioned_at: actionedAt };
+                const actionedBy = currentUser ? (currentUser.name || currentUser.email) : 'Unknown';
+                const actionedAt = new Date().toISOString();
+                if (status) {
+                    this.calendarEventStatus[eventId] = { status, actioned_by: actionedBy, actioned_at: actionedAt };
+                    const payload = { event_id: eventId, status, updated_at: actionedAt, actioned_by: actionedBy, actioned_at: actionedAt };
+                    // Offline: queue instead of silently dropping the completion.
+                    if (!isOnline) { addToOfflineQueue({ type: 'calEventUpsert', data: payload }); return; }
+                    try {
                         const { error } = await supabase
                             .from('calendar_event_status')
-                            .upsert({ event_id: eventId, status, updated_at: new Date().toISOString(), actioned_by: actionedBy, actioned_at: actionedAt }, { onConflict: 'event_id' });
+                            .upsert(payload, { onConflict: 'event_id' });
                         if (error) throw error;
-                    } else {
-                        delete this.calendarEventStatus[eventId];
+                    } catch (e) {
+                        // Dropped connection mid-write — queue so it syncs later.
+                        console.warn('saveCalendarEventStatus error, queueing:', e);
+                        addToOfflineQueue({ type: 'calEventUpsert', data: payload });
+                    }
+                } else {
+                    delete this.calendarEventStatus[eventId];
+                    const patch = { status: null, updated_at: new Date().toISOString(), actioned_by: null, actioned_at: null };
+                    if (!isOnline) { addToOfflineQueue({ type: 'calEventUpdate', data: { eventId, patch } }); return; }
+                    try {
                         const { error } = await supabase
                             .from('calendar_event_status')
-                            .update({ status: null, updated_at: new Date().toISOString(), actioned_by: null, actioned_at: null })
+                            .update(patch)
                             .eq('event_id', eventId);
                         if (error) throw error;
+                    } catch (e) {
+                        console.warn('saveCalendarEventStatus clear error, queueing:', e);
+                        addToOfflineQueue({ type: 'calEventUpdate', data: { eventId, patch } });
                     }
-                } catch (e) {
-                    console.warn('saveCalendarEventStatus error:', e);
                 }
             },
             
@@ -4971,18 +5023,21 @@
             },
             
             async saveCalendarEventNotes(eventId, notes) {
+                if (notes) {
+                    this.calendarEventNotes[eventId] = notes;
+                } else {
+                    delete this.calendarEventNotes[eventId];
+                }
+                const payload = { event_id: eventId, notes: notes || null, updated_at: new Date().toISOString() };
+                if (!isOnline) { addToOfflineQueue({ type: 'calEventUpsert', data: payload }); return; }
                 try {
-                    if (notes) {
-                        this.calendarEventNotes[eventId] = notes;
-                    } else {
-                        delete this.calendarEventNotes[eventId];
-                    }
                     const { error } = await supabase
                         .from('calendar_event_status')
-                        .upsert({ event_id: eventId, notes: notes || null, updated_at: new Date().toISOString() }, { onConflict: 'event_id' });
+                        .upsert(payload, { onConflict: 'event_id' });
                     if (error) throw error;
                 } catch (e) {
-                    console.warn('saveCalendarEventNotes error:', e);
+                    console.warn('saveCalendarEventNotes error, queueing:', e);
+                    addToOfflineQueue({ type: 'calEventUpsert', data: payload });
                 }
             },
 
@@ -4991,19 +5046,22 @@
             },
 
             async saveCalendarEventPhotos(eventId, photos) {
+                const arr = Array.isArray(photos) ? photos.filter(Boolean) : [];
+                if (arr.length) {
+                    this.calendarEventPhotos[eventId] = arr;
+                } else {
+                    delete this.calendarEventPhotos[eventId];
+                }
+                const payload = { event_id: eventId, photos: arr.length ? arr : null, updated_at: new Date().toISOString() };
+                if (!isOnline) { addToOfflineQueue({ type: 'calEventUpsert', data: payload }); return; }
                 try {
-                    const arr = Array.isArray(photos) ? photos.filter(Boolean) : [];
-                    if (arr.length) {
-                        this.calendarEventPhotos[eventId] = arr;
-                    } else {
-                        delete this.calendarEventPhotos[eventId];
-                    }
                     const { error } = await supabase
                         .from('calendar_event_status')
-                        .upsert({ event_id: eventId, photos: arr.length ? arr : null, updated_at: new Date().toISOString() }, { onConflict: 'event_id' });
+                        .upsert(payload, { onConflict: 'event_id' });
                     if (error) throw error;
                 } catch (e) {
-                    console.warn('saveCalendarEventPhotos error:', e);
+                    console.warn('saveCalendarEventPhotos error, queueing:', e);
+                    addToOfflineQueue({ type: 'calEventUpsert', data: payload });
                 }
             },
 
@@ -5102,27 +5160,36 @@
 
             // Per-instance override link (keyed by event_id). Overrides any title rule.
             async saveCalendarEventLink(eventId, customerId) {
-                try {
-                    if (!this.calendarEventLinks) this.calendarEventLinks = {};
-                    const linkedBy = currentUser ? (currentUser.name || currentUser.email) : 'Unknown';
-                    const linkedAt = new Date().toISOString();
-                    if (customerId != null) {
-                        this.calendarEventLinks[eventId] = customerId;
+                if (!this.calendarEventLinks) this.calendarEventLinks = {};
+                const linkedBy = currentUser ? (currentUser.name || currentUser.email) : 'Unknown';
+                const linkedAt = new Date().toISOString();
+                if (customerId != null) {
+                    this.calendarEventLinks[eventId] = customerId;
+                    const payload = { event_id: eventId, linked_customer_id: customerId, linked_by: linkedBy, linked_at: linkedAt, updated_at: linkedAt };
+                    if (!isOnline) { addToOfflineQueue({ type: 'calEventUpsert', data: payload }); return; }
+                    try {
                         const { error } = await supabase
                             .from('calendar_event_status')
-                            .upsert({ event_id: eventId, linked_customer_id: customerId, linked_by: linkedBy, linked_at: linkedAt, updated_at: linkedAt }, { onConflict: 'event_id' });
+                            .upsert(payload, { onConflict: 'event_id' });
                         if (error) throw error;
-                    } else {
-                        delete this.calendarEventLinks[eventId];
+                    } catch (e) {
+                        console.warn('saveCalendarEventLink error, queueing:', e);
+                        addToOfflineQueue({ type: 'calEventUpsert', data: payload });
+                    }
+                } else {
+                    delete this.calendarEventLinks[eventId];
+                    const patch = { linked_customer_id: null, linked_by: null, linked_at: null, updated_at: new Date().toISOString() };
+                    if (!isOnline) { addToOfflineQueue({ type: 'calEventUpdate', data: { eventId, patch } }); return; }
+                    try {
                         const { error } = await supabase
                             .from('calendar_event_status')
-                            .update({ linked_customer_id: null, linked_by: null, linked_at: null, updated_at: new Date().toISOString() })
+                            .update(patch)
                             .eq('event_id', eventId);
                         if (error) throw error;
+                    } catch (e) {
+                        console.warn('saveCalendarEventLink clear error, queueing:', e);
+                        addToOfflineQueue({ type: 'calEventUpdate', data: { eventId, patch } });
                     }
-                } catch (e) {
-                    console.warn('saveCalendarEventLink error:', e);
-                    showToast('Could not save customer link', 'error');
                 }
             },
             
@@ -5352,8 +5419,17 @@
                         }
                     }
                     
-                    // If save genuinely failed (or we couldn't verify), queue for later
+                    // If save genuinely failed (or we couldn't verify), queue for later.
+                    // Keep db.pods in sync here too so the caller never needs to push
+                    // (which previously caused duplicate local entries).
                     addToOfflineQueue({ type: 'pod', data: podData });
+                    const queuedIndex = this.pods.findIndex(p => p.id === pod.id);
+                    if (queuedIndex >= 0) {
+                        this.pods[queuedIndex] = pod;
+                    } else {
+                        this.pods.push(pod);
+                    }
+                    this._syncProgressPod(pod);
                     showToast('⚠️ POD queued for sync (connection issue)', 'error');
                     return true; // Return true since it's queued
                 }
@@ -10403,7 +10479,9 @@
                 
                 const success = await db.savePOD(pod);
                 if (success) {
-                    db.pods.push(pod);
+                    // Note: db.savePOD already adds the POD to db.pods (online, offline,
+                    // and queued-on-failure paths), so we must NOT push again here —
+                    // doing so produced duplicate entries in the runsheet.
                     showToast('Service marked complete!', 'success');
                     renderCustomerList();
                     renderRunDays();
