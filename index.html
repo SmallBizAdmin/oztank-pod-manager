@@ -2611,6 +2611,13 @@
                             <label>Notes</label>
                             <textarea id="newCustomerNotes" placeholder="Special instructions..."></textarea>
                         </div>
+                        <div class="form-group">
+                            <label>Business Group</label>
+                            <select id="newCustomerBusinessGroup">
+                                <option value="">None</option>
+                                <option value="ALH Group">ALH Group</option>
+                            </select>
+                        </div>
                         <button type="submit" class="btn">Add Customer</button>
                     </form>
                 </div>
@@ -3088,6 +3095,14 @@
                     <label style="font-weight: 600;">⚠️ Special Instructions</label>
                     <textarea id="editCustomerSpecialInstructions" placeholder="Enter special instructions (shown prominently)..." style="min-height: 80px; border-color: #f59e0b;"></textarea>
                     <p style="font-size: 12px; color: #f59e0b; margin-top: 4px;">Important instructions displayed prominently to workers</p>
+                </div>
+                <div class="form-group">
+                    <label style="font-weight: 600;">🏢 Business Group</label>
+                    <select id="editCustomerBusinessGroup" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 16px;">
+                        <option value="">None</option>
+                        <option value="ALH Group">ALH Group</option>
+                    </select>
+                    <p style="font-size: 12px; color: #6b7280; margin-top: 4px;">ALH Group customers show a 🏢 ALH badge on runsheets and admin lists.</p>
                 </div>
                 <div class="form-group" id="editCustomerOwnershipGroup" style="display: none;">
                     <label style="font-weight: 600;">🏷️ Tank Ownership</label>
@@ -10970,7 +10985,7 @@
                 
                 // Build customer info HTML
                 let customerInfoHtml = `
-                    <div class="customer-name">${customer.name}${skipDisplay}${scheduleBadgeHtml}${userOwnedBadge(customer)}</div>
+                    <div class="customer-name">${customer.name}${skipDisplay}${scheduleBadgeHtml}${userOwnedBadge(customer)}${alhBadge(customer)}</div>
                     ${customer.address ? `<div class="customer-address">${formatAddressLink(customer.address)}</div>` : ''}
                     ${customer.phone ? `<div class="customer-phone">📞 ${formatPhoneLink(customer.phone)}</div>` : ''}
                 `;
@@ -11700,6 +11715,7 @@
                 waste: document.getElementById('newCustomerWaste').value,
                 code: document.getElementById('newCustomerCode').value,
                 notes: document.getElementById('newCustomerNotes').value,
+                businessGroup: document.getElementById('newCustomerBusinessGroup').value,
                 order: db.customers.filter(c => c.runDay === serviceDay).length
             };
             
@@ -12189,6 +12205,16 @@
             return `<span style="background:#ede9fe;color:#5b21b6;border:1px solid #c4b5fd;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:600;margin-left:6px;white-space:nowrap;" title="Customer-owned tank (not a rental)">🏷️ User-owned</span>`;
         }
 
+        // Business-group badge. Currently flags ALH Group customers; other/blank
+        // groups show nothing. Accepts a customer object or a customerId.
+        function alhBadge(customerOrId) {
+            const c = (customerOrId && typeof customerOrId === 'object')
+                ? customerOrId
+                : db.customers.find(x => x.id === customerOrId);
+            if (!c || c.businessGroup !== 'ALH Group') return '';
+            return `<span style="background:#1e3a5f;color:#ffffff;border:1px solid #1e3a5f;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:600;margin-left:6px;white-space:nowrap;" title="ALH Group customer">🏢 ALH</span>`;
+        }
+
         // Resolve the linked customer for a monthly invoice entry and render the
         // same badge set used on admin runsheet/calendar rows:
         //   📋 billing flag (Blanket / DEL ONLY / etc.)  → from invoiceType/waste
@@ -12215,7 +12241,8 @@
             return billingBadge
                 + billsUnderChildBadge(cust)
                 + billsUnderParentBadge(cust)
-                + userOwnedBadge(cust);
+                + userOwnedBadge(cust)
+                + alhBadge(cust);
         }
 
         function loadAdminRunsheet() {
@@ -12378,8 +12405,8 @@
                     : '';
                 const billsUnderBadges = billsUnderChildBadge(customer) + billsUnderParentBadge(customer);
                 const customerNameDisplay = isSkipped 
-                    ? `<span style="text-decoration: line-through; color: #9ca3af;">${customer.name}</span> <span style="background: #fee2e2; color: #991b1b; padding: 2px 6px; border-radius: 8px; font-size: 10px;">${skipReason || 'Skipped'}</span>${billingBadge}${billsUnderBadges}${userOwnedBadge(customer)}`
-                    : customer.name + scheduleBadgeHtml + billingBadge + billsUnderBadges + userOwnedBadge(customer) + combinablePodBadge(findCounterpartPods(customer.id, selectedDate, true), 'Ad-hoc');
+                    ? `<span style="text-decoration: line-through; color: #9ca3af;">${customer.name}</span> <span style="background: #fee2e2; color: #991b1b; padding: 2px 6px; border-radius: 8px; font-size: 10px;">${skipReason || 'Skipped'}</span>${billingBadge}${billsUnderBadges}${userOwnedBadge(customer)}${alhBadge(customer)}`
+                    : customer.name + scheduleBadgeHtml + billingBadge + billsUnderBadges + userOwnedBadge(customer) + alhBadge(customer) + combinablePodBadge(findCounterpartPods(customer.id, selectedDate, true), 'Ad-hoc');
                 
                 // Status column
                 let statusDisplay;
@@ -12667,7 +12694,7 @@
                                onchange="toggleCheckedSent(${pod.id}, null, null)" title="Checked & Sent">`}
                         </td>
                         <td style="padding: 12px;">
-                            ${customerName}${unlinkedWarningIcon(pod)}${podBillingBadge}${customer ? billsUnderChildBadge(customer) + billsUnderParentBadge(customer) : ''}${podOrderNumberBadge}${customer ? userOwnedBadge(customer) : ''}
+                            ${customerName}${unlinkedWarningIcon(pod)}${podBillingBadge}${customer ? billsUnderChildBadge(customer) + billsUnderParentBadge(customer) : ''}${podOrderNumberBadge}${customer ? userOwnedBadge(customer) : ''}${customer ? alhBadge(customer) : ''}
                             <span style="background:#f59e0b;color:white;padding:2px 6px;border-radius:8px;font-size:10px;margin-left:8px;">Ad-Hoc</span>
                             ${calBadge}
                             ${podWorkerBadge}
@@ -12733,7 +12760,7 @@
                                 style="width:16px;height:16px;cursor:pointer;${!tmIsInvoiced ? 'opacity:0.4;' : ''}">`}
                         </td>
                         <td style="padding: 10px;">
-                            ${tm.customerName}${unlinkedWarningIcon(tm)}${tmBillingBadge}${tmCustomer ? billsUnderChildBadge(tmCustomer) + billsUnderParentBadge(tmCustomer) : ''}${tmOrderNumberBadge}${tmCustomer ? userOwnedBadge(tmCustomer) : ''}
+                            ${tm.customerName}${unlinkedWarningIcon(tm)}${tmBillingBadge}${tmCustomer ? billsUnderChildBadge(tmCustomer) + billsUnderParentBadge(tmCustomer) : ''}${tmOrderNumberBadge}${tmCustomer ? userOwnedBadge(tmCustomer) : ''}${tmCustomer ? alhBadge(tmCustomer) : ''}
                             <div style="margin-top:4px;">
                                 <span style="background:#3b82f6;color:white;padding:2px 6px;border-radius:8px;font-size:10px;">Ad-Hoc</span>
                                 ${tm.completedBy ? `<span style="display:inline-block;margin-left:4px;background:${getWorkerColor(tm.completedBy)};color:white;padding:1px 6px;border-radius:8px;font-size:10px;">👤 ${tm.completedBy}</span>` : ''}
@@ -12971,7 +12998,7 @@
                             style="width:16px;height:16px;cursor:pointer;${!tmIsInvoiced ? 'opacity:0.4;' : ''}">
                     </td>
                     <td style="padding: 10px;">
-                        ${tm.customerName}${unlinkedWarningIcon(tm)}${userOwnedBadge(tm.customerId)}
+                        ${tm.customerName}${unlinkedWarningIcon(tm)}${userOwnedBadge(tm.customerId)}${alhBadge(tm.customerId)}
                         ${adHocBadge ? `<div style="margin-top: 4px;">${adHocBadge}</div>` : ''}
                         ${invoiceNoteInlineHtml('tm', tm.id, tm.invoiceNotes || null)}
                     </td>
@@ -13884,7 +13911,7 @@
                     let errorCount = 0;
 
                     // Process rows (skip header if exists)
-                    // Expected columns: Name | Service Day | Address | Phone | Service Type | Carbsolve | Waste | Code | Notes
+                    // Expected columns: Name | Service Day | Address | Phone | Service Type | Carbsolve | Waste | Code | Notes | Business Group
                     for (let index = 0; index < jsonData.length; index++) {
                         const row = jsonData[index];
                         // Skip empty rows
@@ -13899,6 +13926,7 @@
                         const waste = row[6] ? String(row[6]).trim() : '';
                         const code = row[7] ? String(row[7]).trim() : '';
                         const notes = row[8] ? String(row[8]).trim() : '';
+                        const businessGroup = row[9] ? String(row[9]).trim() : '';
                         
                         // Check for existing customers with same name (handle multi-tank scenarios)
                         const existingWithSameName = db.customers.filter(c => 
@@ -13952,6 +13980,7 @@
                                 waste: waste,
                                 code: code,
                                 notes: notes,
+                                businessGroup: businessGroup,
                                 order: db.customers.length + importedCount
                             };
                             
@@ -13990,7 +14019,7 @@
                     statusDiv.innerHTML = `
                         <div class="import-status error">
                             ✗ Error processing file: ${error.message}
-                            <br>Expected columns: Name | Service Day | Address | Phone | Service Type | Carbsolve | Waste | Code | Notes
+                            <br>Expected columns: Name | Service Day | Address | Phone | Service Type | Carbsolve | Waste | Code | Notes | Business Group
                         </div>
                     `;
                 }
@@ -14499,6 +14528,18 @@
             document.getElementById('editCustomerNotes').value = customer.notes || '';
             document.getElementById('editCustomerSpecialInstructions').value = customer.specialInstructions || '';
 
+            // Business group: ensure the current value is selectable even if it
+            // isn't one of the preset options, so editing never clobbers it.
+            const bgSelect = document.getElementById('editCustomerBusinessGroup');
+            const bgVal = customer.businessGroup || '';
+            if (bgVal && !Array.from(bgSelect.options).some(o => o.value === bgVal)) {
+                const opt = document.createElement('option');
+                opt.value = bgVal;
+                opt.textContent = bgVal;
+                bgSelect.appendChild(opt);
+            }
+            bgSelect.value = bgVal;
+
             // Tank ownership: steve-only, single-tank only (per-tank deferred for multi-tank)
             const ownershipGroup = document.getElementById('editCustomerOwnershipGroup');
             const ownershipSelect = document.getElementById('editCustomerOwnership');
@@ -14593,6 +14634,7 @@
             customer.notes = notes;
             customer.specialInstructions = specialInstructions;
             customer.serviceMonths = serviceMonths;
+            customer.businessGroup = document.getElementById('editCustomerBusinessGroup').value;
 
             // Tank ownership: only writable by steve on single-tank customers.
             const ownershipGroup = document.getElementById('editCustomerOwnershipGroup');
