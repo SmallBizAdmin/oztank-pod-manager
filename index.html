@@ -10970,7 +10970,7 @@
                 
                 // Build customer info HTML
                 let customerInfoHtml = `
-                    <div class="customer-name">${customer.name}${skipDisplay}${scheduleBadgeHtml}</div>
+                    <div class="customer-name">${customer.name}${skipDisplay}${scheduleBadgeHtml}${userOwnedBadge(customer)}</div>
                     ${customer.address ? `<div class="customer-address">${formatAddressLink(customer.address)}</div>` : ''}
                     ${customer.phone ? `<div class="customer-phone">📞 ${formatPhoneLink(customer.phone)}</div>` : ''}
                 `;
