@@ -5809,6 +5809,19 @@
                     const yearMonth = skipDate.substring(0, 7); // 'YYYY-MM-DD' → 'YYYY-MM'
                     const skippedBy = currentUser ? (currentUser.name || currentUser.email) : null;
                     const skippedAt = new Date().toISOString();
+                    // Persist the Rental Only / Skipped classification to the DB so
+                    // downstream consumers (invoicing) can read it, instead of the
+                    // status only being computed client-side. Preserve an existing
+                    // manual override; otherwise use the same default as
+                    // resolveSkipIsRental (user-owned → skipped; rental tank +
+                    // "no service required" reason → Rental Only).
+                    const key = `${customerId}-${skipDate}`;
+                    const existingFlag = this.monthlySkips[key]?.isRentalOnly;
+                    const isRentalOnly = (existingFlag === true || existingFlag === false)
+                        ? existingFlag
+                        : (this.isCustomerUserOwned(customerId)
+                            ? false
+                            : !!(reason && reason.toLowerCase().includes('no service required')));
                     const { error } = await supabase
                         .from('customer_monthly_skips')
                         .upsert({
@@ -5816,6 +5829,7 @@
                             skip_date: skipDate,
                             year_month: yearMonth,
                             reason: reason,
+                            is_rental_only: isRentalOnly,
                             created_at: skippedAt,
                             skipped_by: skippedBy,
                             skipped_at: skippedAt
@@ -5823,12 +5837,12 @@
 
                     if (error) throw error;
 
-                    const key = `${customerId}-${skipDate}`;
                     this.monthlySkips[key] = {
                         reason: reason,
                         createdAt: skippedAt,
                         skippedBy: skippedBy,
-                        skippedAt: skippedAt
+                        skippedAt: skippedAt,
+                        isRentalOnly: isRentalOnly
                     };
 
                     return true;
