@@ -28,7 +28,7 @@ const CALENDARS = [
   { name: 'Matt', id: 'o4utbjuhpl3vn4nj0jl2urtf68@group.calendar.google.com' },
   { name: 'Michael', id: 'cq7t5e80e32o725kb58amgbh2k@group.calendar.google.com' },
   { name: 'Red', id: 'a00lotj6vc5n415gquspoet2tc@group.calendar.google.com' },
-  { name: 'David', id: 'f80ddd3bc98fc42e512c5c9384ae27772445d844a61943558753012c2ed91a61@group.calendar.google.com' }
+  { name: 'Dave', id: 'f80ddd3bc98fc42e512c5c9384ae27772445d844a61943558753012c2ed91a61@group.calendar.google.com' }
 ];
 
 // Invoices calendar

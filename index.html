@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oz Tank - Service POD Manager v11.19</title>
+    <title>Oz Tank - Service POD Manager v11.20</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -3347,12 +3347,28 @@
         
         let currentUser = null;
         
+        // Worker display names: Google profile names arrive as-is (e.g.
+        // "matt harris") — title-case them, and map known short-name aliases.
+        // Applied once at login/session-restore so every stored record and
+        // every screen uses the clean form.
+        function normalizeWorkerName(name) {
+            if (!name) return name;
+            const aliases = { 'david': 'Dave' };
+            const cleaned = name.trim().replace(/\s+/g, ' ');
+            const alias = aliases[cleaned.toLowerCase()];
+            if (alias) return alias;
+            return cleaned.split(' ')
+                .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+                .join(' ');
+        }
+
         // Check for existing session on load (unlimited duration)
         function checkExistingSession() {
             const savedUser = localStorage.getItem('oztank_user');
             if (savedUser) {
                 try {
                     currentUser = JSON.parse(savedUser);
+                    currentUser.name = normalizeWorkerName(currentUser.name);
                     // Session valid as long as it exists - no expiry
                     onAuthSuccess(currentUser);
                     return true;
@@ -3402,7 +3418,7 @@
                 
                 const user = {
                     email: payload.email,
-                    name: payload.name,
+                    name: normalizeWorkerName(payload.name),
                     picture: payload.picture,
                     token: response.credential
                 };
@@ -10713,7 +10729,8 @@
                 'matt': '#d1e7dd',     // Sage - Muted green
                 'michael': '#fce7f3',  // Pink
                 'red': '#fee2e2',      // Tomato - Red
-                'david': '#ffedd5'   // Tangerine - Orange
+                'david': '#ffedd5',  // Tangerine - Orange
+                'dave': '#ffedd5'    // Tangerine - Orange (renamed from David)
             };
             return (worker && colors[worker.toLowerCase()]) || '#f3f4f6';
         }
@@ -10800,7 +10817,8 @@
                 'matt': '#51a36e',     // Sage - Muted green
                 'michael': '#ec4899',  // Pink
                 'red': '#ef4444',      // Tomato - Red
-                'david': '#f97316'   // Tangerine - Orange
+                'david': '#f97316',  // Tangerine - Orange
+                'dave': '#f97316'    // Tangerine - Orange (renamed from David)
             };
             return (worker && colors[worker.toLowerCase()]) || '#6b7280';
         }
