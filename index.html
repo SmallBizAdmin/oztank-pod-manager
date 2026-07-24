@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oz Tank - Service POD Manager v11.11</title>
+    <title>Oz Tank - Service POD Manager v11.12</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -3104,6 +3104,14 @@
                     </select>
                     <p style="font-size: 12px; color: #6b7280; margin-top: 4px;">ALH Group customers show a 🏢 ALH badge on runsheets and admin lists.</p>
                 </div>
+                <div class="form-group">
+                    <label style="font-weight: 600;">✉️ Email Manually</label>
+                    <label style="display: flex; align-items: center; gap: 8px; font-size: 15px; cursor: pointer;">
+                        <input type="checkbox" id="editCustomerEmailManually" style="width: 18px; height: 18px;">
+                        Invoice must be emailed manually
+                    </label>
+                    <p style="font-size: 12px; color: #6b7280; margin-top: 4px;">Shows a ✉️ Email Manually badge on admin runsheet, calendar and invoicing lists.</p>
+                </div>
                 <div class="form-group" id="editCustomerOwnershipGroup" style="display: none;">
                     <label style="font-weight: 600;">🏷️ Tank Ownership</label>
                     <select id="editCustomerOwnership" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 16px;">
@@ -4394,9 +4402,10 @@
                         serviceMonths: c.service_months, // Array of months [1,3,5,7,9,11] for bi-monthly, null for monthly
                         tankCount: c.tank_count || 1,
                         tankLabels: c.tank_labels || null,
-                        tankOwnership: c.tank_ownership || 'rental'
+                        tankOwnership: c.tank_ownership || 'rental',
+                        emailManually: c.email_manually === true
                     }));
-                    
+
                     // Load service days
                     const { data: serviceDays, error: sdError } = await supabase
                         .from('service_days')
@@ -5228,7 +5237,8 @@
                             business_group: customer.businessGroup,
                             order: customer.order,
                             service_months: customer.serviceMonths,
-                            tank_ownership: customer.tankOwnership || 'rental'
+                            tank_ownership: customer.tankOwnership || 'rental',
+                            email_manually: customer.emailManually === true
                         });
                     if (error) throw error;
                     return true;
@@ -6511,7 +6521,8 @@
                             serviceMonths: c.service_months,
                             tankCount: c.tank_count || 1,
                             tankLabels: c.tank_labels || null,
-                            tankOwnership: c.tank_ownership || 'rental'
+                            tankOwnership: c.tank_ownership || 'rental',
+                            emailManually: c.email_manually === true
                         }));
                         // Re-render all views that depend on customer data
                         renderRunDays();
@@ -12229,6 +12240,16 @@
             return `<span style="background:#1e3a5f;color:#ffffff;border:1px solid #1e3a5f;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:600;margin-left:6px;white-space:nowrap;" title="ALH Group customer">🏢 ALH</span>`;
         }
 
+        // Email-manually badge. Flags customers whose invoice must be emailed
+        // manually. Shown on admin views only. Accepts a customer object or id.
+        function emailManuallyBadge(customerOrId) {
+            const c = (customerOrId && typeof customerOrId === 'object')
+                ? customerOrId
+                : db.customers.find(x => x.id === customerOrId);
+            if (!c || c.emailManually !== true) return '';
+            return `<span style="background:#fdf2f8;color:#9d174d;border:1px solid #f9a8d4;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:600;margin-left:6px;white-space:nowrap;" title="Invoice must be emailed manually">✉️ Email Manually</span>`;
+        }
+
         // Resolve the linked customer for a monthly invoice entry and render the
         // same badge set used on admin runsheet/calendar rows:
         //   📋 billing flag (Blanket / DEL ONLY / etc.)  → from invoiceType/waste
@@ -12256,7 +12277,8 @@
                 + billsUnderChildBadge(cust)
                 + billsUnderParentBadge(cust)
                 + userOwnedBadge(cust)
-                + alhBadge(cust);
+                + alhBadge(cust)
+                + emailManuallyBadge(cust);
         }
 
         function loadAdminRunsheet() {
@@ -12419,8 +12441,8 @@
                     : '';
                 const billsUnderBadges = billsUnderChildBadge(customer) + billsUnderParentBadge(customer);
                 const customerNameDisplay = isSkipped 
-                    ? `<span style="text-decoration: line-through; color: #9ca3af;">${customer.name}</span> <span style="background: #fee2e2; color: #991b1b; padding: 2px 6px; border-radius: 8px; font-size: 10px;">${skipReason || 'Skipped'}</span>${billingBadge}${billsUnderBadges}${userOwnedBadge(customer)}${alhBadge(customer)}`
-                    : customer.name + scheduleBadgeHtml + billingBadge + billsUnderBadges + userOwnedBadge(customer) + alhBadge(customer) + combinablePodBadge(findCounterpartPods(customer.id, selectedDate, true), 'Ad-hoc');
+                    ? `<span style="text-decoration: line-through; color: #9ca3af;">${customer.name}</span> <span style="background: #fee2e2; color: #991b1b; padding: 2px 6px; border-radius: 8px; font-size: 10px;">${skipReason || 'Skipped'}</span>${billingBadge}${billsUnderBadges}${userOwnedBadge(customer)}${alhBadge(customer)}${emailManuallyBadge(customer)}`
+                    : customer.name + scheduleBadgeHtml + billingBadge + billsUnderBadges + userOwnedBadge(customer) + alhBadge(customer) + emailManuallyBadge(customer) + combinablePodBadge(findCounterpartPods(customer.id, selectedDate, true), 'Ad-hoc');
                 
                 // Status column
                 let statusDisplay;
@@ -12708,7 +12730,7 @@
                                onchange="toggleCheckedSent(${pod.id}, null, null)" title="Checked & Sent">`}
                         </td>
                         <td style="padding: 12px;">
-                            ${customerName}${unlinkedWarningIcon(pod)}${podBillingBadge}${customer ? billsUnderChildBadge(customer) + billsUnderParentBadge(customer) : ''}${podOrderNumberBadge}${customer ? userOwnedBadge(customer) : ''}${customer ? alhBadge(customer) : ''}
+                            ${customerName}${unlinkedWarningIcon(pod)}${podBillingBadge}${customer ? billsUnderChildBadge(customer) + billsUnderParentBadge(customer) : ''}${podOrderNumberBadge}${customer ? userOwnedBadge(customer) : ''}${customer ? alhBadge(customer) : ''}${customer ? emailManuallyBadge(customer) : ''}
                             <span style="background:#f59e0b;color:white;padding:2px 6px;border-radius:8px;font-size:10px;margin-left:8px;">Ad-Hoc</span>
                             ${calBadge}
                             ${podWorkerBadge}
@@ -12774,7 +12796,7 @@
                                 style="width:16px;height:16px;cursor:pointer;${!tmIsInvoiced ? 'opacity:0.4;' : ''}">`}
                         </td>
                         <td style="padding: 10px;">
-                            ${tm.customerName}${unlinkedWarningIcon(tm)}${tmBillingBadge}${tmCustomer ? billsUnderChildBadge(tmCustomer) + billsUnderParentBadge(tmCustomer) : ''}${tmOrderNumberBadge}${tmCustomer ? userOwnedBadge(tmCustomer) : ''}${tmCustomer ? alhBadge(tmCustomer) : ''}
+                            ${tm.customerName}${unlinkedWarningIcon(tm)}${tmBillingBadge}${tmCustomer ? billsUnderChildBadge(tmCustomer) + billsUnderParentBadge(tmCustomer) : ''}${tmOrderNumberBadge}${tmCustomer ? userOwnedBadge(tmCustomer) : ''}${tmCustomer ? alhBadge(tmCustomer) : ''}${tmCustomer ? emailManuallyBadge(tmCustomer) : ''}
                             <div style="margin-top:4px;">
                                 <span style="background:#3b82f6;color:white;padding:2px 6px;border-radius:8px;font-size:10px;">Ad-Hoc</span>
                                 ${tm.completedBy ? `<span style="display:inline-block;margin-left:4px;background:${getWorkerColor(tm.completedBy)};color:white;padding:1px 6px;border-radius:8px;font-size:10px;">👤 ${tm.completedBy}</span>` : ''}
@@ -13012,7 +13034,7 @@
                             style="width:16px;height:16px;cursor:pointer;${!tmIsInvoiced ? 'opacity:0.4;' : ''}">
                     </td>
                     <td style="padding: 10px;">
-                        ${tm.customerName}${unlinkedWarningIcon(tm)}${userOwnedBadge(tm.customerId)}${alhBadge(tm.customerId)}
+                        ${tm.customerName}${unlinkedWarningIcon(tm)}${userOwnedBadge(tm.customerId)}${alhBadge(tm.customerId)}${emailManuallyBadge(tm.customerId)}
                         ${adHocBadge ? `<div style="margin-top: 4px;">${adHocBadge}</div>` : ''}
                         ${invoiceNoteInlineHtml('tm', tm.id, tm.invoiceNotes || null)}
                     </td>
@@ -14554,6 +14576,8 @@
             }
             bgSelect.value = bgVal;
 
+            document.getElementById('editCustomerEmailManually').checked = customer.emailManually === true;
+
             // Tank ownership: steve-only, single-tank only (per-tank deferred for multi-tank)
             const ownershipGroup = document.getElementById('editCustomerOwnershipGroup');
             const ownershipSelect = document.getElementById('editCustomerOwnership');
@@ -14649,6 +14673,7 @@
             customer.specialInstructions = specialInstructions;
             customer.serviceMonths = serviceMonths;
             customer.businessGroup = document.getElementById('editCustomerBusinessGroup').value;
+            customer.emailManually = document.getElementById('editCustomerEmailManually').checked;
 
             // Tank ownership: only writable by steve on single-tank customers.
             const ownershipGroup = document.getElementById('editCustomerOwnershipGroup');
