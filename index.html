@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oz Tank - Service POD Manager v11.13</title>
+    <title>Oz Tank - Service POD Manager v11.14</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -2401,6 +2401,7 @@
             </div>
         </div>
         <div class="container">
+            <div id="runDayStartTimeBar"></div>
             <div id="runsheetSummary"></div>
             <ul class="customer-list" id="customerList">
                 <!-- Customers will be inserted here -->
@@ -10719,22 +10720,11 @@
                 statusText += ` <span style="font-size: 11px; color: #9ca3af;">(${excludedLabel})</span>`;
             }
             
-            const startTimeLine = `
-                <div style="margin-top: 6px; font-size: 12px; color: #4b5563; display: flex; align-items: center; gap: 6px;">
-                    <span>🕕 Start time</span>
-                    <select onclick="event.stopPropagation()"
-                            onchange="event.stopPropagation(); updateServiceDayStartTime('${serviceDay.name.replace(/'/g, "\\'")}', this.value)"
-                            style="font-size: 12px; padding: 2px 4px; border: 1px solid #d1d5db; border-radius: 6px; background: white; color: #374151;">
-                        ${startTimeOptionsHtml(serviceDay.start_time || '06:00')}
-                    </select>
-                </div>`;
-
             card.innerHTML = `
                 <h3>${serviceDay.name}</h3>
                 ${employeeLine}
                 ${dateLine}
                 <p>${statusText}</p>
-                ${startTimeLine}
                 ${isFullyCompleted ? '<span class="completion-badge">✓ Complete</span>' : ''}
                 <div class="progress-bar" style="width: ${completionPercent}%"></div>
             `;
@@ -10975,6 +10965,26 @@
                 countText = `${activeCount} active (${excludedLabel})`;
             }
             document.getElementById('customerCount').textContent = countText;
+
+            // Shared start-time bar: any worker can set the recommended start
+            // for this run; hidden in historical month views.
+            const stBar = document.getElementById('runDayStartTimeBar');
+            if (stBar) {
+                const sd = db.serviceDays.find(s => s.name === currentRunDay);
+                if (sd && !isHistorical) {
+                    stBar.innerHTML = `
+                        <div style="background: white; border-radius: 8px; padding: 10px 14px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                            <span style="font-weight: 600; color: #374151; font-size: 14px;">🕕 Start time</span>
+                            <select onchange="updateServiceDayStartTime('${sd.name.replace(/'/g, "\\'")}', this.value)"
+                                    style="font-size: 14px; padding: 4px 8px; border: 1px solid #d1d5db; border-radius: 6px; background: white; color: #374151;">
+                                ${startTimeOptionsHtml(sd.start_time || '06:00')}
+                            </select>
+                            <span style="font-size: 12px; color: #9ca3af;">best time to start this run — visible to all workers</span>
+                        </div>`;
+                } else {
+                    stBar.innerHTML = '';
+                }
+            }
 
             // Render summary card
             renderRunsheetSummary(customers, isHistorical);
