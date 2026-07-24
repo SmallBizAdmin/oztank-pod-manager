@@ -43,6 +43,7 @@ Snapshot taken **2026-07-24** (after adding `customers.email_manually`).
 | invoice_under_id | bigint | YES | FK → customers.id (bills-under parent) |
 | tank_ownership | text | NO | 'rental' ('rental' or 'user_owned') |
 | email_manually | boolean | YES | false |
+| no_delivery_fee | boolean | YES | false |
 
 Note: `"order"` is a reserved word — always double-quote it in SQL.
 
