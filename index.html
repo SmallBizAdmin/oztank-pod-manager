@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oz Tank - Service POD Manager v11.18</title>
+    <title>Oz Tank - Service POD Manager v11.19</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -2848,6 +2848,8 @@
             </div>
         </div>
         <div class="container">
+            <!-- Sync issues reported from worker phones (populated when any are open) -->
+            <div id="adminSyncIssuesAlert" style="display: none;"></div>
             <!-- Sticky header wrapper — sticks to top in admin list view only via body.admin-list-active -->
             <div class="admin-list-sticky-header">
                 <!-- Month Selector for Admin -->
@@ -3635,6 +3637,7 @@
             const failed = getFailedSyncItems();
             failed.push({ ...item, failedAt: new Date().toISOString(), lastError: errorMsg || item.lastError || null });
             localStorage.setItem(FAILED_KEY, JSON.stringify(failed));
+            setTimeout(() => reportFailedSyncItems(), 0); // tell the office (best-effort)
         }
         function clearFailedSyncItems() {
             localStorage.removeItem(FAILED_KEY);
@@ -3756,6 +3759,7 @@
                 return;
             }
             localStorage.removeItem(FAILED_KEY);
+            markSyncIssuesByFingerprint(failed.map(syncIssueFingerprint), 'retried');
             const modal = document.getElementById('syncIssuesModal');
             if (modal) modal.remove();
             updateOfflineUI();
@@ -3767,10 +3771,181 @@
             const failed = getFailedSyncItems();
             if (!failed.length) return;
             if (!confirm(`Permanently discard ${failed.length} unsynced item${failed.length > 1 ? 's' : ''}? Only do this after the office has confirmed the work was entered another way.`)) return;
+            markSyncIssuesByFingerprint(failed.map(syncIssueFingerprint), 'cleared');
             clearFailedSyncItems();
             const modal = document.getElementById('syncIssuesModal');
             if (modal) modal.remove();
             showToast('Failed items cleared', 'success');
+        }
+
+        // ── Office-side sync issue reporting ────────────────────────
+        // Phones report their failed-sync items to the sync_issues table
+        // whenever they're online with a live session, so the office can
+        // see problems without needing the worker's phone in hand.
+        function getDeviceKey() {
+            let k = localStorage.getItem('ozTankDeviceKey');
+            if (!k) {
+                k = 'dev-' + Math.random().toString(36).slice(2, 10);
+                localStorage.setItem('ozTankDeviceKey', k);
+            }
+            return k;
+        }
+
+        // Stable per-item identity so re-reports upsert instead of duplicating.
+        // queuedAt is set once when the item is first queued and survives retries.
+        function syncIssueFingerprint(item) {
+            return `${getDeviceKey()}:${item.type}:${item.queuedAt || item.failedAt || 'na'}`;
+        }
+
+        async function reportFailedSyncItems() {
+            try {
+                if (!supabase || !navigator.onLine) return;
+                const failed = getFailedSyncItems();
+                if (!failed.length) return;
+                if (!(await hasSupabaseSession())) return;
+                const userName = currentUser ? (currentUser.name || currentUser.email) : 'Unknown';
+                const rows = failed.map(item => {
+                    const desc = describeSyncItem(item);
+                    return {
+                        fingerprint: syncIssueFingerprint(item),
+                        worker: userName,
+                        device_key: getDeviceKey(),
+                        item_type: item.type,
+                        item_summary: desc.label + (desc.sub ? ` (${desc.sub})` : ''),
+                        item_data: item.data || null,
+                        last_error: item.lastError || null,
+                        failed_at: item.failedAt || null,
+                        reported_at: new Date().toISOString(),
+                        status: 'open' // re-reporting a still-stuck item re-opens it
+                    };
+                });
+                await supabase.from('sync_issues').upsert(rows, { onConflict: 'fingerprint' });
+            } catch (e) {
+                console.warn('reportFailedSyncItems failed (non-fatal):', e);
+            }
+        }
+
+        async function markSyncIssuesByFingerprint(fingerprints, status) {
+            try {
+                if (!supabase || !fingerprints || !fingerprints.length) return;
+                const patch = { status };
+                if (status === 'resolved') {
+                    patch.resolved_at = new Date().toISOString();
+                    patch.resolved_by = currentUser ? (currentUser.name || currentUser.email) : null;
+                }
+                await supabase.from('sync_issues').update(patch).in('fingerprint', fingerprints);
+            } catch (e) {
+                console.warn('markSyncIssuesByFingerprint failed (non-fatal):', e);
+            }
+        }
+
+        // ── Admin: office view of reported sync issues ──────────────
+        async function checkAdminSyncIssues() {
+            const alertEl = document.getElementById('adminSyncIssuesAlert');
+            if (!alertEl || !supabase) return;
+            try {
+                const { data, error } = await supabase
+                    .from('sync_issues')
+                    .select('id')
+                    .in('status', ['open', 'retried']);
+                if (error) throw error;
+                const count = (data || []).length;
+                if (count > 0) {
+                    alertEl.style.display = 'block';
+                    alertEl.innerHTML = `
+                        <div onclick="showAdminSyncIssuesModal()" style="background: #fef2f2; border: 1px solid #fecaca; border-left: 4px solid #dc2626; border-radius: 8px; padding: 12px 14px; margin-bottom: 12px; cursor: pointer; display: flex; align-items: center; gap: 10px;">
+                            <span style="font-size: 20px;">⚠️</span>
+                            <div style="flex: 1;">
+                                <div style="font-weight: 700; color: #b91c1c; font-size: 14px;">${count} sync issue${count > 1 ? 's' : ''} reported from worker phones</div>
+                                <div style="font-size: 12px; color: #6b7280;">Work that couldn't reach the database — tap to review</div>
+                            </div>
+                            <span style="color: #9ca3af;">›</span>
+                        </div>`;
+                } else {
+                    alertEl.style.display = 'none';
+                    alertEl.innerHTML = '';
+                }
+            } catch (e) {
+                console.warn('checkAdminSyncIssues failed (non-fatal):', e);
+            }
+        }
+
+        function adminSyncIssueRowHtml(row) {
+            const isOpen = row.status === 'open' || row.status === 'retried';
+            const statusColors = { open: '#dc2626', retried: '#d97706', resolved: '#16a34a', cleared: '#6b7280' };
+            const failedLabel = row.failed_at ? new Date(row.failed_at).toLocaleString('en-AU', { timeZone: 'Australia/Brisbane', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }) : '';
+            const resolvedLine = row.status === 'resolved' && row.resolved_by ? `<div style="font-size: 11px; color: #16a34a; margin-top: 4px;">Resolved by ${row.resolved_by}</div>` : '';
+            return `
+                <div style="padding: 10px 12px; background: ${isOpen ? '#fef2f2' : '#f9fafb'}; border: 1px solid ${isOpen ? '#fecaca' : '#e5e7eb'}; border-radius: 8px; margin-bottom: 6px;">
+                    <div style="display: flex; align-items: flex-start; gap: 8px;">
+                        <div style="flex: 1; min-width: 0;">
+                            <div style="font-size: 13px; font-weight: 600; color: #111827;">${row.item_summary || row.item_type}</div>
+                            <div style="font-size: 11px; color: #6b7280; margin-top: 2px;">👤 ${row.worker || 'Unknown'} · 📱 ${row.device_key || '?'}${failedLabel ? ' · ' + failedLabel : ''}</div>
+                            ${row.last_error ? `<div style="font-size: 11px; color: #b91c1c; margin-top: 4px; word-break: break-word;">↳ ${row.last_error}</div>` : ''}
+                            ${resolvedLine}
+                        </div>
+                        <div style="text-align: right; flex-shrink: 0;">
+                            <span style="font-size: 10px; font-weight: 700; color: white; background: ${statusColors[row.status] || '#6b7280'}; padding: 2px 8px; border-radius: 10px; text-transform: uppercase;">${row.status}</span>
+                            ${isOpen ? `<div style="margin-top: 6px;"><button onclick="resolveAdminSyncIssue(${row.id})" style="font-size: 11px; padding: 4px 10px; border: 1px solid #16a34a; background: white; color: #16a34a; border-radius: 6px; cursor: pointer; font-weight: 600;">✓ Resolve</button></div>` : ''}
+                        </div>
+                    </div>
+                </div>`;
+        }
+
+        async function showAdminSyncIssuesModal() {
+            const existing = document.getElementById('adminSyncIssuesModal');
+            if (existing) existing.remove();
+            let rows = [];
+            try {
+                const { data, error } = await supabase
+                    .from('sync_issues')
+                    .select('*')
+                    .order('reported_at', { ascending: false })
+                    .limit(100);
+                if (error) throw error;
+                rows = data || [];
+            } catch (e) {
+                showToast('Error loading sync issues: ' + e.message, 'error');
+                return;
+            }
+            const open = rows.filter(r => r.status === 'open' || r.status === 'retried');
+            const closed = rows.filter(r => r.status !== 'open' && r.status !== 'retried');
+
+            const modal = document.createElement('div');
+            modal.id = 'adminSyncIssuesModal';
+            modal.className = 'search-modal-overlay active';
+            modal.innerHTML = `
+                <div class="search-modal" style="max-width: 460px;">
+                    <div class="search-modal-header" style="background: ${open.length ? '#dc2626' : '#16a34a'};">
+                        <h2>⚠️ Worker Sync Issues</h2>
+                        <button class="search-modal-close" onclick="document.getElementById('adminSyncIssuesModal').remove()">×</button>
+                    </div>
+                    <div class="search-modal-body">
+                        <div style="font-size: 12px; color: #6b7280; margin-bottom: 12px;">Reported automatically from worker phones. The work itself is still saved on the phone — have the worker tap their red banner and hit Retry. Mark an issue resolved once the data is confirmed in the system (or entered manually).</div>
+                        ${open.length ? `
+                            <div style="font-weight: 700; color: #b91c1c; font-size: 14px; margin-bottom: 8px;">Needs attention (${open.length})</div>
+                            ${open.map(adminSyncIssueRowHtml).join('')}` : '<div style="text-align: center; color: #16a34a; padding: 12px 0; font-weight: 600;">✅ No open sync issues</div>'}
+                        ${closed.length ? `
+                            <div style="font-weight: 700; color: #374151; font-size: 14px; margin: 14px 0 8px;">History (${closed.length})</div>
+                            ${closed.map(adminSyncIssueRowHtml).join('')}` : ''}
+                    </div>
+                </div>`;
+            document.body.appendChild(modal);
+        }
+
+        async function resolveAdminSyncIssue(id) {
+            try {
+                const { error } = await supabase
+                    .from('sync_issues')
+                    .update({ status: 'resolved', resolved_at: new Date().toISOString(), resolved_by: currentUser ? (currentUser.name || currentUser.email) : null })
+                    .eq('id', id);
+                if (error) throw error;
+                showToast('Marked resolved', 'success');
+                showAdminSyncIssuesModal();
+                checkAdminSyncIssues();
+            } catch (e) {
+                showToast('Error resolving issue: ' + e.message, 'error');
+            }
         }
         
         // Get offline queue
@@ -3879,6 +4054,10 @@
                         throw new Error('Unknown offline queue item type: ' + item.type);
                     }
                     removeFromQueue(0); // Always remove first item since we process in order
+                    if (item.lastError) {
+                        // A previously-failing item finally synced — close its office report
+                        markSyncIssuesByFingerprint([syncIssueFingerprint(item)], 'resolved');
+                    }
                 } catch (e) {
                     console.error('Failed to sync queued item:', e);
                     if (isAuthError(e)) {
@@ -6506,7 +6685,7 @@
             // on a dead connection and relaunches once back in coverage never sees that
             // event, so the queue would otherwise sit undrained. Drain on init to catch it.
             if (isOnline) {
-                setTimeout(() => processOfflineQueue(), 1500);
+                setTimeout(() => { processOfflineQueue(); reportFailedSyncItems(); }, 1500);
             }
         }
         
@@ -7368,6 +7547,7 @@
 
         async function showAdminDashboard() {
             showView('adminDashboardView');
+            checkAdminSyncIssues(); // fire-and-forget banner refresh
             populateAdminServiceDaySelect();
             updatePeriodDisplay();
             await refreshForPeriod();

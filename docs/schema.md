@@ -257,6 +257,26 @@ Note: `timestamp` and `date` are reserved-ish names — quote them when ambiguou
 | value | text | YES | |
 | updated_at | timestamptz | YES | now() |
 
+### sync_issues
+Failed offline-sync items auto-reported from worker phones so the office can
+see them (v11.19+). `fingerprint` = `deviceKey:type:queuedAt` — stable per item
+so re-reports upsert. `status`: open | retried | resolved | cleared.
+| column | type | nullable | default |
+|---|---|---|---|
+| id | bigint | NO | PK, identity |
+| fingerprint | text | NO | UNIQUE |
+| worker | text | YES | |
+| device_key | text | YES | |
+| item_type | text | YES | (pod / tankMovement / deletePod / calEventUpsert / calEventUpdate) |
+| item_summary | text | YES | |
+| item_data | jsonb | YES | (full queued payload) |
+| last_error | text | YES | |
+| failed_at | timestamptz | YES | |
+| reported_at | timestamptz | YES | now() |
+| status | text | YES | 'open' |
+| resolved_at | timestamptz | YES | |
+| resolved_by | text | YES | |
+
 ### calendar_sync_settings / calendar_sync_status
 Sync bookkeeping tables (ICS url, last sync timestamps/status/messages,
 `missing_days` array). `calendar_sync_status` is a singleton (`id` default 1).
