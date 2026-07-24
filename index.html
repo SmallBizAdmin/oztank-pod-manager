@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oz Tank - Service POD Manager v11.16</title>
+    <title>Oz Tank - Service POD Manager v11.17</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -14872,35 +14872,111 @@
         }
 
         // ── My Day view ─────────────────────────────────────────────
-        // Review screen: everything the logged-in worker completed today —
+        // Review screen: everything a worker completed on a given day —
         // PODs (runsheet + ad-hoc), tank movements, and calendar events
-        // they actioned. Rows are chronological and tap through to detail.
+        // they actioned. Fetches the day directly from Supabase so any
+        // date works regardless of which month the app has loaded.
+        // Admins get a worker selector to review anyone's day.
+        let myDayDate = null;
+        let myDayWorker = '';            // '' = my work, '*' = all workers, else a worker name
+        let myDayRecords = { pods: [], tms: [] };  // fetched rows backing tap-through
+        let myDayRenderSeq = 0;
+
         function showMyDayView() {
+            myDayDate = formatDateLocal(new Date());
             showView('myDayView');
             renderMyDay();
         }
 
+        function changeMyDayDate(delta) {
+            const d = new Date(myDayDate + 'T00:00:00');
+            d.setDate(d.getDate() + delta);
+            myDayDate = formatDateLocal(d);
+            renderMyDay();
+        }
+
+        function goToMyDayToday() {
+            myDayDate = formatDateLocal(new Date());
+            renderMyDay();
+        }
+
+        function handleMyDayWorkerChange(value) {
+            myDayWorker = value;
+            renderMyDay();
+        }
+
+        // Tap-through that works for fetched (non-loaded-month) records too
+        function viewMyDayPod(podId) {
+            if (db.pods.find(p => p.id === podId)) { viewPODFromOverview(podId); return; }
+            const pod = myDayRecords.pods.find(p => p.id === podId);
+            if (!pod) { showToast('POD not found', 'error'); return; }
+            const customer = db.customers.find(c => c.id === pod.customerId);
+            currentCustomer = customer || { id: pod.customerId, name: pod.customerName, address: pod.customerAddress || '' };
+            currentRunDay = pod.runDay;
+            showExistingPod(pod);
+        }
+
+        function viewMyDayTM(tmId) {
+            if (!db.tankMovements.some(t => t.id === tmId)) {
+                const tm = myDayRecords.tms.find(t => t.id === tmId);
+                if (tm) db.tankMovements.push(tm);
+            }
+            viewTankMovementDetail(tmId);
+        }
+
         function myDayRowHtml(icon, name, detail, time, onclickJs) {
-            return `<div onclick="${onclickJs}" style="padding: 10px 12px; background: white; border-radius: 8px; margin-bottom: 6px; cursor: pointer; display: flex; align-items: center; gap: 10px; border: 1px solid #e5e7eb;">
+            const clickable = !!onclickJs;
+            return `<div ${clickable ? `onclick="${onclickJs}"` : ''} style="padding: 10px 12px; background: white; border-radius: 8px; margin-bottom: 6px; cursor: ${clickable ? 'pointer' : 'default'}; display: flex; align-items: center; gap: 10px; border: 1px solid #e5e7eb;">
                 <span style="font-size: 18px;">${icon}</span>
                 <div style="flex: 1; min-width: 0;">
                     <div style="font-size: 14px; font-weight: 600; color: #111827; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${name}</div>
                     <div style="font-size: 12px; color: #6b7280;">${detail}</div>
                 </div>
                 <span style="font-size: 12px; color: #9ca3af; white-space: nowrap;">${time}</span>
-                <span style="color: #9ca3af;">›</span>
+                ${clickable ? '<span style="color: #9ca3af;">›</span>' : ''}
             </div>`;
         }
 
-        function renderMyDay() {
+        function myDayNavHtml(isAdmin, workerNames, userName) {
+            const today = formatDateLocal(new Date());
+            const dateLabel = new Date(myDayDate + 'T00:00:00').toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' });
+            const todayBtn = myDayDate !== today
+                ? `<button onclick="goToMyDayToday()" style="padding: 4px 10px; border: 1px solid #d1d5db; border-radius: 6px; background: white; color: #2563eb; font-size: 12px; font-weight: 600; cursor: pointer;">Today</button>`
+                : '';
+            let workerSelect = '';
+            if (isAdmin) {
+                const names = workerNames.filter(n => n && n !== userName);
+                if (myDayWorker && myDayWorker !== '*' && myDayWorker !== userName && !names.includes(myDayWorker)) {
+                    names.push(myDayWorker); // keep selection visible on days the worker did nothing
+                }
+                workerSelect = `
+                    <select onchange="handleMyDayWorkerChange(this.value)" style="font-size: 13px; padding: 4px 8px; border: 1px solid #d1d5db; border-radius: 6px; background: white; color: #374151; max-width: 160px;">
+                        <option value=""${myDayWorker === '' ? ' selected' : ''}>My work</option>
+                        <option value="*"${myDayWorker === '*' ? ' selected' : ''}>All workers</option>
+                        ${names.map(n => `<option value="${n.replace(/"/g, '&quot;')}"${myDayWorker === n ? ' selected' : ''}>${n}</option>`).join('')}
+                    </select>`;
+            }
+            return `
+                <div class="card" style="margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; padding: 10px 14px;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <button onclick="changeMyDayDate(-1)" style="width: 30px; height: 30px; border: 1px solid #d1d5db; border-radius: 6px; background: white; cursor: pointer; font-size: 15px;">‹</button>
+                        <span style="font-weight: 600; color: #111827; font-size: 14px; min-width: 92px; text-align: center;">${dateLabel}</span>
+                        <button onclick="changeMyDayDate(1)" style="width: 30px; height: 30px; border: 1px solid #d1d5db; border-radius: 6px; background: white; cursor: pointer; font-size: 15px;">›</button>
+                        ${todayBtn}
+                    </div>
+                    ${workerSelect}
+                </div>`;
+        }
+
+        async function renderMyDay() {
             const container = document.getElementById('myDayContent');
             if (!container) return;
-            const today = formatDateLocal(new Date());
             const userName = currentUser ? (currentUser.name || currentUser.email) : null;
+            const isAdmin = currentUser && ADMIN_EMAILS.includes((currentUser.email || '').toLowerCase());
 
             const subtitle = document.getElementById('myDaySubtitle');
             if (subtitle) {
-                subtitle.textContent = new Date().toLocaleDateString('en-AU', { timeZone: 'Australia/Brisbane', weekday: 'long', day: 'numeric', month: 'long' });
+                subtitle.textContent = new Date(myDayDate + 'T00:00:00').toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' });
             }
 
             if (!userName) {
@@ -14908,11 +14984,86 @@
                 return;
             }
 
+            const seq = ++myDayRenderSeq;
+            container.innerHTML = myDayNavHtml(isAdmin, [], userName)
+                + '<div class="card" style="text-align: center; color: #6b7280;">Loading…</div>';
+
+            // Brisbane day window for timestamp-based records (no DST in QLD)
+            const nextDay = new Date(myDayDate + 'T00:00:00');
+            nextDay.setDate(nextDay.getDate() + 1);
+            const dayStart = myDayDate + 'T00:00:00+10:00';
+            const dayEnd = formatDateLocal(nextDay) + 'T00:00:00+10:00';
+
+            let podRows, tmRows, statusRows, eventRows;
+            try {
+                const [podsRes, tmsRes, statusRes] = await Promise.all([
+                    supabase.from('pods').select('*').eq('date', myDayDate).eq('archived', false),
+                    supabase.from('tank_movements').select('*').eq('date', myDayDate),
+                    supabase.from('calendar_event_status').select('*').not('actioned_at', 'is', null).gte('actioned_at', dayStart).lt('actioned_at', dayEnd)
+                ]);
+                if (podsRes.error) throw podsRes.error;
+                if (tmsRes.error) throw tmsRes.error;
+                if (statusRes.error) throw statusRes.error;
+                podRows = podsRes.data || [];
+                tmRows = tmsRes.data || [];
+                statusRows = statusRes.data || [];
+
+                const eventIds = statusRows.map(r => r.event_id).filter(Boolean);
+                eventRows = [];
+                if (eventIds.length > 0) {
+                    const evRes = await supabase.from('worker_calendar_events').select('id, event_title, event_date').in('id', eventIds);
+                    if (!evRes.error) eventRows = evRes.data || [];
+                }
+            } catch (error) {
+                if (seq !== myDayRenderSeq) return;
+                container.innerHTML = myDayNavHtml(isAdmin, [], userName)
+                    + `<div class="card" style="text-align: center; color: #dc2626;">Error loading day: ${error.message}</div>`;
+                return;
+            }
+            if (seq !== myDayRenderSeq) return; // superseded by a newer render
+
+            // Map to the same camelCase shape the rest of the app uses
+            const pods = podRows.map(pod => ({
+                id: pod.id, customerId: pod.customer_id, customerName: pod.customer_name,
+                customerAddress: pod.customer_address, runDay: pod.run_day, date: pod.date,
+                timestamp: pod.timestamp, serviceType: pod.service_type, carbsolve: pod.carbsolve,
+                tankServiced: pod.tank_serviced, serviceNotes: pod.service_notes, products: pod.products,
+                notes: pod.notes, photo: pod.photo, signature: pod.signature,
+                signatureName: pod.signature_name, isRentalOnly: pod.is_rental_only || false,
+                isQuickComplete: pod.is_quick_complete || false, isAdHoc: pod.is_ad_hoc || false,
+                sourceRunDay: pod.source_run_day, calendarEventId: pod.calendar_event_id || null, archived: pod.archived,
+                tankLabel: pod.tank_label || null, tankServices: pod.tank_services || null,
+                linkExcluded: pod.link_excluded || false, orderNumber: pod.order_number || null,
+                completedBy: pod.completed_by || null, completedAt: pod.completed_at || null
+            }));
+            const tms = tmRows.map(tm => ({
+                id: tm.id, customerId: tm.customer_id, customerName: tm.customer_name,
+                runDay: tm.run_day, date: tm.date, timestamp: tm.timestamp,
+                movementType: tm.movement_type, tankNoPlaced: tm.tank_no_placed, tankNoPulled: tm.tank_no_pulled,
+                carbsolve: tm.carbsolve, reason: tm.reason, sourceRunDay: tm.source_run_day,
+                calendarEventId: tm.calendar_event_id, completedBy: tm.completed_by || null,
+                invoiceNotes: tm.invoice_notes || null, orderNumber: tm.order_number || null
+            }));
+            myDayRecords = { pods, tms };
+
+            // Who appears in this day's data (for the admin selector)
+            const workerNames = [...new Set([
+                ...pods.map(p => p.completedBy),
+                ...tms.map(t => t.completedBy),
+                ...statusRows.map(s => s.actioned_by)
+            ].filter(Boolean))].sort();
+
+            // Resolve the filter: non-admins always see their own work
+            const filterName = !isAdmin ? userName
+                : (myDayWorker === '' ? userName : (myDayWorker === '*' ? null : myDayWorker));
+            const showAll = filterName === null;
+
             const timeOf = ts => ts ? new Date(ts).getTime() : 0;
             const timeLabel = ts => ts ? new Date(ts).toLocaleTimeString('en-AU', { timeZone: 'Australia/Brisbane', hour: 'numeric', minute: '2-digit' }) : '';
+            const byLine = who => showAll && who ? ` · 👤 ${who}` : '';
             const rows = [];
 
-            const myPods = db.pods.filter(p => p.date === today && p.completedBy === userName);
+            const myPods = pods.filter(p => showAll ? p.completedBy : p.completedBy === filterName);
             myPods.forEach(pod => {
                 const customer = db.customers.find(c => c.id === pod.customerId);
                 const name = customer ? customer.name : (pod.customerName || 'Unknown');
@@ -14920,39 +15071,43 @@
                 const ts = pod.completedAt || pod.timestamp;
                 const tags = (pod.isAdHoc ? '<span style=\'background:#f3e8ff;color:#7e22ce;padding:1px 6px;border-radius:8px;font-size:10px;margin-left:6px;\'>Ad-Hoc</span>' : '')
                     + (pod.isQuickComplete ? '<span style=\'background:#dbeafe;color:#1e40af;padding:1px 6px;border-radius:8px;font-size:10px;margin-left:6px;\'>Quick</span>' : '');
-                rows.push({ ts: timeOf(ts), html: myDayRowHtml(icon, name, (pod.serviceType || 'Service') + tags, timeLabel(ts), `viewPODFromOverview(${pod.id})`) });
+                rows.push({ ts: timeOf(ts), html: myDayRowHtml(icon, name, (pod.serviceType || 'Service') + byLine(pod.completedBy) + tags, timeLabel(ts), `viewMyDayPod(${pod.id})`) });
             });
 
-            const myTMs = db.tankMovements.filter(tm => tm.date === today && tm.completedBy === userName);
+            const myTMs = tms.filter(t => showAll ? t.completedBy : t.completedBy === filterName);
             myTMs.forEach(tm => {
                 const customer = db.customers.find(c => c.id === tm.customerId);
                 const name = customer ? customer.name : (tm.customerName || 'Unknown');
                 const detail = `Tank ${tm.movementType || 'Movement'}`
                     + (tm.tankNoPlaced ? ` · placed ${tm.tankNoPlaced}` : '')
-                    + (tm.tankNoPulled ? ` · pulled ${tm.tankNoPulled}` : '');
-                rows.push({ ts: timeOf(tm.timestamp), html: myDayRowHtml('🔄', name, detail, timeLabel(tm.timestamp), `viewTankMovementDetail(${tm.id})`) });
+                    + (tm.tankNoPulled ? ` · pulled ${tm.tankNoPulled}` : '')
+                    + byLine(tm.completedBy);
+                rows.push({ ts: timeOf(tm.timestamp), html: myDayRowHtml('🔄', name, detail, timeLabel(tm.timestamp), `viewMyDayTM(${tm.id})`) });
             });
 
-            let eventCount = 0;
-            Object.entries(db.calendarEventStatus || {}).forEach(([id, st]) => {
-                if (!st || st.actioned_by !== userName || !st.actioned_at) return;
-                if (formatDateLocal(new Date(st.actioned_at)) !== today) return;
-                const ev = db.findCalendarEvent(id);
-                const title = ev ? ev.eventTitle : `Calendar event #${id}`;
-                const statusLabel = st.status === 'completed' ? '✓ Completed'
-                    : st.status === 'cancelled' ? '✗ Cancelled' : (st.status || '');
-                const dateStr = ev ? ev.eventDate : today;
-                eventCount++;
-                rows.push({ ts: timeOf(st.actioned_at), html: myDayRowHtml('📅', title, statusLabel, timeLabel(st.actioned_at), `showCalendarEventDetailModal(${parseInt(id)}, '${dateStr}')`) });
+            const myStatuses = statusRows.filter(s => showAll ? s.actioned_by : s.actioned_by === filterName);
+            myStatuses.forEach(st => {
+                const evFetched = eventRows.find(e => e.id === st.event_id);
+                const evLocal = db.findCalendarEvent(st.event_id);
+                const title = evFetched ? evFetched.event_title : (evLocal ? evLocal.eventTitle : `Calendar event #${st.event_id}`);
+                const statusLabel = (st.status === 'completed' ? '✓ Completed'
+                    : st.status === 'cancelled' ? '✗ Cancelled' : (st.status || '')) + byLine(st.actioned_by);
+                // Only tappable when the event is in the loaded month's data
+                const onclick = evLocal ? `showCalendarEventDetailModal(${st.event_id}, '${evLocal.eventDate}')` : '';
+                rows.push({ ts: timeOf(st.actioned_at), html: myDayRowHtml('📅', title, statusLabel, timeLabel(st.actioned_at), onclick) });
             });
 
+            const navHtml = myDayNavHtml(isAdmin, workerNames, userName);
             const total = rows.length;
+            const isToday = myDayDate === formatDateLocal(new Date());
             if (total === 0) {
-                container.innerHTML = `
+                const whoText = showAll ? 'No jobs completed by anyone'
+                    : (filterName === userName ? 'Nothing completed' : `Nothing completed by ${filterName}`);
+                container.innerHTML = navHtml + `
                     <div class="card" style="text-align: center; padding: 32px 16px; color: #6b7280;">
                         <div style="font-size: 40px; margin-bottom: 8px;">🌅</div>
-                        <div style="font-weight: 600; color: #374151; margin-bottom: 4px;">Nothing completed yet today</div>
-                        <div style="font-size: 13px;">Jobs you complete will show up here as you go.</div>
+                        <div style="font-weight: 600; color: #374151; margin-bottom: 4px;">${whoText} ${isToday ? 'yet today' : 'on this day'}</div>
+                        ${isToday ? '<div style="font-size: 13px;">Jobs you complete will show up here as you go.</div>' : ''}
                     </div>`;
                 return;
             }
@@ -14967,11 +15122,12 @@
             if (delCount) summaryParts.push(`📦 ${delCount} deliver${delCount !== 1 ? 'ies' : 'y'}`);
             if (repCount) summaryParts.push(`🔨 ${repCount} repair${repCount !== 1 ? 's' : ''}`);
             if (myTMs.length) summaryParts.push(`🔄 ${myTMs.length} tank movement${myTMs.length !== 1 ? 's' : ''}`);
-            if (eventCount) summaryParts.push(`📅 ${eventCount} calendar event${eventCount !== 1 ? 's' : ''}`);
+            if (myStatuses.length) summaryParts.push(`📅 ${myStatuses.length} calendar event${myStatuses.length !== 1 ? 's' : ''}`);
 
-            container.innerHTML = `
+            const whoHeading = showAll ? ' (all workers)' : (filterName !== userName ? ` — ${filterName}` : '');
+            container.innerHTML = navHtml + `
                 <div class="card" style="margin-bottom: 12px;">
-                    <div style="font-size: 15px; font-weight: 700; color: #111827;">${total} job${total !== 1 ? 's' : ''} completed today</div>
+                    <div style="font-size: 15px; font-weight: 700; color: #111827;">${total} job${total !== 1 ? 's' : ''} completed${whoHeading}</div>
                     <div style="font-size: 13px; color: #6b7280; margin-top: 4px;">${summaryParts.join(' · ')}</div>
                 </div>
                 ${rows.map(r => r.html).join('')}`;
