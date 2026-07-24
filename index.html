@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oz Tank - Service POD Manager v11.17</title>
+    <title>Oz Tank - Service POD Manager v11.18</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -2256,7 +2256,7 @@
     </div>
     
     <!-- Offline Status Bar -->
-    <div id="offlineBar" class="offline-bar">
+    <div id="offlineBar" class="offline-bar" onclick="showSyncIssuesModal()" style="cursor: pointer;">
         <span id="offlineIcon">📴</span>
         <span id="offlineText">Offline - changes will sync when connected</span>
         <span id="offlineQueueBadge" class="offline-queue-badge" style="display: none;">0 pending</span>
@@ -3593,7 +3593,7 @@
                 bar.classList.remove('syncing');
                 document.body.classList.add('has-offline-bar');
                 icon.textContent = '⚠️';
-                text.textContent = `${failed.length} item${failed.length > 1 ? 's' : ''} couldn\u2019t sync — please tell the office`;
+                text.textContent = `${failed.length} item${failed.length > 1 ? 's' : ''} couldn\u2019t sync — tap to view & retry`;
                 badge.style.display = 'none';
             } else if (!isOnline) {
                 bar.classList.add('visible');
@@ -3631,14 +3631,146 @@
                 return [];
             }
         }
-        function addFailedSyncItem(item) {
+        function addFailedSyncItem(item, errorMsg) {
             const failed = getFailedSyncItems();
-            failed.push({ ...item, failedAt: new Date().toISOString() });
+            failed.push({ ...item, failedAt: new Date().toISOString(), lastError: errorMsg || item.lastError || null });
             localStorage.setItem(FAILED_KEY, JSON.stringify(failed));
         }
         function clearFailedSyncItems() {
             localStorage.removeItem(FAILED_KEY);
             updateOfflineUI();
+        }
+
+        // ── Auth hardening ──────────────────────────────────────────
+        // A dead Supabase session makes every DB write fail while the app
+        // still *looks* logged in (the app login and DB session are separate).
+        // Detect that state, stop burning sync retries, and prompt re-login.
+        function isAuthError(err) {
+            if (!err) return false;
+            const status = err.status || err.statusCode || null;
+            if (status === 401 || status === 403) return true;
+            const code = err.code || '';
+            if (code === 'PGRST301' || code === '42501') return true;
+            const msg = (err.message || String(err)).toLowerCase();
+            return /jwt|token.*(expired|invalid)|not.*authenticated|row-level security/.test(msg);
+        }
+
+        async function hasSupabaseSession() {
+            try {
+                const { data } = await supabase.auth.getSession();
+                return !!(data && data.session);
+            } catch (e) {
+                return false;
+            }
+        }
+
+        function showReAuthBar() {
+            if (document.getElementById('reAuthBar')) return;
+            const bar = document.createElement('div');
+            bar.id = 'reAuthBar';
+            bar.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:300;background:#b91c1c;color:white;padding:10px 14px;display:flex;align-items:center;justify-content:center;gap:10px;font-size:14px;font-weight:600;flex-wrap:wrap;text-align:center;';
+            bar.innerHTML = `<span>🔒 Database sign-in expired — your work is safe on this phone</span>
+                <button onclick="forceReLogin()" style="background:white;color:#b91c1c;border:none;border-radius:6px;padding:6px 14px;font-weight:700;cursor:pointer;">Sign in again</button>`;
+            document.body.appendChild(bar);
+        }
+
+        function forceReLogin() {
+            // Clears only the login keys — the offline queue and failed-sync
+            // store live under different keys and survive the re-login.
+            localStorage.removeItem('oztank_user');
+            localStorage.removeItem('oztank_login_time');
+            location.reload();
+        }
+
+        // ── Sync Issues screen (tap the offline/failed banner) ──────
+        function describeSyncItem(item) {
+            const d = item.data || {};
+            if (item.type === 'pod') return { icon: '🔧', label: `POD — ${d.customer_name || 'Unknown customer'}`, sub: d.date || '' };
+            if (item.type === 'tankMovement') return { icon: '🔄', label: `Tank ${d.movement_type || 'movement'} — ${d.customer_name || 'Unknown customer'}`, sub: d.date || '' };
+            if (item.type === 'deletePod') return { icon: '🗑️', label: `Delete POD #${d.id || '?'}`, sub: '' };
+            if (item.type === 'calEventUpsert') return { icon: '📅', label: 'Calendar event update', sub: d.status ? `Status: ${d.status}` : '' };
+            if (item.type === 'calEventUpdate') return { icon: '📅', label: 'Calendar event change', sub: '' };
+            return { icon: '❓', label: item.type || 'Unknown item', sub: '' };
+        }
+
+        function syncItemRowHtml(item, isFailed) {
+            const desc = describeSyncItem(item);
+            const when = item.failedAt || item.queuedAt;
+            const whenLabel = when ? new Date(when).toLocaleString('en-AU', { timeZone: 'Australia/Brisbane', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }) : '';
+            const retryInfo = !isFailed && item.retryCount ? ` · ${item.retryCount} failed ${item.retryCount === 1 ? 'try' : 'tries'}` : '';
+            return `
+                <div style="padding: 10px 12px; background: ${isFailed ? '#fef2f2' : '#f9fafb'}; border: 1px solid ${isFailed ? '#fecaca' : '#e5e7eb'}; border-radius: 8px; margin-bottom: 6px;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 16px;">${desc.icon}</span>
+                        <div style="flex: 1; min-width: 0;">
+                            <div style="font-size: 13px; font-weight: 600; color: #111827;">${desc.label}</div>
+                            <div style="font-size: 11px; color: #6b7280;">${[desc.sub, whenLabel].filter(Boolean).join(' · ')}${retryInfo}</div>
+                        </div>
+                    </div>
+                    ${item.lastError ? `<div style="font-size: 11px; color: #b91c1c; margin-top: 6px; word-break: break-word;">↳ ${item.lastError}</div>` : ''}
+                </div>`;
+        }
+
+        function showSyncIssuesModal() {
+            const failed = getFailedSyncItems();
+            const queue = getOfflineQueue();
+            const existing = document.getElementById('syncIssuesModal');
+            if (existing) existing.remove();
+
+            const modal = document.createElement('div');
+            modal.id = 'syncIssuesModal';
+            modal.className = 'search-modal-overlay active';
+            modal.innerHTML = `
+                <div class="search-modal" style="max-width: 420px;">
+                    <div class="search-modal-header" style="background: ${failed.length ? '#dc2626' : '#3b82f6'};">
+                        <h2>🔄 Sync Status</h2>
+                        <button class="search-modal-close" onclick="document.getElementById('syncIssuesModal').remove()">×</button>
+                    </div>
+                    <div class="search-modal-body">
+                        ${failed.length ? `
+                            <div style="font-weight: 700; color: #b91c1c; font-size: 14px; margin-bottom: 8px;">⚠️ Failed items (${failed.length})</div>
+                            <div style="font-size: 12px; color: #6b7280; margin-bottom: 10px;">These are saved safely on this phone but did not reach the database. Retry now — if they keep failing, the error shown under each item tells us why.</div>
+                            ${failed.map(item => syncItemRowHtml(item, true)).join('')}
+                            <div style="display: flex; gap: 8px; margin: 12px 0 16px;">
+                                <button class="btn btn-success" style="flex: 1; padding: 10px;" onclick="retryFailedSyncItems()">🔄 Retry All Now</button>
+                                <button class="btn" style="flex: 1; padding: 10px; background: #6b7280;" onclick="confirmClearFailedSync()">🗑 Clear</button>
+                            </div>` : ''}
+                        ${queue.length ? `
+                            <div style="font-weight: 700; color: #374151; font-size: 14px; margin-bottom: 8px;">⏳ Waiting to sync (${queue.length})</div>
+                            ${queue.map(item => syncItemRowHtml(item, false)).join('')}` : ''}
+                        ${!failed.length && !queue.length ? '<div style="text-align: center; color: #16a34a; padding: 20px 0; font-weight: 600;">✅ Everything is synced</div>' : ''}
+                    </div>
+                </div>`;
+            document.body.appendChild(modal);
+        }
+
+        function retryFailedSyncItems() {
+            const failed = getFailedSyncItems();
+            if (!failed.length) return;
+            const queue = getOfflineQueue();
+            failed.forEach(f => { f.retryCount = 0; queue.push(f); });
+            try {
+                localStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
+            } catch (e) {
+                showToast('⚠️ Storage error — could not move items back to the queue', 'error');
+                return;
+            }
+            localStorage.removeItem(FAILED_KEY);
+            const modal = document.getElementById('syncIssuesModal');
+            if (modal) modal.remove();
+            updateOfflineUI();
+            showToast('Retrying failed items…', 'success');
+            processOfflineQueue();
+        }
+
+        function confirmClearFailedSync() {
+            const failed = getFailedSyncItems();
+            if (!failed.length) return;
+            if (!confirm(`Permanently discard ${failed.length} unsynced item${failed.length > 1 ? 's' : ''}? Only do this after the office has confirmed the work was entered another way.`)) return;
+            clearFailedSyncItems();
+            const modal = document.getElementById('syncIssuesModal');
+            if (modal) modal.remove();
+            showToast('Failed items cleared', 'success');
         }
         
         // Get offline queue
@@ -3707,7 +3839,15 @@
             
             const queue = getOfflineQueue();
             if (queue.length === 0) return;
-            
+
+            // Never burn retries against a dead database session — every write
+            // would fail. Prompt a re-login and leave the queue untouched.
+            if (!(await hasSupabaseSession())) {
+                console.warn('processOfflineQueue: no Supabase session — prompting re-auth');
+                showReAuthBar();
+                return;
+            }
+
             console.log(`🔄 Processing ${queue.length} queued items...`);
             updateOfflineUI();
             
@@ -3741,16 +3881,23 @@
                     removeFromQueue(0); // Always remove first item since we process in order
                 } catch (e) {
                     console.error('Failed to sync queued item:', e);
+                    if (isAuthError(e)) {
+                        // Auth died mid-run: stop entirely, don't count these
+                        // attempts against any item — they can only fail.
+                        showReAuthBar();
+                        break;
+                    }
                     failed++;
                     // Move to end of queue to retry later
                     const failedItem = queue.shift();
                     failedItem.retryCount = (failedItem.retryCount || 0) + 1;
+                    failedItem.lastError = (e && e.message) ? e.message : String(e);
                     if (failedItem.retryCount < 3) {
                         queue.push(failedItem);
                     } else {
                         // Retries exhausted. Do NOT drop silently — move to the failed
                         // store so it surfaces in the banner for the worker/office.
-                        addFailedSyncItem(failedItem);
+                        addFailedSyncItem(failedItem, failedItem.lastError);
                     }
                     localStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
                 }
