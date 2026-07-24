@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oz Tank - Service POD Manager v11.15</title>
+    <title>Oz Tank - Service POD Manager v11.16</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -2275,6 +2275,7 @@
                 <button class="btn btn-secondary" style="flex: 1; min-width: 120px;" onclick="showAdminDashboard()">📊 Admin</button>
                 <button class="btn btn-secondary" style="flex: 1; min-width: 120px;" onclick="showAdminPanelView()">📥 Import</button>
                 <button class="btn btn-secondary" style="flex: 1; min-width: 120px;" onclick="showSearchPodsView()">🔍 Search PODs</button>
+                <button class="btn btn-secondary" style="flex: 1; min-width: 120px;" onclick="showMyDayView()">📋 My Day</button>
             </div>
             
             <!-- Week/Month Selector -->
@@ -2408,6 +2409,20 @@
             </ul>
         </div>
         <button class="add-service-fab" onclick="showActionChooser()" title="Add Service">+</button>
+    </div>
+
+    <!-- My Day View -->
+    <div id="myDayView" class="view">
+        <div class="header">
+            <div class="header-content">
+                <button class="back-btn" onclick="history.back()">← Back</button>
+                <div>
+                    <h1>📋 My Day</h1>
+                    <p class="subtitle" id="myDaySubtitle"></p>
+                </div>
+            </div>
+        </div>
+        <div class="container" id="myDayContent"></div>
     </div>
 
     <!-- POD Creation View -->
@@ -14855,7 +14870,113 @@
             });
             return html;
         }
-        
+
+        // ── My Day view ─────────────────────────────────────────────
+        // Review screen: everything the logged-in worker completed today —
+        // PODs (runsheet + ad-hoc), tank movements, and calendar events
+        // they actioned. Rows are chronological and tap through to detail.
+        function showMyDayView() {
+            showView('myDayView');
+            renderMyDay();
+        }
+
+        function myDayRowHtml(icon, name, detail, time, onclickJs) {
+            return `<div onclick="${onclickJs}" style="padding: 10px 12px; background: white; border-radius: 8px; margin-bottom: 6px; cursor: pointer; display: flex; align-items: center; gap: 10px; border: 1px solid #e5e7eb;">
+                <span style="font-size: 18px;">${icon}</span>
+                <div style="flex: 1; min-width: 0;">
+                    <div style="font-size: 14px; font-weight: 600; color: #111827; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${name}</div>
+                    <div style="font-size: 12px; color: #6b7280;">${detail}</div>
+                </div>
+                <span style="font-size: 12px; color: #9ca3af; white-space: nowrap;">${time}</span>
+                <span style="color: #9ca3af;">›</span>
+            </div>`;
+        }
+
+        function renderMyDay() {
+            const container = document.getElementById('myDayContent');
+            if (!container) return;
+            const today = formatDateLocal(new Date());
+            const userName = currentUser ? (currentUser.name || currentUser.email) : null;
+
+            const subtitle = document.getElementById('myDaySubtitle');
+            if (subtitle) {
+                subtitle.textContent = new Date().toLocaleDateString('en-AU', { timeZone: 'Australia/Brisbane', weekday: 'long', day: 'numeric', month: 'long' });
+            }
+
+            if (!userName) {
+                container.innerHTML = '<div class="card" style="text-align: center; color: #6b7280;">Sign in to see your day.</div>';
+                return;
+            }
+
+            const timeOf = ts => ts ? new Date(ts).getTime() : 0;
+            const timeLabel = ts => ts ? new Date(ts).toLocaleTimeString('en-AU', { timeZone: 'Australia/Brisbane', hour: 'numeric', minute: '2-digit' }) : '';
+            const rows = [];
+
+            const myPods = db.pods.filter(p => p.date === today && p.completedBy === userName);
+            myPods.forEach(pod => {
+                const customer = db.customers.find(c => c.id === pod.customerId);
+                const name = customer ? customer.name : (pod.customerName || 'Unknown');
+                const icon = pod.serviceType === 'Delivery' ? '📦' : pod.serviceType === 'Repairs' ? '🔨' : '🔧';
+                const ts = pod.completedAt || pod.timestamp;
+                const tags = (pod.isAdHoc ? '<span style=\'background:#f3e8ff;color:#7e22ce;padding:1px 6px;border-radius:8px;font-size:10px;margin-left:6px;\'>Ad-Hoc</span>' : '')
+                    + (pod.isQuickComplete ? '<span style=\'background:#dbeafe;color:#1e40af;padding:1px 6px;border-radius:8px;font-size:10px;margin-left:6px;\'>Quick</span>' : '');
+                rows.push({ ts: timeOf(ts), html: myDayRowHtml(icon, name, (pod.serviceType || 'Service') + tags, timeLabel(ts), `viewPODFromOverview(${pod.id})`) });
+            });
+
+            const myTMs = db.tankMovements.filter(tm => tm.date === today && tm.completedBy === userName);
+            myTMs.forEach(tm => {
+                const customer = db.customers.find(c => c.id === tm.customerId);
+                const name = customer ? customer.name : (tm.customerName || 'Unknown');
+                const detail = `Tank ${tm.movementType || 'Movement'}`
+                    + (tm.tankNoPlaced ? ` · placed ${tm.tankNoPlaced}` : '')
+                    + (tm.tankNoPulled ? ` · pulled ${tm.tankNoPulled}` : '');
+                rows.push({ ts: timeOf(tm.timestamp), html: myDayRowHtml('🔄', name, detail, timeLabel(tm.timestamp), `viewTankMovementDetail(${tm.id})`) });
+            });
+
+            let eventCount = 0;
+            Object.entries(db.calendarEventStatus || {}).forEach(([id, st]) => {
+                if (!st || st.actioned_by !== userName || !st.actioned_at) return;
+                if (formatDateLocal(new Date(st.actioned_at)) !== today) return;
+                const ev = db.findCalendarEvent(id);
+                const title = ev ? ev.eventTitle : `Calendar event #${id}`;
+                const statusLabel = st.status === 'completed' ? '✓ Completed'
+                    : st.status === 'cancelled' ? '✗ Cancelled' : (st.status || '');
+                const dateStr = ev ? ev.eventDate : today;
+                eventCount++;
+                rows.push({ ts: timeOf(st.actioned_at), html: myDayRowHtml('📅', title, statusLabel, timeLabel(st.actioned_at), `showCalendarEventDetailModal(${parseInt(id)}, '${dateStr}')`) });
+            });
+
+            const total = rows.length;
+            if (total === 0) {
+                container.innerHTML = `
+                    <div class="card" style="text-align: center; padding: 32px 16px; color: #6b7280;">
+                        <div style="font-size: 40px; margin-bottom: 8px;">🌅</div>
+                        <div style="font-weight: 600; color: #374151; margin-bottom: 4px;">Nothing completed yet today</div>
+                        <div style="font-size: 13px;">Jobs you complete will show up here as you go.</div>
+                    </div>`;
+                return;
+            }
+
+            rows.sort((a, b) => a.ts - b.ts);
+
+            const summaryParts = [];
+            const svcCount = myPods.filter(p => p.serviceType !== 'Delivery' && p.serviceType !== 'Repairs').length;
+            const delCount = myPods.filter(p => p.serviceType === 'Delivery').length;
+            const repCount = myPods.filter(p => p.serviceType === 'Repairs').length;
+            if (svcCount) summaryParts.push(`🔧 ${svcCount} service${svcCount !== 1 ? 's' : ''}`);
+            if (delCount) summaryParts.push(`📦 ${delCount} deliver${delCount !== 1 ? 'ies' : 'y'}`);
+            if (repCount) summaryParts.push(`🔨 ${repCount} repair${repCount !== 1 ? 's' : ''}`);
+            if (myTMs.length) summaryParts.push(`🔄 ${myTMs.length} tank movement${myTMs.length !== 1 ? 's' : ''}`);
+            if (eventCount) summaryParts.push(`📅 ${eventCount} calendar event${eventCount !== 1 ? 's' : ''}`);
+
+            container.innerHTML = `
+                <div class="card" style="margin-bottom: 12px;">
+                    <div style="font-size: 15px; font-weight: 700; color: #111827;">${total} job${total !== 1 ? 's' : ''} completed today</div>
+                    <div style="font-size: 13px; color: #6b7280; margin-top: 4px;">${summaryParts.join(' · ')}</div>
+                </div>
+                ${rows.map(r => r.html).join('')}`;
+        }
+
         // Floating Action Button functions
         function toggleFabMenu() {
             const menu = document.getElementById('fabMenu');
