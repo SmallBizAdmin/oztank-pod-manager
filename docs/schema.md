@@ -212,6 +212,7 @@ Note: `timestamp` and `date` are reserved-ish names — quote them when ambiguou
 | date | date | YES | |
 | created_at | timestamptz | YES | now() |
 | display_order | integer | YES | 0 |
+| start_time | text | YES | '06:00' (24h "HH:MM"; shared run start time shown on run-day cards) |
 
 ### scheduled_service_days
 | column | type | nullable | default |

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oz Tank - Service POD Manager v11.12</title>
+    <title>Oz Tank - Service POD Manager v11.13</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -10719,11 +10719,22 @@
                 statusText += ` <span style="font-size: 11px; color: #9ca3af;">(${excludedLabel})</span>`;
             }
             
+            const startTimeLine = `
+                <div style="margin-top: 6px; font-size: 12px; color: #4b5563; display: flex; align-items: center; gap: 6px;">
+                    <span>🕕 Start time</span>
+                    <select onclick="event.stopPropagation()"
+                            onchange="event.stopPropagation(); updateServiceDayStartTime('${serviceDay.name.replace(/'/g, "\\'")}', this.value)"
+                            style="font-size: 12px; padding: 2px 4px; border: 1px solid #d1d5db; border-radius: 6px; background: white; color: #374151;">
+                        ${startTimeOptionsHtml(serviceDay.start_time || '06:00')}
+                    </select>
+                </div>`;
+
             card.innerHTML = `
                 <h3>${serviceDay.name}</h3>
                 ${employeeLine}
                 ${dateLine}
                 <p>${statusText}</p>
+                ${startTimeLine}
                 ${isFullyCompleted ? '<span class="completion-badge">✓ Complete</span>' : ''}
                 <div class="progress-bar" style="width: ${completionPercent}%"></div>
             `;
@@ -10732,6 +10743,35 @@
                 showCustomerListView(serviceDay.name);
             };
             return card;
+        }
+
+        // Start-time dropdown options: 4:00 AM – 10:00 AM in 30-min steps.
+        // Values are stored as 24h "HH:MM" text in service_days.start_time.
+        function startTimeOptionsHtml(current) {
+            let html = '';
+            for (let mins = 4 * 60; mins <= 10 * 60; mins += 30) {
+                const h24 = Math.floor(mins / 60), m = mins % 60;
+                const value = `${String(h24).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+                const label = `${h24 > 12 ? h24 - 12 : h24}:${String(m).padStart(2, '0')} ${h24 >= 12 ? 'PM' : 'AM'}`;
+                html += `<option value="${value}"${value === current ? ' selected' : ''}>${label}</option>`;
+            }
+            return html;
+        }
+
+        // Shared per-run-day start time — any worker can set it; everyone sees it.
+        async function updateServiceDayStartTime(name, value) {
+            const sd = db.serviceDays.find(s => s.name === name);
+            if (sd) sd.start_time = value;
+            try {
+                const { error } = await supabase
+                    .from('service_days')
+                    .update({ start_time: value })
+                    .eq('name', name);
+                if (error) throw error;
+                showToast(`Start time for ${name} saved`, 'success');
+            } catch (error) {
+                showToast('Error saving start time: ' + error.message, 'error');
+            }
         }
 
         function formatServiceDate(dateStr) {
