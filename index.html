@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oz Tank - Service POD Manager v11.20</title>
+    <title>Oz Tank - Service POD Manager v11.21</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -1548,7 +1548,8 @@
             color: #991b1b;
             border-left-color: #ef4444;
         }
-        .calendar-service-day.employee-david {
+        .calendar-service-day.employee-david,
+        .calendar-service-day.employee-dave {
             /* Tangerine - Orange */
             background: #ffedd5;
             color: #9a3412;
@@ -1704,7 +1705,7 @@
         .legend-dot.employee-matt { background: #d1e7dd; border-color: #51a36e; }
         .legend-dot.employee-michael { background: #fce7f3; border-color: #ec4899; }
         .legend-dot.employee-red { background: #fee2e2; border-color: #ef4444; }
-        .legend-dot.employee-david { background: #ffedd5; border-color: #f97316; }
+        .legend-dot.employee-david, .legend-dot.employee-dave { background: #ffedd5; border-color: #f97316; }
 
         /* Period Toggle (Week/Month) */
         .period-toggle {
@@ -2905,7 +2906,7 @@
                         <div class="legend-item"><span class="legend-dot employee-matt"></span> Matt</div>
                         <div class="legend-item"><span class="legend-dot employee-michael"></span> Michael</div>
                         <div class="legend-item"><span class="legend-dot employee-red"></span> Red</div>
-                        <div class="legend-item"><span class="legend-dot employee-david"></span> David</div>
+                        <div class="legend-item"><span class="legend-dot employee-dave"></span> Dave</div>
                     </div>
                 </div>
             </div>
@@ -10319,7 +10320,7 @@
                 const dateStr = formatDateLocal(date);
                 const isToday = dateStr === todayStr;
                 const isPast = dateStr < todayStr;
-                const workerOrder = ['Matt', 'Drew', 'Michael', 'Allan', 'David', 'Red'];
+                const workerOrder = ['Matt', 'Drew', 'Michael', 'Allan', 'Dave', 'David', 'Red'];
                 const events = (byDate[dateStr] || []).slice().sort((a, b) => {
                     const ai = workerOrder.indexOf(a.calendar_owner);
                     const bi = workerOrder.indexOf(b.calendar_owner);
@@ -10514,7 +10515,7 @@
             }
             
             // Fixed worker order
-            const workerOrder = ['Matt', 'Drew', 'Michael', 'Allan', 'David', 'Red'];
+            const workerOrder = ['Matt', 'Drew', 'Michael', 'Allan', 'Dave', 'David', 'Red'];
             
             // When viewing all workers: group by DATE first, then worker within each date
             // When a specific worker is selected: group by date only (no worker headers needed)
@@ -10801,7 +10802,7 @@
             }
         }
         
-        const WORKER_ORDER = ['Matt', 'Drew', 'Michael', 'Allan', 'David', 'Red'];
+        const WORKER_ORDER = ['Matt', 'Drew', 'Michael', 'Allan', 'Dave', 'David', 'Red'];
         function workerRank(owner) {
             if (!owner) return 999;
             const o = owner.toLowerCase();
