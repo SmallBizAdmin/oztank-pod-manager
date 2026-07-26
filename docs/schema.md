@@ -38,7 +38,7 @@ Snapshot taken **2026-07-24** (after adding `customers.email_manually`).
 | service_months | array | YES | (months 1–12; null = monthly) |
 | frequency | text | YES | |
 | tank_count | integer | NO | 1 |
-| tank_labels | jsonb | YES | |
+| tank_labels | jsonb | YES | array of `{label, carbsolve, ownership}` — `ownership` is per-tank (`rental`/`user_owned`) and falls back to `tank_ownership` when absent (v11.22+) |
 | myob_last_seen_at | timestamptz | YES | |
 | invoice_under_id | bigint | YES | FK → customers.id (bills-under parent) |
 | tank_ownership | text | NO | 'rental' ('rental' or 'user_owned') |

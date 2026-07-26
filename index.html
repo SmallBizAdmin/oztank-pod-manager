@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oz Tank - Service POD Manager v11.21</title>
+    <title>Oz Tank - Service POD Manager v11.22</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -3147,6 +3147,11 @@
                     </select>
                     <p style="font-size: 12px; color: #6b7280; margin-top: 4px;">User-owned tanks show a 🏷️ badge on invoicing lines and default skips to plain Skipped.</p>
                 </div>
+                <div class="form-group" id="editCustomerTankOwnershipGroup" style="display: none;">
+                    <label style="font-weight: 600;">🏷️ Tank Ownership (per tank)</label>
+                    <div id="editCustomerTankOwnershipRows"></div>
+                    <p style="font-size: 12px; color: #6b7280; margin-top: 4px;">Set each tank separately for mixed customers. User-owned tanks show a 🏷️ marker on runsheets, POD forms and admin lists. Skips default to plain Skipped only when every tank is user-owned.</p>
+                </div>
                 <div class="form-group">
                     <label style="font-weight: 600;">📅 Service Schedule</label>
                     <select id="editCustomerSchedule" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 16px;">
@@ -5618,6 +5623,24 @@
                 }
             },
             
+            // Targeted tank_labels update. Kept separate from saveCustomer so
+            // bulk/import save paths (which build customer objects without tank
+            // config) can never null out a customer's tank labels.
+            async saveTankLabels(customerId, tankLabels) {
+                try {
+                    const { error } = await supabase
+                        .from('customers')
+                        .update({ tank_labels: tankLabels })
+                        .eq('id', customerId);
+                    if (error) throw error;
+                    return true;
+                } catch (error) {
+                    console.error('Error saving tank labels:', error);
+                    showToast('Error saving tank ownership: ' + error.message, 'error');
+                    return false;
+                }
+            },
+
             async deleteCustomer(id) {
                 try {
                     const { error } = await supabase
@@ -6268,10 +6291,17 @@
                 return val === undefined ? null : val;
             },
 
-            // True only for explicitly user-owned tanks (default 'rental')
+            // True only for explicitly user-owned tanks (default 'rental').
+            // Multi-tank: true only when EVERY tank is user-owned — a mixed
+            // customer still has rental tanks, so rental-side skip logic applies.
             isCustomerUserOwned(customerId) {
                 const c = this.customers.find(x => x.id === customerId);
-                return c ? c.tankOwnership === 'user_owned' : false;
+                if (!c) return false;
+                if ((c.tankCount || 1) > 1) {
+                    const entries = getTankEntries(c);
+                    return entries.length > 0 && entries.every(t => t.ownership === 'user_owned');
+                }
+                return c.tankOwnership === 'user_owned';
             },
 
             // Resolve whether a skip should be treated as Rental Only.
@@ -7179,7 +7209,7 @@
                     return `<div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid #f3f4f6;" data-tank-label="${t.label}">
                         <input type="checkbox" class="tank-service-check" data-tank="${t.label}" checked
                                style="width:18px;height:18px;cursor:pointer;" title="${t.label} serviced">
-                        <span style="font-weight:600;font-size:14px;min-width:70px;">${t.label}${t.carbsolve ? ` <span style="font-weight:400;color:#6b7280;font-size:12px;">${t.carbsolve}</span>` : ''}</span>
+                        <span style="font-weight:600;font-size:14px;min-width:70px;">${t.label}${tankOwnedMarker(t.ownership)}${t.carbsolve ? ` <span style="font-weight:400;color:#6b7280;font-size:12px;">${t.carbsolve}</span>` : ''}</span>
                         <select class="tank-carbsolve-select" data-tank="${t.label}"
                                 style="padding:6px 10px;border:2px solid #d1d5db;border-radius:6px;font-size:14px;font-weight:600;">
                             ${makeCarbsolveOptions(defaultCarb)}
@@ -7379,7 +7409,7 @@
                     return `<div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid #f3f4f6;" data-tank-label="${t.label}">
                         <input type="checkbox" class="tank-service-check" data-tank="${t.label}" ${saved.serviced ? 'checked' : ''}
                                style="width:18px;height:18px;cursor:pointer;" title="${t.label} serviced">
-                        <span style="font-weight:600;font-size:14px;min-width:70px;">${t.label}${t.carbsolve ? ` <span style="font-weight:400;color:#6b7280;font-size:12px;">${t.carbsolve}</span>` : ''}</span>
+                        <span style="font-weight:600;font-size:14px;min-width:70px;">${t.label}${tankOwnedMarker(t.ownership)}${t.carbsolve ? ` <span style="font-weight:400;color:#6b7280;font-size:12px;">${t.carbsolve}</span>` : ''}</span>
                         <select class="tank-carbsolve-select" data-tank="${t.label}"
                                 style="padding:6px 10px;border:2px solid #d1d5db;border-radius:6px;font-size:14px;font-weight:600;">
                             ${carbsolveOptions(saved.carbsolve || t.carbsolve || customerCarbsolve)}
@@ -10824,17 +10854,29 @@
             return (worker && colors[worker.toLowerCase()]) || '#6b7280';
         }
         
-        // Helper: normalise tank_labels into [{label, carbsolve}] regardless of format
-        // Handles: null, string array ["Tank 1","Tank 2"], object array [{label,carbsolve}]
+        // Helper: normalise tank_labels into [{label, carbsolve, ownership}] regardless of format
+        // Handles: null, string array ["Tank 1","Tank 2"], object array [{label,carbsolve,ownership}]
+        // ownership is per-tank ('rental' | 'user_owned'); when a tank has no
+        // explicit value it INHERITS the customer-level tank_ownership, so
+        // all-rental / all-owned customers need no per-tank data at all.
         function getTankEntries(customer) {
             const count = customer.tankCount || 1;
+            const inherited = customer.tankOwnership === 'user_owned' ? 'user_owned' : 'rental';
+            const resolveOwnership = v => (v === 'user_owned' || v === 'rental') ? v : inherited;
             if (!customer.tankLabels) {
-                return Array.from({length: count}, (_, i) => ({ label: `Tank ${i + 1}`, carbsolve: null }));
+                return Array.from({length: count}, (_, i) => ({ label: `Tank ${i + 1}`, carbsolve: null, ownership: inherited }));
             }
             return customer.tankLabels.map((t, i) => {
-                if (typeof t === 'string') return { label: t, carbsolve: null };
-                return { label: t.label || `Tank ${i + 1}`, carbsolve: t.carbsolve || null };
+                if (typeof t === 'string') return { label: t, carbsolve: null, ownership: inherited };
+                return { label: t.label || `Tank ${i + 1}`, carbsolve: t.carbsolve || null, ownership: resolveOwnership(t.ownership) };
             });
+        }
+
+        // Per-tank user-owned marker for tank chips and per-tank rows.
+        function tankOwnedMarker(ownership) {
+            return ownership === 'user_owned'
+                ? ' <span title="Customer-owned tank" style="color:#5b21b6;">🏷️</span>'
+                : '';
         }
 
         // Quick Complete Table Functions
@@ -11451,11 +11493,16 @@
                 customerInfoHtml += `<span style="background: ${typeStyle.bg}; color: ${typeStyle.text}; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; margin-right: 6px;">${displayServiceType}</span>`;
                 
                 if (customer.tankCount > 1) {
-                    // Multi-tank: show a badge per tank with label + size
+                    // Multi-tank: show a badge per tank with label + size.
+                    // User-owned tanks use the purple user-owned palette + 🏷️.
                     const tankEntries = getTankEntries(customer);
                     tankEntries.forEach(t => {
                         const tankBadgeText = t.carbsolve ? `${t.label} · ${t.carbsolve}` : t.label;
-                        customerInfoHtml += `<span style="background:#eff6ff;color:#2563eb;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;margin-right:4px;">🛢️ ${tankBadgeText}</span>`;
+                        const owned = t.ownership === 'user_owned';
+                        const chipStyle = owned
+                            ? 'background:#ede9fe;color:#5b21b6;border:1px solid #c4b5fd;'
+                            : 'background:#eff6ff;color:#2563eb;';
+                        customerInfoHtml += `<span title="${owned ? 'Customer-owned tank' : 'Rental tank'}" style="${chipStyle}padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;margin-right:4px;">${owned ? '🏷️' : '🛢️'} ${tankBadgeText}</span>`;
                     });
                 } else if (customer.carbsolve) {
                     customerInfoHtml += `<span class="customer-carbsolve">${customer.carbsolve}</span>`;
@@ -12648,8 +12695,23 @@
             const c = (customerOrId && typeof customerOrId === 'object')
                 ? customerOrId
                 : db.customers.find(x => x.id === customerOrId);
-            if (!c || c.tankOwnership !== 'user_owned') return '';
-            return `<span style="background:#ede9fe;color:#5b21b6;border:1px solid #c4b5fd;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:600;margin-left:6px;white-space:nowrap;" title="Customer-owned tank (not a rental)">🏷️ User-owned</span>`;
+            if (!c) return '';
+            const style = 'background:#ede9fe;color:#5b21b6;border:1px solid #c4b5fd;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:600;margin-left:6px;white-space:nowrap;';
+            // Multi-tank: summarise across tanks. All owned reads the same as a
+            // single-tank customer; a mixed customer says which tanks are theirs.
+            if ((c.tankCount || 1) > 1) {
+                const entries = getTankEntries(c);
+                const owned = entries.filter(t => t.ownership === 'user_owned');
+                if (owned.length === 0) return '';
+                const allOwned = owned.length === entries.length;
+                const label = allOwned ? 'User-owned' : `${owned.length}/${entries.length} user-owned`;
+                const title = allOwned
+                    ? 'All tanks customer-owned (not rentals)'
+                    : 'Customer-owned: ' + owned.map(t => t.label).join(', ');
+                return `<span style="${style}" title="${escHtml(title)}">🏷️ ${label}</span>`;
+            }
+            if (c.tankOwnership !== 'user_owned') return '';
+            return `<span style="${style}" title="Customer-owned tank (not a rental)">🏷️ User-owned</span>`;
         }
 
         // Business-group badge. Currently flags ALH Group customers; other/blank
@@ -12840,13 +12902,19 @@
                 const serviceType = pod ? (pod.serviceType || customer.serviceType || 'Service') : (customer.serviceType || 'Service');
                 let carbsolve;
                 if (pod && pod.tankServices && pod.tankServices.length > 0) {
+                    // PODs snapshot tank label/carbsolve but not ownership — resolve
+                    // ownership live from the customer's current tank config.
+                    const ownershipByLabel = {};
+                    if (customer.tankCount > 1) {
+                        getTankEntries(customer).forEach(t => { ownershipByLabel[t.label] = t.ownership; });
+                    }
                     carbsolve = pod.tankServices.map(t =>
-                        `<span style="white-space:nowrap;">${t.serviced ? '✅' : '⬜'} ${t.tankLabel}${t.carbsolve ? ` · ${t.carbsolve}` : ''}</span>`
+                        `<span style="white-space:nowrap;">${t.serviced ? '✅' : '⬜'} ${t.tankLabel}${tankOwnedMarker(ownershipByLabel[t.tankLabel])}${t.carbsolve ? ` · ${t.carbsolve}` : ''}</span>`
                     ).join('<br>');
                 } else if (customer.tankCount > 1) {
                     const tankEntries = getTankEntries(customer);
                     carbsolve = tankEntries.map(t =>
-                        `<span style="white-space:nowrap;">⬜ ${t.label}${t.carbsolve ? ` · ${t.carbsolve}` : ''}</span>`
+                        `<span style="white-space:nowrap;">⬜ ${t.label}${tankOwnedMarker(t.ownership)}${t.carbsolve ? ` · ${t.carbsolve}` : ''}</span>`
                     ).join('<br>');
                 } else {
                     carbsolve = pod ? (pod.carbsolve || customer.carbsolve || '-') : (customer.carbsolve || '-');
@@ -15023,6 +15091,27 @@
             } else {
                 ownershipGroup.style.display = 'none';
             }
+
+            // Multi-tank: per-tank ownership rows (steve-only). Each row starts
+            // from the effective value — the customer-level default unless that
+            // tank already carries an explicit override.
+            const tankOwnGroup = document.getElementById('editCustomerTankOwnershipGroup');
+            const tankOwnRows = document.getElementById('editCustomerTankOwnershipRows');
+            if (isSteve && !isSingleTank) {
+                const tankEntries = getTankEntries(customer);
+                tankOwnRows.innerHTML = tankEntries.map((t, i) => `
+                    <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid #f3f4f6;">
+                        <span style="flex:1;min-width:0;font-weight:600;font-size:14px;">🛢️ ${escHtml(t.label)}${t.carbsolve ? ` <span style="font-weight:400;color:#6b7280;font-size:12px;">${escHtml(t.carbsolve)}</span>` : ''}</span>
+                        <select class="tank-ownership-select" data-tank-index="${i}" style="padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:14px;">
+                            <option value="rental"${t.ownership !== 'user_owned' ? ' selected' : ''}>Rental</option>
+                            <option value="user_owned"${t.ownership === 'user_owned' ? ' selected' : ''}>User-owned</option>
+                        </select>
+                    </div>`).join('');
+                tankOwnGroup.style.display = 'block';
+            } else {
+                tankOwnGroup.style.display = 'none';
+                tankOwnRows.innerHTML = '';
+            }
             
             // Load service schedule
             const scheduleSelect = document.getElementById('editCustomerSchedule');
@@ -15117,9 +15206,33 @@
                 const ownVal = document.getElementById('editCustomerOwnership').value;
                 customer.tankOwnership = ownVal === 'user_owned' ? 'user_owned' : 'rental';
             }
-            
+
+            // Per-tank ownership (multi-tank). Written to tank_labels via a
+            // dedicated update — saveCustomer deliberately doesn't touch
+            // tank_labels, so import/bulk save paths can't clobber tank config.
+            const tankOwnGroupSave = document.getElementById('editCustomerTankOwnershipGroup');
+            let tankLabelsToSave = null;
+            if (isSteveSave && tankOwnGroupSave && tankOwnGroupSave.style.display !== 'none') {
+                const entries = getTankEntries(customer);
+                document.querySelectorAll('#editCustomerTankOwnershipRows .tank-ownership-select').forEach(sel => {
+                    const idx = parseInt(sel.dataset.tankIndex);
+                    if (entries[idx]) {
+                        entries[idx].ownership = sel.value === 'user_owned' ? 'user_owned' : 'rental';
+                    }
+                });
+                tankLabelsToSave = entries.map(t => ({
+                    label: t.label,
+                    carbsolve: t.carbsolve,
+                    ownership: t.ownership
+                }));
+            }
+
             try {
                 await db.saveCustomer(customer);
+                if (tankLabelsToSave) {
+                    const ok = await db.saveTankLabels(customerId, tankLabelsToSave);
+                    if (ok) customer.tankLabels = tankLabelsToSave;
+                }
                 hideCustomerEditModal();
                 renderCustomerList();
                 showToast('Customer updated successfully!', 'success');
