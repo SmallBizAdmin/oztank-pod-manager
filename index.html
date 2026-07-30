@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oz Tank - Service POD Manager v11.24</title>
+    <title>Oz Tank - Service POD Manager v11.25</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -3615,7 +3615,88 @@
 
         // Initialize Supabase
         let supabase;
-        
+
+        // ── App update check ────────────────────────────────────────
+        // The app is one static file with no service worker, so a phone left
+        // open all day never re-fetches it and silently misses every deploy
+        // (this is why workers kept tapping a banner whose handler didn't
+        // exist yet). Poll the deployed file's ETag — a content hash Vercel
+        // returns on HEAD — and offer a reload when it changes. Headers only,
+        // so it costs virtually nothing on mobile data.
+        //
+        // The reload is ALWAYS worker-initiated: forcing one could destroy a
+        // half-filled POD form. Dismissing re-offers later rather than nagging.
+        let _deployFingerprint = null;
+        let _updateOffered = false;
+        const UPDATE_CHECK_MS = 15 * 60 * 1000;
+
+        async function fetchDeployFingerprint() {
+            try {
+                const res = await fetch(location.pathname + '?vcheck=' + Date.now(), {
+                    method: 'HEAD',
+                    cache: 'no-store'
+                });
+                if (!res.ok) return null;
+                return res.headers.get('etag') || res.headers.get('last-modified') || null;
+            } catch (e) {
+                return null; // offline or blocked — just try again next tick
+            }
+        }
+
+        async function initUpdateCheck() {
+            _deployFingerprint = await fetchDeployFingerprint();
+            if (!_deployFingerprint) {
+                console.warn('Update check: no ETag/Last-Modified available — check disabled');
+                return;
+            }
+            setInterval(checkForAppUpdate, UPDATE_CHECK_MS);
+            // Also check when the app is brought back to the foreground, which
+            // is when a worker is most likely to have been away for a while.
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible') checkForAppUpdate();
+            });
+        }
+
+        async function checkForAppUpdate() {
+            if (_updateOffered || !_deployFingerprint) return;
+            const fp = await fetchDeployFingerprint();
+            if (fp && fp !== _deployFingerprint) showUpdateBanner();
+        }
+
+        function showUpdateBanner() {
+            if (document.getElementById('appUpdateBanner')) return;
+            _updateOffered = true;
+            const bar = document.createElement('div');
+            bar.id = 'appUpdateBanner';
+            bar.style.cssText = 'position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom, 0px));z-index:400;background:#1d4ed8;color:white;border-radius:10px;padding:12px 14px;display:flex;align-items:center;gap:10px;box-shadow:0 4px 14px rgba(0,0,0,0.35);font-size:14px;font-weight:600;';
+            bar.innerHTML = `
+                <span style="font-size:18px;">⬆️</span>
+                <span style="flex:1;">App update available</span>
+                <button type="button" onclick="reloadForUpdate()" style="background:white;color:#1d4ed8;border:none;border-radius:6px;padding:8px 14px;font-weight:700;font-size:13px;cursor:pointer;">Reload</button>
+                <button type="button" onclick="dismissUpdateBanner()" title="Later" style="background:transparent;color:rgba(255,255,255,0.85);border:none;font-size:22px;line-height:1;cursor:pointer;padding:0 4px;">×</button>
+            `;
+            document.body.appendChild(bar);
+        }
+
+        function dismissUpdateBanner() {
+            const b = document.getElementById('appUpdateBanner');
+            if (b) b.remove();
+            // Re-offer after a while instead of pestering on every check
+            setTimeout(() => { _updateOffered = false; }, 30 * 60 * 1000);
+        }
+
+        function reloadForUpdate() {
+            // Warn if there's unsynced work — a reload is safe (the queue lives in
+            // localStorage) but an in-progress form that was never saved is not.
+            const pending = getOfflineQueue().length + getFailedSyncItems().length;
+            if (pending > 0 && !confirm(`${pending} item${pending > 1 ? 's' : ''} still waiting to sync. They are saved on this phone and will survive the reload. Reload now?`)) {
+                return;
+            }
+            // Cache-busting navigation — a plain reload can be served from cache
+            location.replace(location.pathname + '?v=' + Date.now());
+        }
+
+
         // ===== OFFLINE QUEUE SYSTEM =====
         let isOnline = navigator.onLine;
         const CACHE_KEY = 'ozTankOfflineCache';
@@ -6655,6 +6736,7 @@
 
         // Initialize
         async function initializeApp() {
+            initUpdateCheck(); // fire-and-forget: watch for new deploys
             await db.load();
 
             // Add some demo data if none exists (for testing)
