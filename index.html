@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oz Tank - Service POD Manager v11.23</title>
+    <title>Oz Tank - Service POD Manager v11.24</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -36,7 +36,10 @@
             display: none;
             background: #f59e0b;
             color: #78350f;
-            padding: 8px 16px;
+            /* Extra top padding clears the iOS status bar / notch in standalone
+               mode — taps in that strip are swallowed by the OS, so the text and
+               View button must sit below it to be reachable. */
+            padding: calc(8px + env(safe-area-inset-top, 0px)) 16px 8px;
             text-align: center;
             font-weight: 500;
             font-size: 14px;
@@ -46,16 +49,31 @@
             right: 0;
             z-index: 200;
         }
-        
+
         .offline-bar.visible {
             display: flex;
             align-items: center;
             justify-content: center;
             gap: 8px;
+            flex-wrap: wrap;
         }
-        
+
+        /* Explicit tap target — relying on the whole bar being tappable isn't
+           obvious to workers, and the bar's top edge is unreachable on iOS. */
+        .offline-bar-view-btn {
+            background: rgba(255,255,255,0.95);
+            color: #b91c1c;
+            border: none;
+            border-radius: 6px;
+            padding: 5px 12px;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+
         body.has-offline-bar {
-            padding-top: 40px;
+            padding-top: calc(40px + env(safe-area-inset-top, 0px));
         }
         
         .offline-bar.syncing {
@@ -2261,6 +2279,8 @@
         <span id="offlineIcon">📴</span>
         <span id="offlineText">Offline - changes will sync when connected</span>
         <span id="offlineQueueBadge" class="offline-queue-badge" style="display: none;">0 pending</span>
+        <button type="button" id="offlineViewBtn" class="offline-bar-view-btn" style="display: none;"
+                onclick="event.stopPropagation(); showSyncIssuesModal();">View &amp; Retry</button>
     </div>
     
     <!-- Home View -->
@@ -3607,9 +3627,13 @@
             const icon = document.getElementById('offlineIcon');
             const text = document.getElementById('offlineText');
             const badge = document.getElementById('offlineQueueBadge');
+            const viewBtn = document.getElementById('offlineViewBtn');
             const queue = getOfflineQueue();
             const failed = getFailedSyncItems();
-            
+
+            // Explicit button only in the failed state — that's the one needing action
+            if (viewBtn) viewBtn.style.display = failed.length > 0 ? 'inline-block' : 'none';
+
             if (failed.length > 0) {
                 // Highest-priority state: something exhausted its retries and did NOT sync.
                 // The worker must know, because nothing will retry it automatically.
@@ -3617,7 +3641,7 @@
                 bar.classList.remove('syncing');
                 document.body.classList.add('has-offline-bar');
                 icon.textContent = '⚠️';
-                text.textContent = `${failed.length} item${failed.length > 1 ? 's' : ''} couldn\u2019t sync — tap to view & retry`;
+                text.textContent = `${failed.length} item${failed.length > 1 ? 's' : ''} couldn\u2019t sync`;
                 badge.style.display = 'none';
             } else if (!isOnline) {
                 bar.classList.add('visible');
