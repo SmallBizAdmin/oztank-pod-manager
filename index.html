@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oz Tank - Service POD Manager v11.26</title>
+    <title>Oz Tank - Service POD Manager v11.27</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -3167,6 +3167,22 @@
                     </label>
                     <p style="font-size: 12px; color: #6b7280; margin-top: 4px;">Shows a 🚫 Do Not Email badge on admin runsheet, calendar and invoicing lists.</p>
                 </div>
+                <div class="form-group">
+                    <label style="font-weight: 600;">🧪 Separate Chemical Invoice</label>
+                    <label style="display: flex; align-items: center; gap: 8px; font-size: 15px; cursor: pointer;">
+                        <input type="checkbox" id="editCustomerChemSeparateInvoice" style="width: 18px; height: 18px;">
+                        Carbsolve delivered is invoiced separately (no delivery fee)
+                    </label>
+                    <p style="font-size: 12px; color: #6b7280; margin-top: 4px;">Shows a 🧪 badge on admin and invoicing lists — chemical goes on its own invoice, with no delivery fee.</p>
+                </div>
+                <div class="form-group">
+                    <label style="font-weight: 600;">🔁 Monthly Rental</label>
+                    <label style="display: flex; align-items: center; gap: 8px; font-size: 15px; cursor: pointer;">
+                        <input type="checkbox" id="editCustomerMonthlyRental" style="width: 18px; height: 18px;">
+                        Recurring rental charged every month regardless of service
+                    </label>
+                    <p style="font-size: 12px; color: #6b7280; margin-top: 4px;">Shows a 🔁 badge on admin and invoicing lists.</p>
+                </div>
                 <div class="form-group" id="editCustomerOwnershipGroup" style="display: none;">
                     <label style="font-weight: 600;">🏷️ Tank Ownership</label>
                     <select id="editCustomerOwnership" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 16px;">
@@ -4890,7 +4906,9 @@
                         tankOwnership: c.tank_ownership || 'rental',
                         emailManually: c.email_manually === true,
                         noDeliveryFee: c.no_delivery_fee === true,
-                        doNotEmail: c.do_not_email === true
+                        doNotEmail: c.do_not_email === true,
+                        chemSeparateInvoice: c.chem_separate_invoice === true,
+                        monthlyRental: c.monthly_rental === true
                     }));
 
                     // Load service days
@@ -5727,7 +5745,9 @@
                             tank_ownership: customer.tankOwnership || 'rental',
                             email_manually: customer.emailManually === true,
                             no_delivery_fee: customer.noDeliveryFee === true,
-                            do_not_email: customer.doNotEmail === true
+                            do_not_email: customer.doNotEmail === true,
+                            chem_separate_invoice: customer.chemSeparateInvoice === true,
+                            monthly_rental: customer.monthlyRental === true
                         });
                     if (error) throw error;
                     return true;
@@ -7039,7 +7059,9 @@
                             tankOwnership: c.tank_ownership || 'rental',
                             emailManually: c.email_manually === true,
                             noDeliveryFee: c.no_delivery_fee === true,
-                            doNotEmail: c.do_not_email === true
+                            doNotEmail: c.do_not_email === true,
+                            chemSeparateInvoice: c.chem_separate_invoice === true,
+                            monthlyRental: c.monthly_rental === true
                         }));
                         // Re-render all views that depend on customer data
                         renderRunDays();
@@ -12881,6 +12903,27 @@
             return `<span style="background:#fef2f2;color:#b91c1c;border:1px solid #fecaca;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:600;margin-left:6px;white-space:nowrap;" title="Do not email this customer">🚫 Do Not Email</span>`;
         }
 
+        // Chemical-invoice badge. Carbsolve delivered to this customer is billed
+        // on its own separate invoice, chemical only, with no delivery fee.
+        // Accepts a customer object or id.
+        function chemSeparateInvoiceBadge(customerOrId) {
+            const c = (customerOrId && typeof customerOrId === 'object')
+                ? customerOrId
+                : db.customers.find(x => x.id === customerOrId);
+            if (!c || c.chemSeparateInvoice !== true) return '';
+            return `<span style="background:#ecfdf5;color:#047857;border:1px solid #6ee7b7;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:600;margin-left:6px;white-space:nowrap;" title="Carbsolve delivered is billed on a SEPARATE chemical-only invoice, with no delivery fee">🧪 Separate Chemical Invoice</span>`;
+        }
+
+        // Monthly-rental badge. Rental is charged as a recurring transaction every
+        // month regardless of whether a service happened.
+        function monthlyRentalBadge(customerOrId) {
+            const c = (customerOrId && typeof customerOrId === 'object')
+                ? customerOrId
+                : db.customers.find(x => x.id === customerOrId);
+            if (!c || c.monthlyRental !== true) return '';
+            return `<span style="background:#eef2ff;color:#4338ca;border:1px solid #a5b4fc;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:600;margin-left:6px;white-space:nowrap;" title="Recurring rental transaction is charged every month regardless of service">🔁 Monthly Rental</span>`;
+        }
+
         // Resolve the linked customer for a monthly invoice entry and render the
         // same badge set used on admin runsheet/calendar rows:
         //   📋 billing flag (Blanket / DEL ONLY / etc.)  → from invoiceType/waste
@@ -12911,7 +12954,9 @@
                 + alhBadge(cust)
                 + emailManuallyBadge(cust)
                 + noDeliveryFeeBadge(cust)
-                + doNotEmailBadge(cust);
+                + doNotEmailBadge(cust)
+                + chemSeparateInvoiceBadge(cust)
+                + monthlyRentalBadge(cust);
         }
 
         function loadAdminRunsheet() {
@@ -13080,8 +13125,8 @@
                     : '';
                 const billsUnderBadges = billsUnderChildBadge(customer) + billsUnderParentBadge(customer);
                 const customerNameDisplay = isSkipped 
-                    ? `<span style="text-decoration: line-through; color: #9ca3af;">${customer.name}</span> <span style="background: #fee2e2; color: #991b1b; padding: 2px 6px; border-radius: 8px; font-size: 10px;">${skipReason || 'Skipped'}</span>${billingBadge}${billsUnderBadges}${userOwnedBadge(customer)}${alhBadge(customer)}${emailManuallyBadge(customer)}${noDeliveryFeeBadge(customer)}${doNotEmailBadge(customer)}`
-                    : customer.name + scheduleBadgeHtml + billingBadge + billsUnderBadges + userOwnedBadge(customer) + alhBadge(customer) + emailManuallyBadge(customer) + noDeliveryFeeBadge(customer) + doNotEmailBadge(customer) + combinablePodBadge(findCounterpartPods(customer.id, selectedDate, true), 'Ad-hoc');
+                    ? `<span style="text-decoration: line-through; color: #9ca3af;">${customer.name}</span> <span style="background: #fee2e2; color: #991b1b; padding: 2px 6px; border-radius: 8px; font-size: 10px;">${skipReason || 'Skipped'}</span>${billingBadge}${billsUnderBadges}${userOwnedBadge(customer)}${alhBadge(customer)}${emailManuallyBadge(customer)}${noDeliveryFeeBadge(customer)}${doNotEmailBadge(customer)}${chemSeparateInvoiceBadge(customer)}${monthlyRentalBadge(customer)}`
+                    : customer.name + scheduleBadgeHtml + billingBadge + billsUnderBadges + userOwnedBadge(customer) + alhBadge(customer) + emailManuallyBadge(customer) + noDeliveryFeeBadge(customer) + doNotEmailBadge(customer) + chemSeparateInvoiceBadge(customer) + monthlyRentalBadge(customer) + combinablePodBadge(findCounterpartPods(customer.id, selectedDate, true), 'Ad-hoc');
                 
                 // Status column
                 let statusDisplay;
@@ -13368,7 +13413,7 @@
                                onchange="toggleCheckedSent(${pod.id}, null, null)" title="Checked & Sent">`}
                         </td>
                         <td style="padding: 12px;">
-                            ${customerName}${unlinkedWarningIcon(pod)}${podBillingBadge}${customer ? billsUnderChildBadge(customer) + billsUnderParentBadge(customer) : ''}${podOrderNumberBadge}${customer ? userOwnedBadge(customer) : ''}${customer ? alhBadge(customer) : ''}${customer ? emailManuallyBadge(customer) : ''}${customer ? noDeliveryFeeBadge(customer) : ''}${customer ? doNotEmailBadge(customer) : ''}
+                            ${customerName}${unlinkedWarningIcon(pod)}${podBillingBadge}${customer ? billsUnderChildBadge(customer) + billsUnderParentBadge(customer) : ''}${podOrderNumberBadge}${customer ? userOwnedBadge(customer) : ''}${customer ? alhBadge(customer) : ''}${customer ? emailManuallyBadge(customer) : ''}${customer ? noDeliveryFeeBadge(customer) : ''}${customer ? doNotEmailBadge(customer) : ''}${customer ? chemSeparateInvoiceBadge(customer) : ''}${customer ? monthlyRentalBadge(customer) : ''}
                             <span style="background:#f59e0b;color:white;padding:2px 6px;border-radius:8px;font-size:10px;margin-left:8px;">Ad-Hoc</span>
                             ${calBadge}
                             ${podWorkerBadge}
@@ -13434,7 +13479,7 @@
                                 style="width:16px;height:16px;cursor:pointer;${!tmIsInvoiced ? 'opacity:0.4;' : ''}">`}
                         </td>
                         <td style="padding: 10px;">
-                            ${tm.customerName}${unlinkedWarningIcon(tm)}${tmBillingBadge}${tmCustomer ? billsUnderChildBadge(tmCustomer) + billsUnderParentBadge(tmCustomer) : ''}${tmOrderNumberBadge}${tmCustomer ? userOwnedBadge(tmCustomer) : ''}${tmCustomer ? alhBadge(tmCustomer) : ''}${tmCustomer ? emailManuallyBadge(tmCustomer) : ''}${tmCustomer ? noDeliveryFeeBadge(tmCustomer) : ''}${tmCustomer ? doNotEmailBadge(tmCustomer) : ''}
+                            ${tm.customerName}${unlinkedWarningIcon(tm)}${tmBillingBadge}${tmCustomer ? billsUnderChildBadge(tmCustomer) + billsUnderParentBadge(tmCustomer) : ''}${tmOrderNumberBadge}${tmCustomer ? userOwnedBadge(tmCustomer) : ''}${tmCustomer ? alhBadge(tmCustomer) : ''}${tmCustomer ? emailManuallyBadge(tmCustomer) : ''}${tmCustomer ? noDeliveryFeeBadge(tmCustomer) : ''}${tmCustomer ? doNotEmailBadge(tmCustomer) : ''}${tmCustomer ? chemSeparateInvoiceBadge(tmCustomer) : ''}${tmCustomer ? monthlyRentalBadge(tmCustomer) : ''}
                             <div style="margin-top:4px;">
                                 <span style="background:#3b82f6;color:white;padding:2px 6px;border-radius:8px;font-size:10px;">Ad-Hoc</span>
                                 ${tm.completedBy ? `<span style="display:inline-block;margin-left:4px;background:${getWorkerColor(tm.completedBy)};color:white;padding:1px 6px;border-radius:8px;font-size:10px;">👤 ${tm.completedBy}</span>` : ''}
@@ -13672,7 +13717,7 @@
                             style="width:16px;height:16px;cursor:pointer;${!tmIsInvoiced ? 'opacity:0.4;' : ''}">
                     </td>
                     <td style="padding: 10px;">
-                        ${tm.customerName}${unlinkedWarningIcon(tm)}${userOwnedBadge(tm.customerId)}${alhBadge(tm.customerId)}${emailManuallyBadge(tm.customerId)}${noDeliveryFeeBadge(tm.customerId)}${doNotEmailBadge(tm.customerId)}
+                        ${tm.customerName}${unlinkedWarningIcon(tm)}${userOwnedBadge(tm.customerId)}${alhBadge(tm.customerId)}${emailManuallyBadge(tm.customerId)}${noDeliveryFeeBadge(tm.customerId)}${doNotEmailBadge(tm.customerId)}${chemSeparateInvoiceBadge(tm.customerId)}${monthlyRentalBadge(tm.customerId)}
                         ${adHocBadge ? `<div style="margin-top: 4px;">${adHocBadge}</div>` : ''}
                         ${invoiceNoteInlineHtml('tm', tm.id, tm.invoiceNotes || null)}
                     </td>
@@ -15217,6 +15262,8 @@
             document.getElementById('editCustomerEmailManually').checked = customer.emailManually === true;
             document.getElementById('editCustomerNoDeliveryFee').checked = customer.noDeliveryFee === true;
             document.getElementById('editCustomerDoNotEmail').checked = customer.doNotEmail === true;
+            document.getElementById('editCustomerChemSeparateInvoice').checked = customer.chemSeparateInvoice === true;
+            document.getElementById('editCustomerMonthlyRental').checked = customer.monthlyRental === true;
 
             // Tank ownership: steve-only, single-tank only (per-tank deferred for multi-tank)
             const ownershipGroup = document.getElementById('editCustomerOwnershipGroup');
@@ -15337,6 +15384,8 @@
             customer.emailManually = document.getElementById('editCustomerEmailManually').checked;
             customer.noDeliveryFee = document.getElementById('editCustomerNoDeliveryFee').checked;
             customer.doNotEmail = document.getElementById('editCustomerDoNotEmail').checked;
+            customer.chemSeparateInvoice = document.getElementById('editCustomerChemSeparateInvoice').checked;
+            customer.monthlyRental = document.getElementById('editCustomerMonthlyRental').checked;
 
             // Tank ownership: only writable by steve on single-tank customers.
             const ownershipGroup = document.getElementById('editCustomerOwnershipGroup');

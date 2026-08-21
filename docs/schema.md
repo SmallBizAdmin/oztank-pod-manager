@@ -45,6 +45,8 @@ Snapshot taken **2026-07-24** (after adding `customers.email_manually`).
 | email_manually | boolean | YES | false |
 | no_delivery_fee | boolean | YES | false |
 | do_not_email | boolean | YES | false |
+| chem_separate_invoice | boolean | YES | false (carbsolve billed on its own invoice, no delivery fee) |
+| monthly_rental | boolean | YES | false (recurring rental charged monthly regardless of service) |
 
 Note: `"order"` is a reserved word — always double-quote it in SQL.
 
