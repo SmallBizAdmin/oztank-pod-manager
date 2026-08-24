@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oz Tank - Service POD Manager v11.27</title>
+    <title>Oz Tank - Service POD Manager v11.28</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -12924,6 +12924,23 @@
             return `<span style="background:#eef2ff;color:#4338ca;border:1px solid #a5b4fc;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:600;margin-left:6px;white-space:nowrap;" title="Recurring rental transaction is charged every month regardless of service">🔁 Monthly Rental</span>`;
         }
 
+        // Label for a completed POD on admin views. A runsheet POD inherits its
+        // service type from the customer (the form has no type selector), so a
+        // "Check" customer whose visit resulted in product going out was reading
+        // as "Serviced". Report what actually happened: a Check visit that
+        // delivered line items is a delivery; one that didn't is just a check.
+        function podStatusLabel(pod, customer) {
+            const type = (pod && pod.serviceType) || (customer && customer.serviceType) || 'Service';
+            if (type === 'Delivery' || (customer && customer.serviceType === 'Delivery')) return 'Delivered';
+            if (type === 'Check') {
+                // products only ever contains confirmed lines with quantity > 0;
+                // 'repair' lines are repairs, not delivered stock.
+                const delivered = ((pod && pod.products) || []).some(p => p && p.type !== 'repair');
+                return delivered ? 'Delivered' : 'Checked';
+            }
+            return 'Serviced';
+        }
+
         // Resolve the linked customer for a monthly invoice entry and render the
         // same badge set used on admin runsheet/calendar rows:
         //   📋 billing flag (Blanket / DEL ONLY / etc.)  → from invoiceType/waste
@@ -13209,7 +13226,7 @@
                     if (isRentalOnly) {
                         statusBadgeHtml = `<div style="text-align:center;"><span class="rental-only-badge">Rental Only</span>${podAttrib}<div style="display:flex;align-items:center;justify-content:center;gap:4px;margin-top:3px;">${rentalToggleBtn}${podPencil}</div></div>`;
                     } else {
-                        const badgeLabel = (pod.serviceType === 'Delivery' || customer.serviceType === 'Delivery') ? 'Delivered' : 'Serviced';
+                        const badgeLabel = podStatusLabel(pod, customer);
                         statusBadgeHtml = `<div style="text-align:center;"><span style="background: #dcfce7; color: #166534; padding: 2px 8px; border-radius: 8px; font-size: 10px; font-weight: 600;">${badgeLabel}</span>${podAttrib}<div style="display:flex;align-items:center;justify-content:center;gap:4px;margin-top:3px;">${rentalToggleBtn}${podPencil}</div></div>`;
                     }
                 } else if (isSkipped) {
