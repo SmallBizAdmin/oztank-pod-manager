@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oz Tank - Service POD Manager v11.28</title>
+    <title>Oz Tank - Service POD Manager v11.29</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -4423,12 +4423,53 @@
         //   "Service O/N: PO4471"                      -> "PO4471"
         //   "Repair o/n PO 12345"                      -> "PO 12345"
         // Returns null if no O/N marker is present or capture is empty.
+        // Pull an order number out of a calendar event title.
+        // Captures only the O/N token itself — previously this ran to end-of-line,
+        // so "O/N 12345 - 7kg" stored "12345 - 7kg" and "O/N 12345 (URGENT)"
+        // stored "12345 (URGENT)". Order numbers are alphanumeric and may contain
+        // hyphens or slashes (e.g. 240826-R57VHD, PO-2026-001) but never spaces.
         function extractOrderNumber(title) {
             if (!title) return null;
-            const m = String(title).match(/\bO\/N\s*[:#\-]?\s*(.+?)\s*$/i);
+            const m = String(title).match(/\bO\/N\s*[:#\-]?\s*([A-Za-z0-9][A-Za-z0-9\-\/]*)/i);
             if (!m) return null;
             const captured = m[1].trim();
             return captured.length > 0 ? captured : null;
+        }
+
+        // Read a calendar event's CURRENT title from the database.
+        // The in-memory copy can be hours stale: the sync upserts title edits in
+        // place (same row id, new title), and a backgrounded or offline phone
+        // misses the realtime refresh. Parsing the cached title silently lost
+        // order numbers that the office added to an event on the day of the job.
+        async function fetchLiveEventTitle(eventId) {
+            try {
+                if (!supabase || !navigator.onLine) return null;
+                const { data, error } = await supabase
+                    .from('worker_calendar_events')
+                    .select('event_title')
+                    .eq('id', parseInt(eventId))
+                    .maybeSingle();
+                if (error || !data) return null;
+                return data.event_title || null;
+            } catch (e) {
+                return null; // offline / transient — fall back to the cached title
+            }
+        }
+
+        // Resolve the order number for a calendar-linked job. Prefers the live
+        // title; falls back to the cached one when offline or the row is gone.
+        async function resolveOrderNumber(eventId) {
+            if (!eventId) return null;
+            const liveTitle = await fetchLiveEventTitle(eventId);
+            if (liveTitle) return extractOrderNumber(liveTitle);
+            const cached = db.findCalendarEvent(eventId);
+            return (cached && cached.eventTitle) ? extractOrderNumber(cached.eventTitle) : null;
+        }
+
+        // Shared O/N badge so every admin view renders it identically.
+        function orderNumberBadge(orderNumber) {
+            if (!orderNumber) return '';
+            return `<span style="background: #14532d; color: white; padding: 2px 7px; border-radius: 8px; font-size: 10px; font-weight: 600; margin-left: 6px;">O/N ${escHtml(String(orderNumber))}</span>`;
         }
 
         // Format date as YYYY-MM-DD without UTC conversion (fixes timezone issues)
@@ -12202,16 +12243,13 @@
             const isRentalOnly = notesValue.toLowerCase().includes('no service required');
             
             const podId = currentEditingPodId || Date.now();
-            // O/N extraction: only for new ad-hoc PODs linked to a calendar event.
+            // O/N extraction: only for new PODs linked to a calendar event.
             // Skipped on edit (currentEditingPodId set) so existing value is preserved.
-            // Uses db.findCalendarEvent which parseInts the id and searches both
-            // adminCalendarEvents (admin view) and calendarEvents (worker view).
+            // Reads the event's LIVE title from the DB — the cached copy can be
+            // stale by hours and was losing same-day order numbers.
             let orderNumber = null;
             if (!currentEditingPodId && currentCalendarEventId) {
-                const linkedEv = db.findCalendarEvent(currentCalendarEventId);
-                if (linkedEv && linkedEv.eventTitle) {
-                    orderNumber = extractOrderNumber(linkedEv.eventTitle);
-                }
+                orderNumber = await resolveOrderNumber(currentCalendarEventId);
             }
             const pod = {
                 id: podId,
@@ -13143,7 +13181,7 @@
                 const billsUnderBadges = billsUnderChildBadge(customer) + billsUnderParentBadge(customer);
                 const customerNameDisplay = isSkipped 
                     ? `<span style="text-decoration: line-through; color: #9ca3af;">${customer.name}</span> <span style="background: #fee2e2; color: #991b1b; padding: 2px 6px; border-radius: 8px; font-size: 10px;">${skipReason || 'Skipped'}</span>${billingBadge}${billsUnderBadges}${userOwnedBadge(customer)}${alhBadge(customer)}${emailManuallyBadge(customer)}${noDeliveryFeeBadge(customer)}${doNotEmailBadge(customer)}${chemSeparateInvoiceBadge(customer)}${monthlyRentalBadge(customer)}`
-                    : customer.name + scheduleBadgeHtml + billingBadge + billsUnderBadges + userOwnedBadge(customer) + alhBadge(customer) + emailManuallyBadge(customer) + noDeliveryFeeBadge(customer) + doNotEmailBadge(customer) + chemSeparateInvoiceBadge(customer) + monthlyRentalBadge(customer) + combinablePodBadge(findCounterpartPods(customer.id, selectedDate, true), 'Ad-hoc');
+                    : customer.name + scheduleBadgeHtml + billingBadge + billsUnderBadges + userOwnedBadge(customer) + alhBadge(customer) + emailManuallyBadge(customer) + noDeliveryFeeBadge(customer) + doNotEmailBadge(customer) + chemSeparateInvoiceBadge(customer) + monthlyRentalBadge(customer) + orderNumberBadge(pod && pod.orderNumber) + combinablePodBadge(findCounterpartPods(customer.id, selectedDate, true), 'Ad-hoc');
                 
                 // Status column
                 let statusDisplay;
@@ -13364,9 +13402,7 @@
                     const podBillingBadge = podBillingValue
                         ? `<span style="background: #fff7ed; color: #c2410c; border: 1px solid #fdba74; padding: 2px 7px; border-radius: 8px; font-size: 10px; font-weight: 600; margin-left: 6px;">📋 ${podBillingValue}</span>`
                         : '';
-                    const podOrderNumberBadge = pod.orderNumber
-                        ? `<span style="background: #14532d; color: white; padding: 2px 7px; border-radius: 8px; font-size: 10px; font-weight: 600; margin-left: 6px;">O/N ${pod.orderNumber}</span>`
-                        : '';
+                    const podOrderNumberBadge = orderNumberBadge(pod.orderNumber);
                     const productsStr = (() => {
                         if (!pod.products || pod.products.length === 0) return '-';
                         const saleItems = pod.products.filter(p => p.type !== 'repair');
@@ -13476,9 +13512,7 @@
                     const tmBillingBadge = tmBillingValue
                         ? `<span style="background: #fff7ed; color: #c2410c; border: 1px solid #fdba74; padding: 2px 7px; border-radius: 8px; font-size: 10px; font-weight: 600; margin-left: 6px;">📋 ${tmBillingValue}</span>`
                         : '';
-                    const tmOrderNumberBadge = tm.orderNumber
-                        ? `<span style="background: #14532d; color: white; padding: 2px 7px; border-radius: 8px; font-size: 10px; font-weight: 600; margin-left: 6px;">O/N ${tm.orderNumber}</span>`
-                        : '';
+                    const tmOrderNumberBadge = orderNumberBadge(tm.orderNumber);
                     tr.innerHTML = `
                         <td style="padding: 10px; text-align: center;"><span style="color: #16a34a; font-size: 18px;">✓</span></td>
                         <td style="padding: 10px; text-align: center;" onclick="event.stopPropagation();">
@@ -13734,7 +13768,7 @@
                             style="width:16px;height:16px;cursor:pointer;${!tmIsInvoiced ? 'opacity:0.4;' : ''}">
                     </td>
                     <td style="padding: 10px;">
-                        ${tm.customerName}${unlinkedWarningIcon(tm)}${userOwnedBadge(tm.customerId)}${alhBadge(tm.customerId)}${emailManuallyBadge(tm.customerId)}${noDeliveryFeeBadge(tm.customerId)}${doNotEmailBadge(tm.customerId)}${chemSeparateInvoiceBadge(tm.customerId)}${monthlyRentalBadge(tm.customerId)}
+                        ${tm.customerName}${unlinkedWarningIcon(tm)}${orderNumberBadge(tm.orderNumber)}${userOwnedBadge(tm.customerId)}${alhBadge(tm.customerId)}${emailManuallyBadge(tm.customerId)}${noDeliveryFeeBadge(tm.customerId)}${doNotEmailBadge(tm.customerId)}${chemSeparateInvoiceBadge(tm.customerId)}${monthlyRentalBadge(tm.customerId)}
                         ${adHocBadge ? `<div style="margin-top: 4px;">${adHocBadge}</div>` : ''}
                         ${invoiceNoteInlineHtml('tm', tm.id, tm.invoiceNotes || null)}
                     </td>
@@ -16208,14 +16242,11 @@
             const effectiveCustomerName = selectedTankMovementCustomer ? selectedTankMovementCustomer.name : freetextName;
 
             // O/N extraction: from linked calendar event title, new tank movements only.
-            // Uses db.findCalendarEvent which parseInts the id and searches both
-            // adminCalendarEvents (admin view) and calendarEvents (worker view).
+            // Reads the event's LIVE title from the DB — the cached copy can be
+            // stale by hours and was losing same-day order numbers.
             let tmOrderNumber = null;
             if (tankMovementCalendarEventId) {
-                const linkedEv = db.findCalendarEvent(tankMovementCalendarEventId);
-                if (linkedEv && linkedEv.eventTitle) {
-                    tmOrderNumber = extractOrderNumber(linkedEv.eventTitle);
-                }
+                tmOrderNumber = await resolveOrderNumber(tankMovementCalendarEventId);
             }
 
             const movement = {
