@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oz Tank - Service POD Manager v11.29</title>
+    <title>Oz Tank - Service POD Manager v11.30</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -13206,7 +13206,14 @@
                 
                 // Invoice & checked-sent state
                 const isNoInvoice = customer.invoiceType === 'No Invoice';
-                const isInvoiceable = !isNoInvoice && !customerIsOffMonth;
+                // Off-month rows ARE invoiceable. A bi-monthly customer still gets
+                // charged rent every month even though the chemical delivery only
+                // happens every second month, and blanket-excluding off months left
+                // no way to tick that rent as invoiced. Same mechanism skipped rows
+                // already use (skipped_invoice_status, keyed customer+date) — the
+                // tick is simply offered; whether anything is charged stays a
+                // human decision, as it is for a skipped customer.
+                const isInvoiceable = !isNoInvoice;
                 let invoiced = false;
                 let checkedSent = false;
                 let invoiceCheckboxHtml = '';
