@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oz Tank - Service POD Manager v11.30</title>
+    <title>Oz Tank - Service POD Manager v11.31</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -13206,14 +13206,14 @@
                 
                 // Invoice & checked-sent state
                 const isNoInvoice = customer.invoiceType === 'No Invoice';
-                // Off-month rows ARE invoiceable. A bi-monthly customer still gets
-                // charged rent every month even though the chemical delivery only
-                // happens every second month, and blanket-excluding off months left
-                // no way to tick that rent as invoiced. Same mechanism skipped rows
-                // already use (skipped_invoice_status, keyed customer+date) — the
-                // tick is simply offered; whether anything is charged stays a
-                // human decision, as it is for a skipped customer.
-                const isInvoiceable = !isNoInvoice;
+                // Off-month rows are invoiceable ONLY for Rent & SS customers: their
+                // rent is charged every month even though the chemical delivery is
+                // bi-monthly, and there was previously no way to tick that rent.
+                // Every other off-month row has nothing to bill, so it keeps the "—".
+                // Uses the same billingValue the 📋 badge displays, and the same
+                // mechanism skipped rows use (skipped_invoice_status, customer+date).
+                const isRentAndSS = (billingValue || '').toLowerCase().includes('rent & ss');
+                const isInvoiceable = !isNoInvoice && (!customerIsOffMonth || isRentAndSS);
                 let invoiced = false;
                 let checkedSent = false;
                 let invoiceCheckboxHtml = '';
