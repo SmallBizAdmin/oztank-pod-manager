@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oz Tank - Service POD Manager v11.35</title>
+    <title>Oz Tank - Service POD Manager v11.36</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -9627,19 +9627,19 @@
             if (!customer) { el.innerHTML = ''; _profileCustomerId = null; return; }
             _profileCustomerId = customer.id;
 
-            const billingValue = (customer.invoiceType && isBillingWaste(customer.invoiceType))
-                ? customer.invoiceType
-                : (isBillingWaste(customer.waste) ? customer.waste : null);
-            const billingBadge = billingValue
-                ? `<span style="background:#fff7ed;color:#c2410c;border:1px solid #fdba74;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:600;">&#128203; ${escHtml(billingValue)}</span>`
-                : '';
+            // Header carries only what the customer IS at a glance. Billing and
+            // bills-under get labelled tiles below instead of chips, so they're
+            // actually findable. Shared helpers add margin-left; flex gap covers it.
+            const identityBadges = (userOwnedBadge(customer) + alhBadge(customer))
+                .replace(/margin-left:6px;/g, '');
 
-            // Header carries the identity badges — what this customer IS. The
-            // on/off options live in their own section so their state is always
-            // visible. Shared badge helpers add margin-left; flex gap covers it.
-            const identityBadges = (billingBadge
-                + billsUnderChildBadge(customer) + billsUnderParentBadge(customer)
-                + userOwnedBadge(customer) + alhBadge(customer)).replace(/margin-left:6px;/g, '');
+            // Billing arrangement
+            const billsUnderParentName = customer.invoiceUnderId != null
+                ? ((db.customers.find(c => c.id === customer.invoiceUnderId) || {}).name
+                    || ('#' + customer.invoiceUnderId))
+                : '';
+            const billedHereNames = db.customers
+                .filter(c => c.invoiceUnderId === customer.id).map(c => c.name);
 
             // Schedule: cadence, the actual months, and where this month sits
             const now = new Date();
@@ -9695,10 +9695,13 @@
                         <div style="${grid}">
                             ${profileTile('Run day', escHtml(customer.runDay || '&mdash;'))}
                             ${profileTile('Service type', escHtml(customer.serviceType || 'Service'))}
+                            ${profileTile('Billing note', customer.invoiceType ? escHtml(customer.invoiceType) : '&mdash;', !!customer.invoiceType)}
                             ${profileTile('Schedule', scheduleHtml, scheduleAccent)}
                             ${multi ? '' : profileTile('Carbsolve', singleCarb ? escHtml(singleCarb) : '&mdash;')}
                             ${profileTile('Business group', escHtml(customer.businessGroup || ''))}
                             ${profileTile('Waste', escHtml(customer.waste || ''))}
+                            ${profileTile('Bills under', billsUnderParentName ? '&#129534; ' + escHtml(billsUnderParentName) : '', !!billsUnderParentName)}
+                            ${profileTile('Billed here', billedHereNames.length ? '&#129534; ' + escHtml(billedHereNames.join(', ')) : '', billedHereNames.length > 0)}
                         </div>
 
                         <div style="margin-top:12px;">
