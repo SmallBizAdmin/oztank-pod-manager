@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oz Tank - Service POD Manager v11.32</title>
+    <title>Oz Tank - Service POD Manager v11.33</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -9594,11 +9594,13 @@
         // Edit button into the merged edit modal.
         let _profileCustomerId = null;
 
-        function profileRow(label, value) {
+        // One labelled tile in the profile grid. Returns '' for empty values so
+        // the grid only ever shows facts that actually exist.
+        function profileTile(label, value, accent) {
             if (value === null || value === undefined || value === '') return '';
-            return `<div style="display:flex;gap:10px;padding:5px 0;border-bottom:1px solid #f3f4f6;">
-                <div style="min-width:110px;font-size:12px;color:#6b7280;font-weight:600;">${label}</div>
-                <div style="flex:1;font-size:14px;color:#111827;">${value}</div>
+            return `<div style="background:${accent ? '#eff6ff' : '#f9fafb'};border:1px solid ${accent ? '#dbeafe' : '#eef0f3'};border-radius:8px;padding:9px 11px;min-width:0;">
+                <div style="font-size:10px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:.05em;">${label}</div>
+                <div style="font-size:14px;color:#111827;font-weight:600;margin-top:3px;word-break:break-word;">${value}</div>
             </div>`;
         }
 
@@ -9612,65 +9614,91 @@
                 ? customer.invoiceType
                 : (isBillingWaste(customer.waste) ? customer.waste : null);
             const billingBadge = billingValue
-                ? `<span style="background:#fff7ed;color:#c2410c;border:1px solid #fdba74;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:600;margin-left:6px;">&#128203; ${escHtml(billingValue)}</span>`
+                ? `<span style="background:#fff7ed;color:#c2410c;border:1px solid #fdba74;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:600;">&#128203; ${escHtml(billingValue)}</span>`
                 : '';
 
-            const badges = billingBadge
+            // Badges are emitted with margin-left by their shared helpers; the flex
+            // gap here handles spacing, so strip it to keep the row even.
+            const badges = (billingBadge
                 + billsUnderChildBadge(customer) + billsUnderParentBadge(customer)
                 + userOwnedBadge(customer) + alhBadge(customer)
                 + emailManuallyBadge(customer) + noDeliveryFeeBadge(customer)
                 + doNotEmailBadge(customer) + chemSeparateInvoiceBadge(customer)
-                + monthlyRentalBadge(customer);
+                + monthlyRentalBadge(customer)).replace(/margin-left:6px;/g, '');
 
-            // Schedule, with this month's status
+            // Schedule tile: cadence plus where this month sits in it
             const now = new Date();
             const scheduleLabel = getScheduleLabel(customer.serviceMonths);
-            let scheduleHtml;
+            let scheduleHtml, scheduleAccent = false;
             if (!scheduleLabel) {
-                scheduleHtml = 'Monthly (every month)';
+                scheduleHtml = 'Monthly';
             } else {
                 const off = isOffMonth(customer, now.getMonth(), now.getFullYear());
-                scheduleHtml = `${escHtml(scheduleLabel)} `
+                scheduleAccent = true;
+                scheduleHtml = escHtml(scheduleLabel)
                     + (off
-                        ? `<span class="schedule-badge off-month">&#9208;&#65039; OFF MONTH</span>`
-                        : `<span class="schedule-badge">&#10003; Due this month</span>`);
+                        ? `<div style="margin-top:4px;"><span style="background:#fef3c7;color:#92400e;border:1px solid #fcd34d;padding:1px 7px;border-radius:8px;font-size:10px;font-weight:700;">&#9208;&#65039; OFF THIS MONTH</span></div>`
+                        : `<div style="margin-top:4px;"><span style="background:#dcfce7;color:#166534;border:1px solid #86efac;padding:1px 7px;border-radius:8px;font-size:10px;font-weight:700;">&#10003; DUE THIS MONTH</span></div>`);
             }
 
             // Tanks
             const entries = getTankEntries(customer);
             const multi = (customer.tankCount || 1) > 1;
-            const tanksHtml = multi
-                ? entries.map(t => {
-                    const owned = t.ownership === 'user_owned';
-                    const style = owned
-                        ? 'background:#ede9fe;color:#5b21b6;border:1px solid #c4b5fd;'
-                        : 'background:#eff6ff;color:#2563eb;';
-                    return `<span style="${style}padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;margin:0 4px 4px 0;display:inline-block;">${owned ? '&#127991;&#65039;' : '&#128738;'} ${escHtml(t.label)}${t.carbsolve ? ' &middot; ' + escHtml(t.carbsolve) : ''}</span>`;
-                  }).join('')
-                : (customer.carbsolve ? escHtml(customer.carbsolve) : 'No carbsolve set')
-                  + (customer.tankOwnership === 'user_owned'
-                      ? ' <span style="background:#ede9fe;color:#5b21b6;border:1px solid #c4b5fd;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:600;">&#127991;&#65039; User-owned</span>'
-                      : '');
+            const tankChips = entries.map(t => {
+                const owned = t.ownership === 'user_owned';
+                const style = owned
+                    ? 'background:#ede9fe;color:#5b21b6;border:1px solid #c4b5fd;'
+                    : 'background:#eff6ff;color:#2563eb;border:1px solid #bfdbfe;';
+                return `<span style="${style}padding:4px 10px;border-radius:8px;font-size:12px;font-weight:600;display:inline-block;">${owned ? '&#127991;&#65039;' : '&#128738;'} ${escHtml(t.label)}${t.carbsolve ? ' &middot; ' + escHtml(t.carbsolve) : ''}</span>`;
+            }).join('');
+
+            const singleCarb = (customer.carbsolve || '').replace(/^(Carbsolve\s*[-:]\s*|Carb:\s*)/i, '').trim();
+            const grid = 'display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;';
 
             el.innerHTML = `
-                <div class="card" style="margin-bottom: 12px;">
-                    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:10px;">
+                <div class="card" style="margin-bottom:12px;padding:0;overflow:hidden;">
+
+                    <div style="background:linear-gradient(135deg,#374151 0%,#1f2937 100%);padding:14px 16px;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
                         <div style="flex:1;min-width:0;">
-                            <div style="font-size:16px;font-weight:700;color:#111827;">${escHtml(customer.name)}${badges}</div>
+                            <div style="font-size:17px;font-weight:700;color:#fff;line-height:1.25;">${escHtml(customer.name)}</div>
+                            ${badges ? `<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;">${badges}</div>` : ''}
                         </div>
-                        <button class="btn" style="padding:8px 16px;font-size:13px;background:#374151;flex-shrink:0;"
-                                onclick="showCustomerEditModal(${customer.id})">&#9998; Edit Customer</button>
+                        <button class="btn" style="padding:8px 16px;font-size:13px;background:#f59e0b;flex-shrink:0;margin:0;"
+                                onclick="showCustomerEditModal(${customer.id})">&#9998; Edit</button>
                     </div>
-                    ${profileRow('Run day', escHtml(customer.runDay || '-'))}
-                    ${profileRow('Service type', escHtml(customer.serviceType || 'Service'))}
-                    ${profileRow('Schedule', scheduleHtml)}
-                    ${profileRow(multi ? `Tanks (${customer.tankCount})` : 'Carbsolve', tanksHtml)}
-                    ${profileRow('Address', customer.address ? formatAddressLink(customer.address) : '')}
-                    ${profileRow('Phone', customer.phone ? formatPhoneLink(customer.phone) : '')}
-                    ${profileRow('Keycode', customer.code ? '&#128273; ' + escHtml(customer.code) : '')}
-                    ${profileRow('Waste', escHtml(customer.waste || ''))}
-                    ${profileRow('Notes', customer.notes ? escHtml(customer.notes) : '')}
-                    ${customer.specialInstructions ? `<div style="margin-top:10px;padding:10px;background:#fffbeb;border-left:4px solid #f59e0b;border-radius:6px;font-size:13px;color:#92400e;">&#9888;&#65039; ${escHtml(customer.specialInstructions)}</div>` : ''}
+
+                    <div style="padding:14px 16px;">
+                        <div style="${grid}">
+                            ${profileTile('Run day', escHtml(customer.runDay || '&mdash;'))}
+                            ${profileTile('Service type', escHtml(customer.serviceType || 'Service'))}
+                            ${profileTile('Schedule', scheduleHtml, scheduleAccent)}
+                            ${multi ? '' : profileTile('Carbsolve', singleCarb ? escHtml(singleCarb) : '&mdash;')}
+                        </div>
+
+                        ${multi ? `
+                        <div style="margin-top:12px;">
+                            <div style="font-size:10px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Tanks (${customer.tankCount})</div>
+                            <div style="display:flex;flex-wrap:wrap;gap:6px;">${tankChips}</div>
+                        </div>` : ''}
+
+                        ${(customer.address || customer.phone || customer.code || customer.waste) ? `
+                        <div style="${grid}margin-top:12px;">
+                            ${profileTile('Address', customer.address ? formatAddressLink(customer.address) : '')}
+                            ${profileTile('Phone', customer.phone ? formatPhoneLink(customer.phone) : '')}
+                            ${profileTile('Keycode', customer.code ? '&#128273; ' + escHtml(customer.code) : '')}
+                            ${profileTile('Waste', escHtml(customer.waste || ''))}
+                        </div>` : ''}
+
+                        ${customer.specialInstructions ? `
+                        <div style="margin-top:12px;padding:11px 13px;background:#fffbeb;border-left:4px solid #f59e0b;border-radius:6px;font-size:13px;color:#92400e;line-height:1.5;">
+                            <strong>&#9888;&#65039; Special instructions</strong><br>${escHtml(customer.specialInstructions)}
+                        </div>` : ''}
+
+                        ${customer.notes ? `
+                        <div style="margin-top:10px;padding:11px 13px;background:#f9fafb;border:1px solid #eef0f3;border-radius:6px;font-size:13px;color:#4b5563;line-height:1.5;">
+                            <strong style="color:#6b7280;">&#128221; Notes</strong><br>${escHtml(customer.notes)}
+                        </div>` : ''}
+                    </div>
                 </div>`;
         }
 
