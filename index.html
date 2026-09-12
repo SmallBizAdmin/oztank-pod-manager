@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oz Tank - Service POD Manager v11.36</title>
+    <title>Oz Tank - Service POD Manager v11.37</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -9633,7 +9633,18 @@
             const identityBadges = (userOwnedBadge(customer) + alhBadge(customer))
                 .replace(/margin-left:6px;/g, '');
 
-            // Billing arrangement
+            // Billing arrangement. The billing flag lives in EITHER invoice_type or
+            // the waste column (isBillingWaste checks both), so a tile reading only
+            // invoice_type showed nothing for customers flagged via waste.
+            const billingNote = customer.invoiceType
+                || (isBillingWaste(customer.waste) ? customer.waste : '');
+            const billingFromWaste = !customer.invoiceType && !!billingNote;
+            const billingNoteHtml = billingNote
+                ? escHtml(billingNote) + (billingFromWaste
+                    ? '<div style="font-size:10px;color:#9ca3af;font-weight:500;margin-top:2px;">from waste field</div>'
+                    : '')
+                : '&mdash;';
+
             const billsUnderParentName = customer.invoiceUnderId != null
                 ? ((db.customers.find(c => c.id === customer.invoiceUnderId) || {}).name
                     || ('#' + customer.invoiceUnderId))
@@ -9695,7 +9706,7 @@
                         <div style="${grid}">
                             ${profileTile('Run day', escHtml(customer.runDay || '&mdash;'))}
                             ${profileTile('Service type', escHtml(customer.serviceType || 'Service'))}
-                            ${profileTile('Billing note', customer.invoiceType ? escHtml(customer.invoiceType) : '&mdash;', !!customer.invoiceType)}
+                            ${profileTile('Billing note', billingNoteHtml, !!billingNote)}
                             ${profileTile('Schedule', scheduleHtml, scheduleAccent)}
                             ${multi ? '' : profileTile('Carbsolve', singleCarb ? escHtml(singleCarb) : '&mdash;')}
                             ${profileTile('Business group', escHtml(customer.businessGroup || ''))}
