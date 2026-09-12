@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oz Tank - Service POD Manager v11.31</title>
+    <title>Oz Tank - Service POD Manager v11.32</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -2828,6 +2828,9 @@
                     </div>
                     <div id="searchPodsStats" class="customer-stats"></div>
                 </div>
+
+                <!-- Customer profile: everything configurable about this customer -->
+                <div id="customerProfilePanel"></div>
                 
                 <div id="searchPodsTable">
                     <!-- POD history table will be rendered here -->
@@ -3116,9 +3119,69 @@
             </div>
             <div class="search-modal-body">
                 <input type="hidden" id="editCustomerId">
+                <div style="font-weight:700;font-size:12px;color:#1e40af;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid #dbeafe;padding-bottom:6px;margin:18px 0 14px;">Details</div>
                 <div class="form-group">
                     <label style="font-weight: 600;">Customer Name</label>
-                    <div id="editCustomerName" style="padding: 10px; background: #f3f4f6; border-radius: 6px; color: #374151;"></div>
+                    <input type="text" id="editCustomerName" style="font-size: 16px;">
+                </div>
+                <div class="form-group">
+                    <label style="font-weight: 600;">📅 Run Day</label>
+                    <input type="text" id="editCustomerRunDay" placeholder="e.g. Day 12 or Ad-Hoc" style="font-size: 16px;">
+                </div>
+                <div class="form-group">
+                    <label style="font-weight: 600;">📍 Address</label>
+                    <input type="text" id="editCustomerAddress" placeholder="Street address" style="font-size: 16px;">
+                </div>
+                <div class="form-group">
+                    <label style="font-weight: 600;">📞 Phone / Contact</label>
+                    <input type="text" id="editCustomerPhone" placeholder="e.g. Steve - 0427 633 836" style="font-size: 16px;">
+                </div>
+                <div class="form-group">
+                    <label style="font-weight: 600;">🔧 Service Type</label>
+                    <select id="editCustomerServiceType" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 16px;">
+                        <option value="Service">Service</option>
+                        <option value="Delivery">Delivery</option>
+                        <option value="Check">Check</option>
+                    </select>
+                </div>
+                <div class="form-group" id="editCustomerCarbsolveGroup">
+                    <label style="font-weight: 600;">🧪 Carbsolve</label>
+                    <select id="editCustomerCarbsolve" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 16px;">
+                        <option value="">None</option>
+                        <option value="4kg">4kg</option>
+                        <option value="4kg spcl">4kg spcl</option>
+                        <option value="7kg">7kg</option>
+                        <option value="7kg spcl">7kg spcl</option>
+                        <option value="10kg">10kg</option>
+                        <option value="11kg spcl">11kg spcl</option>
+                        <option value="14kg">14kg</option>
+                        <option value="17kg">17kg</option>
+                        <option value="21kg">21kg</option>
+                        <option value="28kg">28kg</option>
+                    </select>
+                    <p style="font-size: 12px; color: #6b7280; margin-top: 4px;">Customer-level carbsolve. Multi-tank customers set this per tank under Tanks.</p>
+                </div>
+                <div class="form-group">
+                    <label style="font-weight: 600;">🛢️ Waste</label>
+                    <select id="editCustomerWaste" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 16px;">
+                        <option value="">None</option>
+                        <option value="Drum">Drum</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label style="font-weight: 600;">📋 Billing Note</label>
+                    <select id="editCustomerInvoiceType" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 16px;">
+                        <option value="">None</option>
+                        <option value="Blanket Invoice">Blanket Invoice</option>
+                        <option value="USE PO">USE PO</option>
+                        <option value="No Invoice">No Invoice</option>
+                        <option value="Forward Invoices">Forward Invoices</option>
+                        <option value="Rent & SS">Rent & SS</option>
+                        <option value="DEL ONLY">DEL ONLY</option>
+                        <option value="Delivery doc">Delivery doc</option>
+                        <option value="O/N get">O/N get</option>
+                    </select>
+                    <p style="font-size: 12px; color: #6b7280; margin-top: 4px;">Shows as a 📋 badge on admin lists. "Rent & SS" also makes off-month rows invoiceable.</p>
                 </div>
                 <div class="form-group">
                     <label style="font-weight: 600;">🔑 Keycode</label>
@@ -3135,6 +3198,7 @@
                     <textarea id="editCustomerSpecialInstructions" placeholder="Enter special instructions (shown prominently)..." style="min-height: 80px; border-color: #f59e0b;"></textarea>
                     <p style="font-size: 12px; color: #f59e0b; margin-top: 4px;">Important instructions displayed prominently to workers</p>
                 </div>
+                <div style="font-weight:700;font-size:12px;color:#1e40af;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid #dbeafe;padding-bottom:6px;margin:18px 0 14px;">Badges & Billing Flags</div>
                 <div class="form-group">
                     <label style="font-weight: 600;">🏢 Business Group</label>
                     <select id="editCustomerBusinessGroup" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 16px;">
@@ -3183,6 +3247,13 @@
                     </label>
                     <p style="font-size: 12px; color: #6b7280; margin-top: 4px;">Shows a 🔁 badge on admin and invoicing lists.</p>
                 </div>
+                <div style="font-weight:700;font-size:12px;color:#1e40af;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid #dbeafe;padding-bottom:6px;margin:18px 0 14px;">Tanks</div>
+                <div class="form-group">
+                    <label style="font-weight: 600;">🛢️ Number of Tanks</label>
+                    <input type="number" id="editCustomerTankCount" min="1" max="12" step="1" style="font-size: 16px;"
+                           onchange="renderCustomerTankRows()" oninput="renderCustomerTankRows()">
+                    <p style="font-size: 12px; color: #6b7280; margin-top: 4px;">Set above 1 to name each tank and give it its own carbsolve and ownership.</p>
+                </div>
                 <div class="form-group" id="editCustomerOwnershipGroup" style="display: none;">
                     <label style="font-weight: 600;">🏷️ Tank Ownership</label>
                     <select id="editCustomerOwnership" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 16px;">
@@ -3196,6 +3267,7 @@
                     <div id="editCustomerTankOwnershipRows"></div>
                     <p style="font-size: 12px; color: #6b7280; margin-top: 4px;">Set each tank separately for mixed customers. User-owned tanks show a 🏷️ marker on runsheets, POD forms and admin lists. Skips default to plain Skipped only when every tank is user-owned.</p>
                 </div>
+                <div style="font-weight:700;font-size:12px;color:#1e40af;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid #dbeafe;padding-bottom:6px;margin:18px 0 14px;">Service Schedule</div>
                 <div class="form-group">
                     <label style="font-weight: 600;">📅 Service Schedule</label>
                     <select id="editCustomerSchedule" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 16px;">
@@ -4390,6 +4462,7 @@
                             'July', 'August', 'September', 'October', 'November', 'December'];
         
         // Waste field values that are billing instructions, not physical collection types
+        const CARBSOLVE_OPTIONS = ['', '4kg', '4kg spcl', '7kg', '7kg spcl', '10kg', '11kg spcl', '14kg', '17kg', '21kg', '28kg'];
         const BILLING_WASTE_FLAGS = ['blanket invoice', 'use po', 'blanket po', 'po number', 'forward invoice', 'rent & ss', 'del only', 'delivery doc', 'o/n get'];
         function isBillingWaste(waste) {
             if (!waste) return false;
@@ -5802,11 +5875,13 @@
             // Targeted tank_labels update. Kept separate from saveCustomer so
             // bulk/import save paths (which build customer objects without tank
             // config) can never null out a customer's tank labels.
-            async saveTankLabels(customerId, tankLabels) {
+            async saveTankLabels(customerId, tankLabels, tankCount) {
                 try {
+                    const patch = { tank_labels: tankLabels };
+                    if (tankCount != null) patch.tank_count = tankCount;
                     const { error } = await supabase
                         .from('customers')
-                        .update({ tank_labels: tankLabels })
+                        .update(patch)
                         .eq('id', customerId);
                     if (error) throw error;
                     return true;
@@ -9513,6 +9588,92 @@
             resultsDiv.innerHTML = html;
         }
         
+
+        // -- Customer profile panel (Customers / Search POD page) --------------
+        // Everything configurable about a customer, in one place, with a single
+        // Edit button into the merged edit modal.
+        let _profileCustomerId = null;
+
+        function profileRow(label, value) {
+            if (value === null || value === undefined || value === '') return '';
+            return `<div style="display:flex;gap:10px;padding:5px 0;border-bottom:1px solid #f3f4f6;">
+                <div style="min-width:110px;font-size:12px;color:#6b7280;font-weight:600;">${label}</div>
+                <div style="flex:1;font-size:14px;color:#111827;">${value}</div>
+            </div>`;
+        }
+
+        function renderCustomerProfilePanel(customer) {
+            const el = document.getElementById('customerProfilePanel');
+            if (!el) return;
+            if (!customer) { el.innerHTML = ''; _profileCustomerId = null; return; }
+            _profileCustomerId = customer.id;
+
+            const billingValue = (customer.invoiceType && isBillingWaste(customer.invoiceType))
+                ? customer.invoiceType
+                : (isBillingWaste(customer.waste) ? customer.waste : null);
+            const billingBadge = billingValue
+                ? `<span style="background:#fff7ed;color:#c2410c;border:1px solid #fdba74;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:600;margin-left:6px;">&#128203; ${escHtml(billingValue)}</span>`
+                : '';
+
+            const badges = billingBadge
+                + billsUnderChildBadge(customer) + billsUnderParentBadge(customer)
+                + userOwnedBadge(customer) + alhBadge(customer)
+                + emailManuallyBadge(customer) + noDeliveryFeeBadge(customer)
+                + doNotEmailBadge(customer) + chemSeparateInvoiceBadge(customer)
+                + monthlyRentalBadge(customer);
+
+            // Schedule, with this month's status
+            const now = new Date();
+            const scheduleLabel = getScheduleLabel(customer.serviceMonths);
+            let scheduleHtml;
+            if (!scheduleLabel) {
+                scheduleHtml = 'Monthly (every month)';
+            } else {
+                const off = isOffMonth(customer, now.getMonth(), now.getFullYear());
+                scheduleHtml = `${escHtml(scheduleLabel)} `
+                    + (off
+                        ? `<span class="schedule-badge off-month">&#9208;&#65039; OFF MONTH</span>`
+                        : `<span class="schedule-badge">&#10003; Due this month</span>`);
+            }
+
+            // Tanks
+            const entries = getTankEntries(customer);
+            const multi = (customer.tankCount || 1) > 1;
+            const tanksHtml = multi
+                ? entries.map(t => {
+                    const owned = t.ownership === 'user_owned';
+                    const style = owned
+                        ? 'background:#ede9fe;color:#5b21b6;border:1px solid #c4b5fd;'
+                        : 'background:#eff6ff;color:#2563eb;';
+                    return `<span style="${style}padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;margin:0 4px 4px 0;display:inline-block;">${owned ? '&#127991;&#65039;' : '&#128738;'} ${escHtml(t.label)}${t.carbsolve ? ' &middot; ' + escHtml(t.carbsolve) : ''}</span>`;
+                  }).join('')
+                : (customer.carbsolve ? escHtml(customer.carbsolve) : 'No carbsolve set')
+                  + (customer.tankOwnership === 'user_owned'
+                      ? ' <span style="background:#ede9fe;color:#5b21b6;border:1px solid #c4b5fd;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:600;">&#127991;&#65039; User-owned</span>'
+                      : '');
+
+            el.innerHTML = `
+                <div class="card" style="margin-bottom: 12px;">
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:10px;">
+                        <div style="flex:1;min-width:0;">
+                            <div style="font-size:16px;font-weight:700;color:#111827;">${escHtml(customer.name)}${badges}</div>
+                        </div>
+                        <button class="btn" style="padding:8px 16px;font-size:13px;background:#374151;flex-shrink:0;"
+                                onclick="showCustomerEditModal(${customer.id})">&#9998; Edit Customer</button>
+                    </div>
+                    ${profileRow('Run day', escHtml(customer.runDay || '-'))}
+                    ${profileRow('Service type', escHtml(customer.serviceType || 'Service'))}
+                    ${profileRow('Schedule', scheduleHtml)}
+                    ${profileRow(multi ? `Tanks (${customer.tankCount})` : 'Carbsolve', tanksHtml)}
+                    ${profileRow('Address', customer.address ? formatAddressLink(customer.address) : '')}
+                    ${profileRow('Phone', customer.phone ? formatPhoneLink(customer.phone) : '')}
+                    ${profileRow('Keycode', customer.code ? '&#128273; ' + escHtml(customer.code) : '')}
+                    ${profileRow('Waste', escHtml(customer.waste || ''))}
+                    ${profileRow('Notes', customer.notes ? escHtml(customer.notes) : '')}
+                    ${customer.specialInstructions ? `<div style="margin-top:10px;padding:10px;background:#fffbeb;border-left:4px solid #f59e0b;border-radius:6px;font-size:13px;color:#92400e;">&#9888;&#65039; ${escHtml(customer.specialInstructions)}</div>` : ''}
+                </div>`;
+        }
+
         async function loadSearchPodsHistory(customerId) {
             const customer = db.customers.find(c => c.id === customerId);
             if (!customer) return;
@@ -9522,6 +9683,7 @@
             document.getElementById('searchPodsHint').style.display = 'none';
             document.getElementById('searchPodsHistoryContainer').style.display = 'block';
             document.getElementById('searchPodsCustomerName').textContent = customer.name;
+            renderCustomerProfilePanel(customer);
             document.getElementById('searchPodsStats').innerHTML = '<div style="text-align: center; padding: 12px;">Loading...</div>';
             document.getElementById('searchPodsTable').innerHTML = '';
             
@@ -9839,6 +10001,7 @@
             document.getElementById('searchPodsHint').style.display = 'block';
             document.getElementById('searchPodsInput').value = '';
             document.getElementById('searchPodsInput').focus();
+            renderCustomerProfilePanel(null);
         }
 
         // ─── Unassigned PODs & Tank Movements (Search POD page) ────────────────
@@ -12496,8 +12659,7 @@
                         <small>${details.join(' | ')}</small>
                     </div>
                     <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                        <button class="btn" style="padding: 6px 12px; font-size: 12px; background: #374151;" onclick="editCustomer(${customer.id})">Edit</button>
-                        <button class="btn" style="padding: 6px 12px; font-size: 12px; background: #0891b2;" onclick="showCustomerEditModal(${customer.id})">📅 Schedule & Notes</button>
+                        <button class="btn" style="padding: 6px 12px; font-size: 12px; background: #374151;" onclick="showCustomerEditModal(${customer.id})">Edit</button>
                         <button class="delete-btn" onclick="deleteCustomer(${customer.id})">Delete</button>
                     </div>
                 `;
@@ -12510,114 +12672,6 @@
                 moreDiv.style.cssText = 'padding: 16px; text-align: center; color: #6b7280; background: #f3f4f6; border-radius: 6px; margin-top: 8px;';
                 moreDiv.textContent = `Refine your search to see more results`;
                 list.appendChild(moreDiv);
-            }
-        }
-
-        function editCustomer(id) {
-            const customer = db.customers.find(c => c.id === id);
-            if (!customer) return;
-            
-            // Strip stored prefix (e.g. "Carbsolve - 4kg" → "4kg") so the dropdown matches
-            const currentCarbsolve = (customer.carbsolve || '').replace(/^(Carbsolve\s*[-:]\s*|Carb:\s*)/i, '').trim();
-            const isMultiTank = (customer.tankCount || 1) > 1;
-            // Standard dropdown options (lowercased for matching). Blank counts as standard.
-            const STANDARD_CARBSOLVE = ['', '4kg', '4kg spcl', '7kg', '7kg spcl', '10kg', '11kg spcl', '14kg', '17kg', '21kg', '28kg'];
-            const isCustomCarbsolve = !isMultiTank && currentCarbsolve && !STANDARD_CARBSOLVE.includes(currentCarbsolve.toLowerCase());
-            
-            const div = document.getElementById(`customer-${id}`);
-            div.innerHTML = `
-                <div style="flex: 1;">
-                    <div class="form-group" style="margin-bottom: 8px;">
-                        <input type="text" id="edit-name-${id}" value="${customer.name}" placeholder="Customer Name" style="width: 100%; padding: 8px; margin-bottom: 4px;">
-                        <input type="text" id="edit-runday-${id}" value="${customer.runDay}" placeholder="Service Day" style="width: 100%; padding: 8px; margin-bottom: 4px;">
-                        <input type="text" id="edit-address-${id}" value="${customer.address || ''}" placeholder="Address" style="width: 100%; padding: 8px; margin-bottom: 4px;">
-                        <input type="text" id="edit-phone-${id}" value="${customer.phone || ''}" placeholder="Phone" style="width: 100%; padding: 8px; margin-bottom: 4px;">
-                        
-                        <select id="edit-servicetype-${id}" style="width: 100%; padding: 8px; margin-bottom: 4px;">
-                            <option value="">Service Type...</option>
-                            <option value="Service" ${customer.serviceType === 'Service' ? 'selected' : ''}>Service</option>
-                            <option value="Delivery" ${customer.serviceType === 'Delivery' ? 'selected' : ''}>Delivery</option>
-                            <option value="Check" ${customer.serviceType === 'Check' ? 'selected' : ''}>Check</option>
-                        </select>
-                        
-                        ${isMultiTank ? `
-                        <div style="width: 100%; padding: 8px; margin-bottom: 4px; background: #f3f4f6; border: 1px dashed #9ca3af; border-radius: 4px; color: #6b7280; font-size: 13px; font-style: italic;">
-                            📋 Per-tank carbsolve — edit in customer profile (Schedule & Notes)
-                        </div>
-                        ` : isCustomCarbsolve ? `
-                        <div style="width: 100%; padding: 8px; margin-bottom: 4px; background: #fff7ed; border: 1px dashed #fb923c; border-radius: 4px; color: #9a3412; font-size: 13px;">
-                            📋 Custom carbsolve: <strong>${currentCarbsolve}</strong> — edit in customer profile
-                        </div>
-                        ` : `
-                        <select id="edit-carbsolve-${id}" style="width: 100%; padding: 8px; margin-bottom: 4px;">
-                            <option value="">Carbsolve...</option>
-                            <option value="4kg" ${currentCarbsolve === '4kg' ? 'selected' : ''}>4kg</option>
-                            <option value="4kg spcl" ${currentCarbsolve === '4kg spcl' ? 'selected' : ''}>4kg spcl</option>
-                            <option value="7kg" ${currentCarbsolve === '7kg' ? 'selected' : ''}>7kg</option>
-                            <option value="7kg spcl" ${currentCarbsolve === '7kg spcl' ? 'selected' : ''}>7kg spcl</option>
-                            <option value="10kg" ${currentCarbsolve === '10kg' ? 'selected' : ''}>10kg</option>
-                            <option value="11kg spcl" ${currentCarbsolve === '11kg spcl' ? 'selected' : ''}>11kg spcl</option>
-                            <option value="14kg" ${currentCarbsolve === '14kg' ? 'selected' : ''}>14kg</option>
-                            <option value="17kg" ${currentCarbsolve === '17kg' ? 'selected' : ''}>17kg</option>
-                            <option value="21kg" ${currentCarbsolve === '21kg' ? 'selected' : ''}>21kg</option>
-                            <option value="28kg" ${currentCarbsolve === '28kg' ? 'selected' : ''}>28kg</option>
-                        </select>
-                        `}
-                        
-                        <select id="edit-waste-${id}" style="width: 100%; padding: 8px; margin-bottom: 4px;">
-                            <option value="">Waste...</option>
-                            <option value="Drum" ${customer.waste === 'Drum' ? 'selected' : ''}>Drum</option>
-                        </select>
-                        
-                        <select id="edit-invoicetype-${id}" style="width: 100%; padding: 8px; margin-bottom: 4px;">
-                            <option value="">Billing Note...</option>
-                            <option value="Blanket Invoice" ${customer.invoiceType === 'Blanket Invoice' ? 'selected' : ''}>📋 Blanket Invoice</option>
-                            <option value="USE PO" ${customer.invoiceType === 'USE PO' ? 'selected' : ''}>📋 USE PO</option>
-                            <option value="No Invoice" ${customer.invoiceType === 'No Invoice' ? 'selected' : ''}>No Invoice</option>
-                            <option value="Forward Invoices" ${customer.invoiceType === 'Forward Invoices' ? 'selected' : ''}>📋 Forward Invoices</option>
-                            <option value="Rent & SS" ${customer.invoiceType === 'Rent & SS' ? 'selected' : ''}>📋 Rent & SS</option>
-                            <option value="DEL ONLY" ${customer.invoiceType === 'DEL ONLY' ? 'selected' : ''}>📋 DEL ONLY</option>
-                            <option value="Delivery doc" ${customer.invoiceType === 'Delivery doc' ? 'selected' : ''}>📋 Delivery doc</option>
-                            <option value="O/N get" ${customer.invoiceType === 'O/N get' ? 'selected' : ''}>📋 O/N get</option>
-                        </select>
-                        
-                        <input type="text" id="edit-code-${id}" value="${customer.code || ''}" placeholder="Code" style="width: 100%; padding: 8px; margin-bottom: 4px;">
-                        <textarea id="edit-notes-${id}" placeholder="Notes" style="width: 100%; padding: 8px; min-height: 60px;">${customer.notes || ''}</textarea>
-                    </div>
-                </div>
-                <div style="display: flex; gap: 8px;">
-                    <button class="btn btn-success" style="padding: 6px 12px; font-size: 12px;" onclick="saveCustomer(${id})">Save</button>
-                    <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px;" onclick="renderCustomerAdminList()">Cancel</button>
-                </div>
-            `;
-        }
-
-        async function saveCustomer(id) {
-            const customer = db.customers.find(c => c.id === id);
-            if (!customer) return;
-            
-            customer.name = document.getElementById(`edit-name-${id}`).value;
-            customer.runDay = document.getElementById(`edit-runday-${id}`).value;
-            customer.address = document.getElementById(`edit-address-${id}`).value;
-            customer.phone = document.getElementById(`edit-phone-${id}`).value;
-            customer.serviceType = document.getElementById(`edit-servicetype-${id}`).value;
-            // Only overwrite customer-level carbsolve for single-tank customers.
-            // Multi-tank customers store carbsolve per-tank in tankLabels and the dropdown isn't rendered.
-            const carbsolveEl = document.getElementById(`edit-carbsolve-${id}`);
-            if (carbsolveEl) {
-                const rawCarbsolve = carbsolveEl.value;
-                customer.carbsolve = rawCarbsolve ? `Carbsolve - ${rawCarbsolve}` : '';
-            }
-            customer.waste = document.getElementById(`edit-waste-${id}`).value;
-            customer.invoiceType = document.getElementById(`edit-invoicetype-${id}`).value;
-            customer.code = document.getElementById(`edit-code-${id}`).value;
-            customer.notes = document.getElementById(`edit-notes-${id}`).value;
-            
-            const success = await db.saveCustomer(customer);
-            if (success) {
-                renderCustomerAdminList();
-                renderRunDays();
-                showToast('Customer updated successfully!', 'success');
             }
         }
 
@@ -15300,7 +15354,32 @@
             }
             
             document.getElementById('editCustomerId').value = customerId;
-            document.getElementById('editCustomerName').textContent = customer.name;
+            document.getElementById('editCustomerName').value = customer.name || '';
+            document.getElementById('editCustomerRunDay').value = customer.runDay || '';
+            document.getElementById('editCustomerAddress').value = customer.address || '';
+            document.getElementById('editCustomerPhone').value = customer.phone || '';
+
+            // Service type / waste / billing note. ensureCarbsolveOption injects any
+            // non-standard stored value as an option so saving can never silently
+            // wipe a value the dropdown doesn't list (the old inline editor did).
+            const stEl = document.getElementById('editCustomerServiceType');
+            ensureCarbsolveOption(stEl, customer.serviceType);
+            stEl.value = customer.serviceType || 'Service';
+
+            const wasteEl = document.getElementById('editCustomerWaste');
+            ensureCarbsolveOption(wasteEl, customer.waste);
+            wasteEl.value = customer.waste || '';
+
+            const invEl = document.getElementById('editCustomerInvoiceType');
+            ensureCarbsolveOption(invEl, customer.invoiceType);
+            invEl.value = customer.invoiceType || '';
+
+            // Customer-level carbsolve — stored with a "Carbsolve - " prefix
+            const carbEl = document.getElementById('editCustomerCarbsolve');
+            const bareCarb = (customer.carbsolve || '').replace(/^(Carbsolve\s*[-:]\s*|Carb:\s*)/i, '').trim();
+            ensureCarbsolveOption(carbEl, bareCarb);
+            carbEl.value = bareCarb;
+
             document.getElementById('editCustomerCode').value = customer.code || '';
             document.getElementById('editCustomerNotes').value = customer.notes || '';
             document.getElementById('editCustomerSpecialInstructions').value = customer.specialInstructions || '';
@@ -15323,39 +15402,14 @@
             document.getElementById('editCustomerChemSeparateInvoice').checked = customer.chemSeparateInvoice === true;
             document.getElementById('editCustomerMonthlyRental').checked = customer.monthlyRental === true;
 
-            // Tank ownership: steve-only, single-tank only (per-tank deferred for multi-tank)
-            const ownershipGroup = document.getElementById('editCustomerOwnershipGroup');
-            const ownershipSelect = document.getElementById('editCustomerOwnership');
-            const isSteve = currentUser && (currentUser.email || '').toLowerCase() === 'steve.oztank@gmail.com';
-            const isSingleTank = (customer.tankCount || 1) <= 1;
-            if (isSteve && isSingleTank) {
-                ownershipSelect.value = customer.tankOwnership === 'user_owned' ? 'user_owned' : 'rental';
-                ownershipGroup.style.display = 'block';
-            } else {
-                ownershipGroup.style.display = 'none';
-            }
+            // Tank config. Editing is open to everyone (the previous steve-only gate
+            // was lifted when this merged into the customer profile page).
+            document.getElementById('editCustomerTankCount').value = customer.tankCount || 1;
+            document.getElementById('editCustomerOwnership').value =
+                customer.tankOwnership === 'user_owned' ? 'user_owned' : 'rental';
+            _tankRowSeed = getTankEntries(customer);
+            renderCustomerTankRows();
 
-            // Multi-tank: per-tank ownership rows (steve-only). Each row starts
-            // from the effective value — the customer-level default unless that
-            // tank already carries an explicit override.
-            const tankOwnGroup = document.getElementById('editCustomerTankOwnershipGroup');
-            const tankOwnRows = document.getElementById('editCustomerTankOwnershipRows');
-            if (isSteve && !isSingleTank) {
-                const tankEntries = getTankEntries(customer);
-                tankOwnRows.innerHTML = tankEntries.map((t, i) => `
-                    <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid #f3f4f6;">
-                        <span style="flex:1;min-width:0;font-weight:600;font-size:14px;">🛢️ ${escHtml(t.label)}${t.carbsolve ? ` <span style="font-weight:400;color:#6b7280;font-size:12px;">${escHtml(t.carbsolve)}</span>` : ''}</span>
-                        <select class="tank-ownership-select" data-tank-index="${i}" style="padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:14px;">
-                            <option value="rental"${t.ownership !== 'user_owned' ? ' selected' : ''}>Rental</option>
-                            <option value="user_owned"${t.ownership === 'user_owned' ? ' selected' : ''}>User-owned</option>
-                        </select>
-                    </div>`).join('');
-                tankOwnGroup.style.display = 'block';
-            } else {
-                tankOwnGroup.style.display = 'none';
-                tankOwnRows.innerHTML = '';
-            }
-            
             // Load service schedule
             const scheduleSelect = document.getElementById('editCustomerSchedule');
             const customContainer = document.getElementById('customMonthsContainer');
@@ -15400,6 +15454,75 @@
             }
         });
         
+
+        // Tank rows in the customer edit modal. Seeded from the customer's current
+        // config, then kept in sync as the tank-count field changes so a worker can
+        // add or remove tanks without losing what they've already typed.
+        let _tankRowSeed = [];
+
+        function renderCustomerTankRows() {
+            const countEl = document.getElementById('editCustomerTankCount');
+            const rowsEl = document.getElementById('editCustomerTankOwnershipRows');
+            const groupEl = document.getElementById('editCustomerTankOwnershipGroup');
+            const singleEl = document.getElementById('editCustomerOwnershipGroup');
+            const carbGroupEl = document.getElementById('editCustomerCarbsolveGroup');
+            if (!countEl || !rowsEl) return;
+
+            let count = parseInt(countEl.value, 10);
+            if (!Number.isFinite(count) || count < 1) count = 1;
+            if (count > 12) count = 12;
+
+            // Keep anything already typed before re-rendering
+            const typed = Array.from(rowsEl.querySelectorAll('[data-tank-row]')).map(row => ({
+                label: row.querySelector('.tank-label-input').value,
+                carbsolve: row.querySelector('.tank-carb-select').value,
+                ownership: row.querySelector('.tank-ownership-select').value
+            }));
+            const source = typed.length ? typed : _tankRowSeed;
+
+            if (count <= 1) {
+                // Single tank: customer-level carbsolve + one ownership dropdown
+                groupEl.style.display = 'none';
+                rowsEl.innerHTML = '';
+                singleEl.style.display = 'block';
+                if (carbGroupEl) carbGroupEl.style.display = 'block';
+                return;
+            }
+
+            singleEl.style.display = 'none';
+            if (carbGroupEl) carbGroupEl.style.display = 'none';
+            groupEl.style.display = 'block';
+
+            const carbOptions = (sel) => {
+                const std = CARBSOLVE_OPTIONS.slice();
+                if (sel && !std.includes(sel)) std.push(sel);
+                return std.map(v => `<option value="${escHtml(v)}"${v === (sel || '') ? ' selected' : ''}>${v ? escHtml(v) : 'None'}</option>`).join('');
+            };
+
+            let html = '';
+            for (let i = 0; i < count; i++) {
+                const t = source[i] || { label: `Tank ${i + 1}`, carbsolve: '', ownership: 'rental' };
+                const label = t.label || `Tank ${i + 1}`;
+                const carb = t.carbsolve || '';
+                html += `
+                    <div data-tank-row="${i}" style="border:1px solid #e5e7eb;border-radius:8px;padding:10px;margin-bottom:8px;background:#f9fafb;">
+                        <div style="font-size:11px;font-weight:700;color:#6b7280;margin-bottom:6px;">TANK ${i + 1}</div>
+                        <input type="text" class="tank-label-input" value="${escHtml(label)}" placeholder="Tank name, e.g. Level 3 KTM016"
+                               style="width:100%;padding:8px;margin-bottom:6px;border:1px solid #d1d5db;border-radius:6px;font-size:15px;">
+                        <div style="display:flex;gap:8px;">
+                            <select class="tank-carb-select" style="flex:1;min-width:0;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:14px;">
+                                ${carbOptions(carb)}
+                            </select>
+                            <select class="tank-ownership-select" style="flex:1;min-width:0;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:14px;">
+                                <option value="rental"${t.ownership !== 'user_owned' ? ' selected' : ''}>Rental</option>
+                                <option value="user_owned"${t.ownership === 'user_owned' ? ' selected' : ''}>User-owned</option>
+                            </select>
+                        </div>
+                    </div>`;
+            }
+            rowsEl.innerHTML = html;
+        }
+
         function hideCustomerEditModal() {
             document.getElementById('customerEditModal').classList.remove('active');
         }
@@ -15434,6 +15557,25 @@
                 return;
             }
             
+            // Details
+            const newName = document.getElementById('editCustomerName').value.trim();
+            if (!newName) { showToast('Customer name cannot be empty', 'error'); return; }
+            customer.name = newName;
+            customer.runDay = document.getElementById('editCustomerRunDay').value.trim();
+            customer.address = document.getElementById('editCustomerAddress').value.trim();
+            customer.phone = document.getElementById('editCustomerPhone').value.trim();
+            customer.serviceType = document.getElementById('editCustomerServiceType').value;
+            customer.waste = document.getElementById('editCustomerWaste').value;
+            customer.invoiceType = document.getElementById('editCustomerInvoiceType').value;
+
+            // Customer-level carbsolve only applies to single-tank customers;
+            // multi-tank carbsolve lives per tank in tank_labels.
+            const carbGroupVisible = document.getElementById('editCustomerCarbsolveGroup').style.display !== 'none';
+            if (carbGroupVisible) {
+                const rawCarb = document.getElementById('editCustomerCarbsolve').value;
+                customer.carbsolve = rawCarb ? `Carbsolve - ${rawCarb}` : '';
+            }
+
             customer.code = code;
             customer.notes = notes;
             customer.specialInstructions = specialInstructions;
@@ -15445,42 +15587,41 @@
             customer.chemSeparateInvoice = document.getElementById('editCustomerChemSeparateInvoice').checked;
             customer.monthlyRental = document.getElementById('editCustomerMonthlyRental').checked;
 
-            // Tank ownership: only writable by steve on single-tank customers.
-            const ownershipGroup = document.getElementById('editCustomerOwnershipGroup');
-            const isSteveSave = currentUser && (currentUser.email || '').toLowerCase() === 'steve.oztank@gmail.com';
-            if (isSteveSave && ownershipGroup && ownershipGroup.style.display !== 'none') {
+            // Tank config: count, per-tank name/carbsolve/ownership.
+            // Written through a targeted update (not the general upsert) so bulk
+            // and import save paths can never null out a customer's tank config.
+            let tankCount = parseInt(document.getElementById('editCustomerTankCount').value, 10);
+            if (!Number.isFinite(tankCount) || tankCount < 1) tankCount = 1;
+            if (tankCount > 12) tankCount = 12;
+            customer.tankCount = tankCount;
+
+            let tankLabelsToSave = null;
+            if (tankCount > 1) {
+                const rows = Array.from(document.querySelectorAll('#editCustomerTankOwnershipRows [data-tank-row]'));
+                tankLabelsToSave = rows.map((row, i) => ({
+                    label: (row.querySelector('.tank-label-input').value || '').trim() || `Tank ${i + 1}`,
+                    carbsolve: row.querySelector('.tank-carb-select').value || null,
+                    ownership: row.querySelector('.tank-ownership-select').value === 'user_owned' ? 'user_owned' : 'rental'
+                }));
+            } else {
+                // Dropping to one tank clears per-tank config; the single ownership
+                // dropdown and customer-level carbsolve take over.
+                tankLabelsToSave = null;
                 const ownVal = document.getElementById('editCustomerOwnership').value;
                 customer.tankOwnership = ownVal === 'user_owned' ? 'user_owned' : 'rental';
             }
 
-            // Per-tank ownership (multi-tank). Written to tank_labels via a
-            // dedicated update — saveCustomer deliberately doesn't touch
-            // tank_labels, so import/bulk save paths can't clobber tank config.
-            const tankOwnGroupSave = document.getElementById('editCustomerTankOwnershipGroup');
-            let tankLabelsToSave = null;
-            if (isSteveSave && tankOwnGroupSave && tankOwnGroupSave.style.display !== 'none') {
-                const entries = getTankEntries(customer);
-                document.querySelectorAll('#editCustomerTankOwnershipRows .tank-ownership-select').forEach(sel => {
-                    const idx = parseInt(sel.dataset.tankIndex);
-                    if (entries[idx]) {
-                        entries[idx].ownership = sel.value === 'user_owned' ? 'user_owned' : 'rental';
-                    }
-                });
-                tankLabelsToSave = entries.map(t => ({
-                    label: t.label,
-                    carbsolve: t.carbsolve,
-                    ownership: t.ownership
-                }));
-            }
-
             try {
                 await db.saveCustomer(customer);
-                if (tankLabelsToSave) {
-                    const ok = await db.saveTankLabels(customerId, tankLabelsToSave);
-                    if (ok) customer.tankLabels = tankLabelsToSave;
-                }
+                const ok = await db.saveTankLabels(customerId, tankLabelsToSave, tankCount);
+                if (ok) customer.tankLabels = tankLabelsToSave;
                 hideCustomerEditModal();
                 renderCustomerList();
+                if (document.getElementById('customerAdminList')) renderCustomerAdminList();
+                // Refresh the profile panel if the customer page is showing this customer
+                if (typeof _profileCustomerId !== 'undefined' && _profileCustomerId === customerId) {
+                    renderCustomerProfilePanel(customer);
+                }
                 showToast('Customer updated successfully!', 'success');
             } catch (error) {
                 showToast('Error saving customer: ' + error.message, 'error');
