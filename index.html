@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oz Tank - Service POD Manager v11.34</title>
+    <title>Oz Tank - Service POD Manager v11.35</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -9600,6 +9600,27 @@
             </div>`;
         }
 
+        // Every on/off option the edit modal exposes, with the palette its badge
+        // uses when active. Listed here so the summary can show the FULL set —
+        // an unset flag renders muted rather than vanishing, which is what makes
+        // "off" distinguishable from "never configured".
+        const CUSTOMER_OPTION_FLAGS = [
+            { key: 'emailManually',       icon: '&#9993;&#65039;', label: 'Email Manually',           bg: '#fdf2f8', fg: '#9d174d', br: '#f9a8d4' },
+            { key: 'noDeliveryFee',       icon: '&#128666;',       label: 'No Delivery Fee',          bg: '#ecfeff', fg: '#0e7490', br: '#67e8f9' },
+            { key: 'doNotEmail',          icon: '&#128683;',       label: 'Do Not Email',             bg: '#fef2f2', fg: '#b91c1c', br: '#fecaca' },
+            { key: 'chemSeparateInvoice', icon: '&#129514;',       label: 'Separate Chemical Invoice',bg: '#ecfdf5', fg: '#047857', br: '#6ee7b7' },
+            { key: 'monthlyRental',       icon: '&#128257;',       label: 'Monthly Rental',           bg: '#eef2ff', fg: '#4338ca', br: '#a5b4fc' }
+        ];
+
+        function optionChip(flag, active) {
+            const style = active
+                ? `background:${flag.bg};color:${flag.fg};border:1px solid ${flag.br};`
+                : 'background:#fff;color:#b6bcc6;border:1px dashed #e2e5ea;';
+            return `<span style="${style}padding:4px 10px;border-radius:8px;font-size:11px;font-weight:600;display:inline-flex;align-items:center;gap:5px;">
+                <span style="font-size:11px;">${active ? '&#10003;' : '&#9675;'}</span>${flag.icon} ${flag.label}
+            </span>`;
+        }
+
         function renderCustomerProfilePanel(customer) {
             const el = document.getElementById('customerProfilePanel');
             if (!el) return;
@@ -9613,31 +9634,30 @@
                 ? `<span style="background:#fff7ed;color:#c2410c;border:1px solid #fdba74;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:600;">&#128203; ${escHtml(billingValue)}</span>`
                 : '';
 
-            // Badges are emitted with margin-left by their shared helpers; the flex
-            // gap here handles spacing, so strip it to keep the row even.
-            const badges = (billingBadge
+            // Header carries the identity badges — what this customer IS. The
+            // on/off options live in their own section so their state is always
+            // visible. Shared badge helpers add margin-left; flex gap covers it.
+            const identityBadges = (billingBadge
                 + billsUnderChildBadge(customer) + billsUnderParentBadge(customer)
-                + userOwnedBadge(customer) + alhBadge(customer)
-                + emailManuallyBadge(customer) + noDeliveryFeeBadge(customer)
-                + doNotEmailBadge(customer) + chemSeparateInvoiceBadge(customer)
-                + monthlyRentalBadge(customer)).replace(/margin-left:6px;/g, '');
+                + userOwnedBadge(customer) + alhBadge(customer)).replace(/margin-left:6px;/g, '');
 
-            // Schedule tile: cadence plus where this month sits in it
+            // Schedule: cadence, the actual months, and where this month sits
             const now = new Date();
             const scheduleLabel = getScheduleLabel(customer.serviceMonths);
+            const monthList = formatServiceMonths(customer.serviceMonths);
             let scheduleHtml, scheduleAccent = false;
             if (!scheduleLabel) {
-                scheduleHtml = 'Monthly';
+                scheduleHtml = 'Monthly (every month)';
             } else {
                 const off = isOffMonth(customer, now.getMonth(), now.getFullYear());
                 scheduleAccent = true;
                 scheduleHtml = escHtml(scheduleLabel)
+                    + (monthList ? `<div style="font-size:11px;color:#6b7280;font-weight:500;margin-top:2px;">${escHtml(monthList)}</div>` : '')
                     + (off
                         ? `<div style="margin-top:4px;"><span style="background:#fef3c7;color:#92400e;border:1px solid #fcd34d;padding:1px 7px;border-radius:8px;font-size:10px;font-weight:700;">&#9208;&#65039; OFF THIS MONTH</span></div>`
                         : `<div style="margin-top:4px;"><span style="background:#dcfce7;color:#166534;border:1px solid #86efac;padding:1px 7px;border-radius:8px;font-size:10px;font-weight:700;">&#10003; DUE THIS MONTH</span></div>`);
             }
 
-            // Tanks
             const entries = getTankEntries(customer);
             const multi = (customer.tankCount || 1) > 1;
             const tankChips = entries.map(t => {
@@ -9648,8 +9668,12 @@
                 return `<span style="${style}padding:4px 10px;border-radius:8px;font-size:12px;font-weight:600;display:inline-block;">${owned ? '&#127991;&#65039;' : '&#128738;'} ${escHtml(t.label)}${t.carbsolve ? ' &middot; ' + escHtml(t.carbsolve) : ''}</span>`;
             }).join('');
 
+            const optionChips = CUSTOMER_OPTION_FLAGS
+                .map(f => optionChip(f, customer[f.key] === true)).join('');
+
             const singleCarb = (customer.carbsolve || '').replace(/^(Carbsolve\s*[-:]\s*|Carb:\s*)/i, '').trim();
             const grid = 'display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;';
+            const sectionLabel = 'font-size:10px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;';
 
             el.innerHTML = `
                 <div class="card" style="margin-bottom:12px;padding:0;overflow:hidden;">
@@ -9657,7 +9681,7 @@
                     <div style="background:linear-gradient(135deg,#374151 0%,#1f2937 100%);padding:14px 16px;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
                         <div style="flex:1;min-width:0;">
                             <div style="font-size:17px;font-weight:700;color:#fff;line-height:1.25;">${escHtml(customer.name)}</div>
-                            ${badges ? `<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;">${badges}</div>` : ''}
+                            ${identityBadges ? `<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;">${identityBadges}</div>` : ''}
                         </div>
                         <div style="display:flex;gap:8px;flex-shrink:0;">
                             <button class="btn" style="width:auto;padding:8px 16px;font-size:13px;background:#f59e0b;margin:0;white-space:nowrap;"
@@ -9673,20 +9697,25 @@
                             ${profileTile('Service type', escHtml(customer.serviceType || 'Service'))}
                             ${profileTile('Schedule', scheduleHtml, scheduleAccent)}
                             ${multi ? '' : profileTile('Carbsolve', singleCarb ? escHtml(singleCarb) : '&mdash;')}
+                            ${profileTile('Business group', escHtml(customer.businessGroup || ''))}
+                            ${profileTile('Waste', escHtml(customer.waste || ''))}
                         </div>
 
-                        ${multi ? `
                         <div style="margin-top:12px;">
-                            <div style="font-size:10px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Tanks (${customer.tankCount})</div>
+                            <div style="${sectionLabel}">Tanks (${customer.tankCount || 1})${multi ? '' : ' &mdash; single'}</div>
                             <div style="display:flex;flex-wrap:wrap;gap:6px;">${tankChips}</div>
-                        </div>` : ''}
+                        </div>
 
-                        ${(customer.address || customer.phone || customer.code || customer.waste) ? `
+                        <div style="margin-top:12px;">
+                            <div style="${sectionLabel}">Options</div>
+                            <div style="display:flex;flex-wrap:wrap;gap:6px;">${optionChips}</div>
+                        </div>
+
+                        ${(customer.address || customer.phone || customer.code) ? `
                         <div style="${grid}margin-top:12px;">
                             ${profileTile('Address', customer.address ? formatAddressLink(customer.address) : '')}
                             ${profileTile('Phone', customer.phone ? formatPhoneLink(customer.phone) : '')}
                             ${profileTile('Keycode', customer.code ? '&#128273; ' + escHtml(customer.code) : '')}
-                            ${profileTile('Waste', escHtml(customer.waste || ''))}
                         </div>` : ''}
 
                         ${customer.specialInstructions ? `
