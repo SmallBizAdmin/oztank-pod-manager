@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oz Tank - Service POD Manager v11.37</title>
+    <title>Oz Tank - Service POD Manager v11.38</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -13414,7 +13414,14 @@
                 // Build carbsolve display — highlight orange if worker used a different size to customer default
                 const customerDefaultCarbsolve = (customer.carbsolve || '').replace(/^(Carbsolve\s*[-:]\s*|Carb:\s*)/i, '');
                 const podCarbsolveValue = pod ? (pod.carbsolve || '').replace(/^(Carbsolve\s*[-:]\s*|Carb:\s*)/i, '') : '';
-                const carbsolveOverridden = pod && podCarbsolveValue && customerDefaultCarbsolve && podCarbsolveValue !== customerDefaultCarbsolve;
+                // Only meaningful for single-tank customers. Multi-tank carbsolve lives
+                // per tank (shown as chips above); the customer-level carbsolve is a
+                // leftover from before the customer was split into tanks, so comparing
+                // against it flagged every multi-tank POD and printed a stale default.
+                const isPerTankRow = (customer.tankCount || 1) > 1
+                    || !!(pod && pod.tankServices && pod.tankServices.length > 0);
+                const carbsolveOverridden = !isPerTankRow && pod && podCarbsolveValue
+                    && customerDefaultCarbsolve && podCarbsolveValue !== customerDefaultCarbsolve;
                 const carbsolveDisplay = carbsolveOverridden
                     ? `<span style="background: #fff7ed; color: #c2410c; border: 2px solid #f97316; padding: 3px 8px; border-radius: 6px; font-weight: 700; white-space: nowrap;">⚠️ ${carbsolve}</span><br><span style="font-size: 10px; color: #9ca3af;">default: ${customerDefaultCarbsolve}</span>`
                     : carbsolve;
