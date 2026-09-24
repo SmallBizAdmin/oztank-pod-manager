@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oz Tank - Service POD Manager v11.38</title>
+    <title>Oz Tank - Service POD Manager v11.39</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -8311,6 +8311,7 @@
                         </td>
                         <td style="padding: 12px;">
                             <div style="font-weight: 600; color: #111827;">${inv.event_title}${invoiceEntryCustomerBadges(inv)}</div>
+                            ${invoiceEntryLinkControl(inv)}
                             ${invoicedAtStr}
                         </td>
                         <td style="padding: 12px;">
@@ -13112,6 +13113,36 @@
         // and optionally an `event_id`, so we resolve via the same per-instance
         // then title-rule link mechanism the calendar view uses. Returns '' when
         // the entry isn't linked to a customer yet.
+        // Link control for a monthly invoice line. Invoice entries resolve their
+        // customer through the same title rule the calendar uses, but there was no
+        // way to CREATE that link from the invoicing screen — you had to find the
+        // event on the admin calendar. Steve-only, matching the calendar/ad-hoc rows.
+        function invoiceEntryLinkControl(inv) {
+            if (!inv) return '';
+            const canLink = currentUser && (currentUser.email || '').toLowerCase() === 'steve.oztank@gmail.com';
+            const linkedId = db.getCalendarEventLink(inv.event_id, inv.event_title);
+            const cust = linkedId != null ? db.customers.find(c => c.id === linkedId) : null;
+            const titleJs = String(inv.event_title || '')
+                .replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;').replace(/\n/g, ' ');
+            const fromTitle = db.isCalendarEventLinkFromTitle(inv.event_id, inv.event_title);
+
+            if (cust) {
+                const recurringTag = fromTitle
+                    ? `<span style="font-size:10px;color:#6b7280;margin-left:6px;" title="Auto-linked by event title \u2014 recurs for future events with this title">\u21bb recurring</span>`
+                    : '';
+                const changeBtn = canLink
+                    ? `<a href="#" onclick="event.preventDefault(); event.stopPropagation(); linkCalendarEventCustomer('${inv.id}', '${titleJs}', 'invoice')" style="font-size:10px;color:#2563eb;margin-left:8px;">\u270e change</a>`
+                    : '';
+                return `<div style="font-size:12px;margin-top:5px;">
+                    <span style="background:#dbeafe;color:#1e40af;padding:2px 7px;border-radius:8px;font-size:11px;font-weight:600;">&#128279; ${escHtml(cust.name)}</span>${recurringTag}${changeBtn}
+                </div>`;
+            }
+            if (!canLink) return '';
+            return `<div style="margin-top:5px;">
+                <button onclick="event.stopPropagation(); linkCalendarEventCustomer('${inv.id}', '${titleJs}', 'invoice')" style="background:#1e3a8a;color:white;border:none;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:11px;">&#128279; Link customer</button>
+            </div>`;
+        }
+
         function invoiceEntryCustomerBadges(inv) {
             if (!inv) return '';
             const linkedCustId = db.getCalendarEventLink(inv.event_id, inv.event_title);
@@ -15356,6 +15387,8 @@
                     showToast(`Linked "${evTitle}" → ${customer.name}`, 'success');
                     if (src === 'calendar') {
                         renderAdminCalendar();
+                    } else if (src === 'invoice') {
+                        renderInvoiceRunsheet(currentInvoiceDate);
                     } else {
                         loadAdminAdHocRunsheet(currentAdminDateFilter);
                     }
