@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oz Tank - Service POD Manager v11.39</title>
+    <title>Oz Tank - Service POD Manager v11.40</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -3708,6 +3708,32 @@
         // Initialize Supabase
         let supabase;
 
+        // Supabase caps an unpaginated select at a fixed row limit (1000 by
+        // default) and returns the first page WITHOUT any error — the rest is
+        // silently dropped. calendar_event_status passed 1000 rows, so the most
+        // recent ticks stopped loading for everyone except the worker who had
+        // just made them (their own in-memory copy was right). Page through any
+        // table that grows without bound. A stable order column is required or
+        // paging can repeat and skip rows.
+        async function fetchAllRows(table, columns, orderColumn, pageSize = 1000) {
+            const out = [];
+            let offset = 0;
+            for (;;) {
+                const { data, error } = await supabase
+                    .from(table)
+                    .select(columns)
+                    .order(orderColumn, { ascending: true })
+                    .range(offset, offset + pageSize - 1);
+                if (error) throw error;
+                const batch = data || [];
+                out.push(...batch);
+                if (batch.length < pageSize) return out;
+                offset += pageSize;
+            }
+        }
+
+
+
         // ── App update check ────────────────────────────────────────
         // The app is one static file with no service worker, so a phone left
         // open all day never re-fetches it and silently misses every deploy
@@ -5022,10 +5048,7 @@
                     }));
 
                     // Load service days
-                    const { data: serviceDays, error: sdError } = await supabase
-                        .from('service_days')
-                        .select('*');
-                    if (sdError) throw sdError;
+                    const serviceDays = await fetchAllRows('service_days', '*', 'name');
                     this.serviceDays = serviceDays || [];
                     
                     // Sort service days naturally (Day 1, Day 2, ..., Day 10, Day 11, etc.)
@@ -5579,10 +5602,10 @@
             // Calendar event status management (Supabase-backed, shared across all devices)
             async loadCalendarEventStatus() {
                 try {
-                    const { data, error } = await supabase
-                        .from('calendar_event_status')
-                        .select('event_id, status, notes, actioned_by, actioned_at, invoice_notes, photos, linked_customer_id');
-                    if (error) throw error;
+                    const data = await fetchAllRows(
+                        'calendar_event_status',
+                        'id, event_id, status, notes, actioned_by, actioned_at, invoice_notes, photos, linked_customer_id',
+                        'id');
                     this.calendarEventStatus = {};
                     this.calendarEventNotes = {};
                     this.calendarEventInvoiceNotes = {};
@@ -5714,10 +5737,10 @@
             // Load the title→customer mapping rules (recurring links).
             async loadCalendarTitleLinks() {
                 try {
-                    const { data, error } = await supabase
-                        .from('calendar_event_customer_links')
-                        .select('title_normalized, customer_id');
-                    if (error) throw error;
+                    const data = await fetchAllRows(
+                        'calendar_event_customer_links',
+                        'title_normalized, customer_id',
+                        'title_normalized');
                     this.calendarTitleLinks = {};
                     (data || []).forEach(row => {
                         if (row.title_normalized && row.customer_id != null) {
@@ -6240,9 +6263,8 @@
             
             async loadServiceDayInvoiceStatus() {
                 try {
-                    const { data, error } = await supabase
-                        .from('service_day_invoice_status')
-                        .select('*');
+                    const data = await fetchAllRows('service_day_invoice_status', '*', 'id');
+                    const error = null;
                     
                     this.serviceDayInvoiceStatus = {};
                     if (!error && data) {
