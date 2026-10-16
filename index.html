@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oz Tank - Service POD Manager v11.40</title>
+    <title>Oz Tank - Service POD Manager v11.41</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -3715,6 +3715,22 @@
         // just made them (their own in-memory copy was right). Page through any
         // table that grows without bound. A stable order column is required or
         // paging can repeat and skip rows.
+        // As fetchAllRows, but for queries that carry filters. Pass a builder so
+        // each page gets a fresh query. The order must be stable (add a unique
+        // tiebreaker) or range paging can repeat and skip rows.
+        async function fetchAllFiltered(build, pageSize = 1000) {
+            const out = [];
+            let offset = 0;
+            for (;;) {
+                const { data, error } = await build().range(offset, offset + pageSize - 1);
+                if (error) throw error;
+                const batch = data || [];
+                out.push(...batch);
+                if (batch.length < pageSize) return out;
+                offset += pageSize;
+            }
+        }
+
         async function fetchAllRows(table, columns, orderColumn, pageSize = 1000) {
             const out = [];
             let offset = 0;
@@ -5352,12 +5368,14 @@
                     const startStr = start.toISOString().split('T')[0];
                     const endStr = end.toISOString().split('T')[0];
                     
-                    const { data: pods, error: podsError } = await supabase
+                    const pods = await fetchAllFiltered(() => supabase
                         .from('pods')
                         .select('*')
                         .gte('date', startStr)
                         .lte('date', endStr)
-                        .order('timestamp', { ascending: false });
+                        .order('timestamp', { ascending: false })
+                        .order('id', { ascending: false }));
+                    const podsError = null;
                     
                     if (podsError) throw podsError;
                     
@@ -5411,12 +5429,14 @@
                     friday.setDate(friday.getDate() + 6);
                     const endStr = formatDateLocal(friday);
                     
-                    const { data: pods, error: podsError } = await supabase
+                    const pods = await fetchAllFiltered(() => supabase
                         .from('pods')
                         .select('*')
                         .gte('date', startStr)
                         .lte('date', endStr)
-                        .order('timestamp', { ascending: false });
+                        .order('timestamp', { ascending: false })
+                        .order('id', { ascending: false }));
+                    const podsError = null;
                     
                     if (podsError) throw podsError;
                     
@@ -5467,12 +5487,14 @@
                     const startStr = formatDateLocal(start);
                     const endStr = formatDateLocal(end);
                     
-                    const { data: pods, error: podsError } = await supabase
+                    const pods = await fetchAllFiltered(() => supabase
                         .from('pods')
                         .select('*')
                         .gte('date', startStr)
                         .lte('date', endStr)
-                        .order('timestamp', { ascending: false });
+                        .order('timestamp', { ascending: false })
+                        .order('id', { ascending: false }));
+                    const podsError = null;
                     
                     if (podsError) throw podsError;
                     
@@ -6326,12 +6348,14 @@
                     const startStr = start.toISOString().split('T')[0];
                     const endStr = end.toISOString().split('T')[0];
                     
-                    const { data, error } = await supabase
+                    const data = await fetchAllFiltered(() => supabase
                         .from('tank_movements')
                         .select('*')
                         .gte('date', startStr)
                         .lte('date', endStr)
-                        .order('timestamp', { ascending: false });
+                        .order('timestamp', { ascending: false })
+                        .order('id', { ascending: false }));
+                    const error = null;
                     
                     if (error) {
                         console.log('Tank movements table may not exist yet');
@@ -12915,11 +12939,13 @@
             // Fetch dates from both PODs and worker_calendar_events
             try {
                 // Get POD dates
-                const { data: podData, error: podError } = await supabase
+                const podData = await fetchAllFiltered(() => supabase
                     .from('pods')
-                    .select('date')
+                    .select('date, id')
                     .eq('run_day', serviceDayName)
-                    .order('date', { ascending: false });
+                    .order('date', { ascending: false })
+                    .order('id', { ascending: false }));
+                const podError = null;
                 
                 if (podError) throw podError;
                 
