@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oz Tank - Service POD Manager v11.41</title>
+    <title>Oz Tank - Service POD Manager v11.42</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -7469,6 +7469,11 @@
         }
 
         function showNewPodForm() {
+            // Clear any edit state — otherwise this new POD would save over the
+            // POD last opened for editing, since podId falls back to it.
+            currentEditingPodId = null;
+            currentEditingServiceType = null;
+            currentEditingOriginal = null;
             showView('podView');
             document.getElementById('podCustomerName').textContent = currentCustomer.name;
             document.getElementById('podForm').style.display = 'block';
@@ -7856,11 +7861,22 @@
             // Store the POD ID so we know we're editing
             currentEditingPodId = pod.id;
             currentEditingServiceType = pod.serviceType || 'Service';
+            currentEditingOriginal = {
+                date: pod.date || null,
+                timestamp: pod.timestamp || null,
+                completedBy: pod.completedBy || null,
+                completedAt: pod.completedAt || null
+            };
             currentCalendarEventId = pod.calendarEventId || null;
         }
 
         let currentEditingPodId = null;
         let currentEditingServiceType = null;
+        // Snapshot of the fields an edit must NOT change: when a POD is reached
+        // from Search PODs or My Day, currentServiceDate is null, so savePOD used
+        // to recompute the date as "today" and stamp the editor as the completer —
+        // silently moving the POD and reassigning whose work it was.
+        let currentEditingOriginal = null;
         
         async function deleteExistingPod(podId, customerName, podDate) {
             if (!confirm(`Delete POD for ${customerName} on ${podDate}?\n\nThis cannot be undone.`)) return;
@@ -12501,8 +12517,12 @@
             const nowUTC = new Date();
             const nowAEST = new Date(nowUTC.toLocaleString('en-US', { timeZone: 'Australia/Brisbane' }));
             
-            // Use the service date if set (when working from calendar), otherwise today
-            const podDate = currentServiceDate || formatDateLocal(nowAEST);
+            // Editing must never move an existing POD. Only a NEW POD derives its
+            // date from the working context; an edit keeps the date it already had.
+            const editingOrig = currentEditingPodId ? currentEditingOriginal : null;
+            const podDate = (editingOrig && editingOrig.date)
+                ? editingOrig.date
+                : (currentServiceDate || formatDateLocal(nowAEST));
             
             // Get carbsolve from dropdown (single-tank only)
             const carbsolve = document.getElementById('podCarbsolveDisplay') ? document.getElementById('podCarbsolveDisplay').value : (currentCustomer.carbsolve || '');
@@ -12538,7 +12558,7 @@
                 customerAddress: currentCustomer.address || '',
                 runDay: currentRunDay,
                 date: podDate,
-                timestamp: nowUTC.toISOString(), // Store as UTC, display as AEST
+                timestamp: (editingOrig && editingOrig.timestamp) || nowUTC.toISOString(), // UTC; displayed as AEST
                 serviceType: serviceType,
                 carbsolve: carbsolve,
                 tankServiced: null,
@@ -12552,8 +12572,9 @@
                 isAdHoc: isAdHocService,
                 sourceRunDay: isAdHocService ? adHocSourceRunDay : null, // Track which runsheet ad-hoc was created from
                 calendarEventId: currentCalendarEventId || null, // Link back to calendar event if triggered from one
-                completedBy: currentUser ? (currentUser.name || currentUser.email) : 'Unknown',
-                completedAt: nowUTC.toISOString(),
+                completedBy: (editingOrig && editingOrig.completedBy)
+                    || (currentUser ? (currentUser.name || currentUser.email) : 'Unknown'),
+                completedAt: (editingOrig && editingOrig.completedAt) || nowUTC.toISOString(),
                 tankLabel: null,
                 tankServices: tankServices,
                 orderNumber: orderNumber
@@ -12596,6 +12617,7 @@
                     }
                     
                     currentEditingPodId = null; // Reset editing state
+                    currentEditingOriginal = null;
                     const wasAdHoc = isAdHocService;
                     isAdHocService = false; // Reset ad-hoc state
                     adHocCustomerName = '';
