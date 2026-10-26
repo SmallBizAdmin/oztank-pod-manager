@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oz Tank - Service POD Manager v11.43</title>
+    <title>Oz Tank - Service POD Manager v11.44</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -11664,6 +11664,52 @@
         }
 
         // Render customer list with drag-and-drop reordering
+
+        // Count one carbsolve spec into the bag tally.
+        // Handles plain sizes ("7kg spcl"), composites that ship as several bags
+        // ("14kg" = 2 x 7kg), and free-text combinations like
+        // "2 x 7kg spcl + 1kg Additive" — which previously matched nothing and
+        // contributed ZERO bags, silently under-loading the truck for every
+        // customer with a custom spec.
+        // Components that aren't carbsolve bags (Additive, Fryersolve) are
+        // collected into `extras` so they can be shown as also-required.
+        const CARBSOLVE_COMPOSITES = {
+            '14kg spcl': [['7kg spcl', 2]],
+            '14kg':      [['7kg', 2]],
+            '17kg':      [['7kg', 1], ['10kg', 1]],
+            '21kg':      [['7kg', 3]],
+            '28kg':      [['7kg', 4]]
+        };
+
+        function tallyCarbsolve(raw, bagCounts, bagSizes, extras) {
+            const norm = v => String(v || '')
+                .toLowerCase()
+                .replace(/^carbsolve[\s\-:]+/i, '')
+                .replace(/\s+/g, ' ')
+                .trim();
+            const text = norm(raw);
+            if (!text) return;
+
+            text.split('+').forEach(part => {
+                const piece = norm(part);
+                if (!piece) return;
+                // optional leading quantity: "2 x 7kg spcl", "2x 7kg", "2 × 7kg"
+                const m = piece.match(/^(?:(\d+)\s*[x\u00d7]\s*)?(.+)$/);
+                const qty = (m && m[1]) ? parseInt(m[1], 10) : 1;
+                const item = norm(m ? m[2] : piece);
+
+                const composite = CARBSOLVE_COMPOSITES[item];
+                if (composite) {
+                    composite.forEach(([size, n]) => { bagCounts[size] += n * qty; });
+                    return;
+                }
+                const match = bagSizes.find(sz => norm(sz) === item);
+                if (match) { bagCounts[match] += qty; return; }
+                // Not a carbsolve bag — e.g. "1kg additive", "1kg fryersolve"
+                if (extras && item) extras[item] = (extras[item] || 0) + qty;
+            });
+        }
+
         function renderRunsheetSummary(customers, isHistorical) {
             const el = document.getElementById('runsheetSummary');
             if (!el) return;
@@ -11720,6 +11766,7 @@
             const bagSizes = ['4kg', '4kg spcl', '7kg', '7kg spcl', '10kg', '11kg spcl', '17kg'];
             const bagCounts = {};
             bagSizes.forEach(s => bagCounts[s] = 0);
+            const extraItems = {}; // non-carbsolve components, e.g. Fryersolve / Additive
 
             active.forEach(c => {
                 // Multi-tank: count each tank's carbsolve separately from tank_labels
@@ -11729,13 +11776,7 @@
                     entries.forEach(t => {
                         const raw = (t.carbsolve || customerCarbsolve || '').toLowerCase().replace(/^carbsolve[\s\-:]+/i, '').replace(/\s+/g, ' ').trim();
                         if (!raw) return;
-                        const normalise = s => s.toLowerCase().replace(/\s+/g, ' ').trim();
-                        if (raw === '14kg spcl') { bagCounts['7kg spcl'] += 2; }
-                        else if (raw === '14kg') { bagCounts['7kg'] += 2; }
-                        else if (raw === '17kg') { bagCounts['7kg'] += 1; bagCounts['10kg'] += 1; }
-                        else if (raw === '21kg') { bagCounts['7kg'] += 3; }
-                        else if (raw === '28kg') { bagCounts['7kg'] += 4; }
-                        else { const match = bagSizes.find(s => normalise(s) === raw); if (match) bagCounts[match]++; }
+                        tallyCarbsolve(raw, bagCounts, bagSizes, extraItems);
                     });
                     return;
                 }
@@ -11749,21 +11790,7 @@
                 // Also normalise the bag size keys the same way for comparison
                 const normalise = s => s.toLowerCase().replace(/\s+/g, ' ').trim();
 
-                if (raw === '14kg spcl') {
-                    bagCounts['7kg spcl'] += 2; // 2 × 7kg spcl bags
-                } else if (raw === '14kg') {
-                    bagCounts['7kg'] += 2; // 2 × 7kg bags
-                } else if (raw === '17kg') {
-                    bagCounts['7kg'] += 1; // 1 × 7kg + 1 × 10kg
-                    bagCounts['10kg'] += 1;
-                } else if (raw === '21kg') {
-                    bagCounts['7kg'] += 3; // 3 × 7kg bags
-                } else if (raw === '28kg') {
-                    bagCounts['7kg'] += 4; // 4 × 7kg bags
-                } else {
-                    const match = bagSizes.find(s => normalise(s) === raw);
-                    if (match) bagCounts[match]++;
-                }
+                tallyCarbsolve(raw, bagCounts, bagSizes, extraItems);
             });
 
             // Build carbsolve pills HTML
@@ -11776,6 +11803,11 @@
                 .join('');
 
             const noCarbsolve = bagSizes.every(s => bagCounts[s] === 0);
+
+            // Non-carbsolve items that still have to go on the truck
+            const extrasHtml = Object.keys(extraItems).sort()
+                .map(k => `<span class="carbsolve-pill" style="background:#ecfdf5;color:#047857;border-color:#6ee7b7;">${extraItems[k]} × ${escHtml(k)}</span>`)
+                .join('');
 
             el.innerHTML = `
                 <div class="runsheet-summary">
@@ -11790,6 +11822,9 @@
                         ${noCarbsolve
                             ? '<div class="runsheet-summary-sub">None required</div>'
                             : `<div class="carbsolve-grid">${pillsHtml}</div>`}
+                        ${extrasHtml
+                            ? `<div class="runsheet-summary-title" style="margin-top:8px;">Also Required</div><div class="carbsolve-grid">${extrasHtml}</div>`
+                            : ''}
                     </div>
                 </div>
             `;
