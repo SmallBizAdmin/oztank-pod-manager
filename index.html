@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oz Tank - Service POD Manager v11.42</title>
+    <title>Oz Tank - Service POD Manager v11.43</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -2488,6 +2488,7 @@
                                 <option value="7kg spcl">7kg spcl</option>
                                 <option value="10kg">10kg</option>
                                 <option value="11kg spcl">11kg spcl</option>
+                                <option value="14kg spcl">14kg spcl</option>
                                 <option value="14kg">14kg</option>
                                 <option value="17kg">17kg</option>
                                 <option value="21kg">21kg</option>
@@ -2627,6 +2628,7 @@
                                 <option value="7kg spcl">7kg spcl</option>
                                 <option value="10kg">10kg</option>
                                 <option value="11kg spcl">11kg spcl</option>
+                                <option value="14kg spcl">14kg spcl</option>
                                 <option value="14kg">14kg</option>
                                 <option value="17kg">17kg</option>
                                 <option value="21kg">21kg</option>
@@ -3150,6 +3152,7 @@
                         <option value="7kg spcl">7kg spcl</option>
                         <option value="10kg">10kg</option>
                         <option value="11kg spcl">11kg spcl</option>
+                        <option value="14kg spcl">14kg spcl</option>
                         <option value="14kg">14kg</option>
                         <option value="17kg">17kg</option>
                         <option value="21kg">21kg</option>
@@ -3369,6 +3372,7 @@
                         <option value="7kg spcl">7kg spcl</option>
                         <option value="10kg">10kg</option>
                         <option value="11kg spcl">11kg spcl</option>
+                        <option value="14kg spcl">14kg spcl</option>
                         <option value="14kg">14kg</option>
                         <option value="17kg">17kg</option>
                         <option value="21kg">21kg</option>
@@ -4500,7 +4504,7 @@
                             'July', 'August', 'September', 'October', 'November', 'December'];
         
         // Waste field values that are billing instructions, not physical collection types
-        const CARBSOLVE_OPTIONS = ['', '4kg', '4kg spcl', '7kg', '7kg spcl', '10kg', '11kg spcl', '14kg', '17kg', '21kg', '28kg'];
+        const CARBSOLVE_OPTIONS = ['', '4kg', '4kg spcl', '7kg', '7kg spcl', '10kg', '11kg spcl', '14kg', '14kg spcl', '17kg', '21kg', '28kg'];
         const BILLING_WASTE_FLAGS = ['blanket invoice', 'use po', 'blanket po', 'po number', 'forward invoice', 'rent & ss', 'del only', 'delivery doc', 'o/n get'];
         function isBillingWaste(waste) {
             if (!waste) return false;
@@ -7501,7 +7505,7 @@
                 const tankEntries = getTankEntries(currentCustomer);
                 const customerCarbsolve = (currentCustomer.carbsolve || '').replace(/^(Carbsolve\s*[-:]\s*|Carb:\s*)/i, '').trim();
                 const makeCarbsolveOptions = (selected) => {
-                    const standard = ['', '4kg', '4kg spcl', '7kg', '7kg spcl', '10kg', '11kg spcl', '14kg', '17kg', '21kg', '28kg'];
+                    const standard = ['', '4kg', '4kg spcl', '7kg', '7kg spcl', '10kg', '11kg spcl', '14kg', '14kg spcl', '17kg', '21kg', '28kg'];
                     const opts = (selected && !standard.includes(selected)) ? [...standard, selected] : standard;
                     return opts.map(v => `<option value="${v}" ${v === selected ? 'selected' : ''}>${v || 'None'}</option>`).join('');
                 };
@@ -7702,7 +7706,7 @@
                 // Use saved tankServices if present, else default all serviced with per-tank carbsolve
                 const savedServices = pod.tankServices || tankEntries.map(t => ({ tankLabel: t.label, serviced: true, carbsolve: t.carbsolve || customerCarbsolve }));
                 const carbsolveOptions = (sel) => {
-                    const standard = ['', '4kg', '4kg spcl', '7kg', '7kg spcl', '10kg', '11kg spcl', '14kg', '17kg', '21kg', '28kg'];
+                    const standard = ['', '4kg', '4kg spcl', '7kg', '7kg spcl', '10kg', '11kg spcl', '14kg', '14kg spcl', '17kg', '21kg', '28kg'];
                     const opts = (sel && !standard.includes(sel)) ? [...standard, sel] : standard;
                     return opts.map(v => `<option value="${v}" ${v === sel ? 'selected' : ''}>${v || 'None'}</option>`).join('');
                 };
@@ -11726,7 +11730,8 @@
                         const raw = (t.carbsolve || customerCarbsolve || '').toLowerCase().replace(/^carbsolve[\s\-:]+/i, '').replace(/\s+/g, ' ').trim();
                         if (!raw) return;
                         const normalise = s => s.toLowerCase().replace(/\s+/g, ' ').trim();
-                        if (raw === '14kg') { bagCounts['7kg'] += 2; }
+                        if (raw === '14kg spcl') { bagCounts['7kg spcl'] += 2; }
+                        else if (raw === '14kg') { bagCounts['7kg'] += 2; }
                         else if (raw === '17kg') { bagCounts['7kg'] += 1; bagCounts['10kg'] += 1; }
                         else if (raw === '21kg') { bagCounts['7kg'] += 3; }
                         else if (raw === '28kg') { bagCounts['7kg'] += 4; }
@@ -11744,7 +11749,9 @@
                 // Also normalise the bag size keys the same way for comparison
                 const normalise = s => s.toLowerCase().replace(/\s+/g, ' ').trim();
 
-                if (raw === '14kg') {
+                if (raw === '14kg spcl') {
+                    bagCounts['7kg spcl'] += 2; // 2 × 7kg spcl bags
+                } else if (raw === '14kg') {
                     bagCounts['7kg'] += 2; // 2 × 7kg bags
                 } else if (raw === '17kg') {
                     bagCounts['7kg'] += 1; // 1 × 7kg + 1 × 10kg
