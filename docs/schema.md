@@ -1,7 +1,7 @@
 # Supabase Database Schema
 
 Reference for writing SQL against the Oz Tank POD Manager database.
-Snapshot taken **2026-07-24** (after adding `customers.email_manually`).
+Snapshot taken **2026-11-02** (after adding `customers.predecessor_id`).
 
 > **Keeping this current:** whenever a column/table is added or changed, re-run the
 > three introspection queries at the bottom of this file in the Supabase SQL Editor
@@ -41,6 +41,7 @@ Snapshot taken **2026-07-24** (after adding `customers.email_manually`).
 | tank_labels | jsonb | YES | array of `{label, carbsolve, ownership}` — `ownership` is per-tank (`rental`/`user_owned`) and falls back to `tank_ownership` when absent (v11.22+) |
 | myob_last_seen_at | timestamptz | YES | |
 | invoice_under_id | bigint | YES | FK → customers.id (bills-under parent) |
+| predecessor_id | bigint | YES | FK → customers.id `on delete set null` — ownership change: this customer took over the site from that one (v11.45+) |
 | tank_ownership | text | NO | 'rental' ('rental' or 'user_owned') |
 | email_manually | boolean | YES | false |
 | no_delivery_fee | boolean | YES | false |
@@ -49,6 +50,24 @@ Snapshot taken **2026-07-24** (after adding `customers.email_manually`).
 | monthly_rental | boolean | YES | false (recurring rental charged monthly regardless of service) |
 
 Note: `"order"` is a reserved word — always double-quote it in SQL.
+
+**Ownership changes** (`predecessor_id`): when a site changes hands, the old customer
+is kept as its own record — its PODs, tank movements and skips stay attached to it — and
+the new customer points back at it with `predecessor_id`. Nothing is moved or merged.
+Searching either record in the app shows the combined history, labelled by owner.
+Chains work (A → B → C), and two old records may point at one new one. To find a
+whole lineage in SQL:
+
+```sql
+with recursive lineage as (
+    select id, name, predecessor_id from customers where id = <any id in the chain>
+    union
+    select c.id, c.name, c.predecessor_id
+    from customers c join lineage l
+      on c.id = l.predecessor_id or c.predecessor_id = l.id
+)
+select * from lineage;
+```
 
 ### pods
 | column | type | nullable | default |

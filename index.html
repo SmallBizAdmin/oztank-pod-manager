@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oz Tank - Service POD Manager v11.44</title>
+    <title>Oz Tank - Service POD Manager v11.45</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -3246,6 +3246,15 @@
                     </label>
                     <p style="font-size: 12px; color: #6b7280; margin-top: 4px;">Shows a 🔁 badge on admin and invoicing lists.</p>
                 </div>
+                <div style="font-weight:700;font-size:12px;color:#1e40af;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid #dbeafe;padding-bottom:6px;margin:18px 0 14px;">Ownership Change</div>
+                <div class="form-group">
+                    <label style="font-weight: 600;">&#128279; Took Over From</label>
+                    <select id="editCustomerPredecessor" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 16px;">
+                        <option value="">Not linked &mdash; original owner</option>
+                    </select>
+                    <p style="font-size: 12px; color: #6b7280; margin-top: 4px;">Links this customer to the previous owner of the same site. Both stay fully independent &mdash; nothing is moved or merged &mdash; but opening either one in Search POD shows the combined history.</p>
+                    <div id="editCustomerSuccessorNote" style="display:none;font-size:12px;margin-top:8px;padding:8px 10px;background:#eef2ff;border:1px solid #c7d2fe;border-radius:6px;color:#3730a3;"></div>
+                </div>
                 <div style="font-weight:700;font-size:12px;color:#1e40af;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid #dbeafe;padding-bottom:6px;margin:18px 0 14px;">Tanks</div>
                 <div class="form-group">
                     <label style="font-weight: 600;">🛢️ Number of Tanks</label>
@@ -4511,6 +4520,67 @@
             return BILLING_WASTE_FLAGS.some(f => waste.toLowerCase().includes(f));
         }
 
+        // ─── Ownership succession ─────────────────────────────────────────
+        // When a site changes hands the old customer stays its own record — its
+        // PODs, tank movements and skips remain attached to it — and the new
+        // customer points back with predecessorId. Searching either one can then
+        // show the whole lineage. Names usually go "Foo" -> "Foo (old)" + "Foo",
+        // but sometimes change completely, so the link is explicit, never inferred.
+
+        // Walk back from a customer through its predecessors, newest first. The
+        // visited set means a loop in the data degrades to a short list rather
+        // than hanging the page.
+        function predecessorChainIds(startId) {
+            const out = [];
+            const seen = new Set();
+            let id = startId;
+            while (id != null && !seen.has(id)) {
+                seen.add(id);
+                out.push(id);
+                const c = db.customers.find(x => x.id === id);
+                id = c ? c.predecessorId : null;
+            }
+            return out;
+        }
+
+        // Every customer connected to this one by succession, both directions.
+        // Two old records can point at one new one (a merge), so this is a
+        // connected component rather than a strict chain.
+        function customerLineageIds(customerId) {
+            const seen = new Set();
+            const queue = [customerId];
+            while (queue.length) {
+                const id = queue.shift();
+                if (id == null || seen.has(id)) continue;
+                seen.add(id);
+                const c = db.customers.find(x => x.id === id);
+                if (c && c.predecessorId != null) queue.push(c.predecessorId);
+                db.customers.forEach(x => { if (x.predecessorId === id) queue.push(x.id); });
+            }
+            return Array.from(seen);
+        }
+
+        function customerSuccessors(customerId) {
+            return db.customers.filter(c => c.predecessorId === customerId);
+        }
+
+        // Pointing A at B is a cycle if A already sits back along B's own chain.
+        // Checked when building the picker so the UI can't create that state.
+        function canBePredecessorOf(candidateId, customerId) {
+            if (candidateId === customerId) return false;
+            return !predecessorChainIds(candidateId).includes(customerId);
+        }
+
+        // "Mondrian Hotel (old)" and "Mondrian Hotel" reduce to the same base, so
+        // the picker can float the obvious candidate to the top of a long list.
+        function baseCustomerName(name) {
+            return String(name || '').toLowerCase()
+                .replace(/\((?:old|prev|previous|former|closed)\)/g, ' ')
+                .replace(/\b(?:old|prev|previous|former)\b/g, ' ')
+                .replace(/[^a-z0-9]+/g, ' ')
+                .trim();
+        }
+
         // "Bills under" arrangement: a customer with invoiceUnderId always gets
         // invoiced under another customer (the parent). Lines stay tickable; these
         // badges just make the relationship visible on the runsheet.
@@ -5055,6 +5125,7 @@
                         businessGroup: c.business_group,
                         invoiceType: c.invoice_type,
                         invoiceUnderId: c.invoice_under_id,
+                        predecessorId: c.predecessor_id,
                         order: c.order,
                         serviceMonths: c.service_months, // Array of months [1,3,5,7,9,11] for bi-monthly, null for monthly
                         tankCount: c.tank_count || 1,
@@ -5917,6 +5988,24 @@
                 }
             },
             
+            // Targeted predecessor update. Kept out of the general upsert for the
+            // same reason as tank labels: bulk and import save paths build customer
+            // objects without this field and would otherwise null the link out.
+            async savePredecessor(customerId, predecessorId) {
+                try {
+                    const { error } = await supabase
+                        .from('customers')
+                        .update({ predecessor_id: predecessorId })
+                        .eq('id', customerId);
+                    if (error) throw error;
+                    return true;
+                } catch (error) {
+                    console.error('Error saving ownership link:', error);
+                    showToast('Error saving ownership link: ' + error.message, 'error');
+                    return false;
+                }
+            },
+
             // Targeted tank_labels update. Kept separate from saveCustomer so
             // bulk/import save paths (which build customer objects without tank
             // config) can never null out a customer's tank labels.
@@ -7214,6 +7303,7 @@
                             businessGroup: c.business_group,
                             invoiceType: c.invoice_type,
                             invoiceUnderId: c.invoice_under_id,
+                            predecessorId: c.predecessor_id,
                             order: c.order,
                             serviceMonths: c.service_months,
                             tankCount: c.tank_count || 1,
@@ -9656,6 +9746,15 @@
         // Everything configurable about a customer, in one place, with a single
         // Edit button into the merged edit modal.
         let _profileCustomerId = null;
+        // Combined ownership history is on by default: a linked predecessor only
+        // exists because someone said the two records are the same site, so
+        // showing both is what you want when you look either one up.
+        let _searchPodsIncludeLineage = true;
+
+        function setSearchPodsLineage(on) {
+            _searchPodsIncludeLineage = on !== false;
+            if (_profileCustomerId != null) loadSearchPodsHistory(_profileCustomerId);
+        }
 
         // One labelled tile in the profile grid. Returns '' for empty values so
         // the grid only ever shows facts that actually exist.
@@ -9753,6 +9852,41 @@
             const grid = 'display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;';
             const sectionLabel = 'font-size:10px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;';
 
+            // Ownership succession. Chips are clickable so you can jump straight
+            // to the other record; the checkbox opts out of the merged history
+            // when you specifically want this owner's own records only.
+            const lineageOthers = customerLineageIds(customer.id).filter(id => id !== customer.id);
+            let lineageHtml = '';
+            if (lineageOthers.length) {
+                const prevCust = customer.predecessorId != null
+                    ? db.customers.find(c => c.id === customer.predecessorId) : null;
+                const succCusts = customerSuccessors(customer.id);
+                const chip = (c, role) => `<span onclick="loadSearchPodsHistory(${c.id})" title="Open ${escHtml(c.name)}" style="cursor:pointer;background:#eef2ff;color:#3730a3;border:1px solid #c7d2fe;padding:4px 10px;border-radius:8px;font-size:12px;font-weight:600;display:inline-block;">${role} ${escHtml(c.name)}</span>`;
+                const parts = [];
+                if (prevCust) parts.push(chip(prevCust, '&#8592; took over from'));
+                succCusts.forEach(c => parts.push(chip(c, '&#8594; taken over by')));
+                // Anything further along the chain, so a site that has changed
+                // hands twice still shows every owner rather than just neighbours.
+                lineageOthers
+                    .filter(id => (!prevCust || id !== prevCust.id) && !succCusts.some(c => c.id === id))
+                    .forEach(id => {
+                        const c = db.customers.find(x => x.id === id);
+                        if (c) parts.push(chip(c, '&#8943;'));
+                    });
+                lineageHtml = `
+                        <div style="margin-top:12px;">
+                            <div style="${sectionLabel}">Ownership history</div>
+                            <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">
+                                ${parts.join('')}
+                                <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#4b5563;cursor:pointer;margin-left:2px;">
+                                    <input type="checkbox" ${_searchPodsIncludeLineage ? 'checked' : ''}
+                                           onchange="setSearchPodsLineage(this.checked)" style="width:15px;height:15px;">
+                                    Show combined history
+                                </label>
+                            </div>
+                        </div>`;
+            }
+
             el.innerHTML = `
                 <div class="card" style="margin-bottom:12px;padding:0;overflow:hidden;">
 
@@ -9791,6 +9925,7 @@
                             <div style="${sectionLabel}">Options</div>
                             <div style="display:flex;flex-wrap:wrap;gap:6px;">${optionChips}</div>
                         </div>
+                        ${lineageHtml}
 
                         ${(customer.address || customer.phone || customer.code) ? `
                         <div style="${grid}margin-top:12px;">
@@ -9815,6 +9950,25 @@
         async function loadSearchPodsHistory(customerId) {
             const customer = db.customers.find(c => c.id === customerId);
             if (!customer) return;
+
+            // Every record type below is keyed by customer_id, so including the
+            // previous owner's history is just a matter of querying the whole
+            // lineage instead of one id. Rows stay attributed to the customer
+            // that owns them - nothing is reassigned.
+            const lineageIds = customerLineageIds(customerId);
+            const historyIds = (lineageIds.length > 1 && _searchPodsIncludeLineage)
+                ? lineageIds : [customerId];
+            const showOwnerCol = historyIds.length > 1;
+            const ownerName = id => {
+                const c = db.customers.find(x => x.id === id);
+                return c ? c.name : (id != null ? '#' + id : '-');
+            };
+            const ownerCell = srcId => {
+                if (!showOwnerCol) return '';
+                const isThis = srcId === customerId;
+                return '<td style="padding: 10px 8px; font-size: 12px;">'
+                    + `<span style="background:${isThis ? '#e0e7ff' : '#f3f4f6'};color:${isThis ? '#3730a3' : '#4b5563'};border:1px solid ${isThis ? '#c7d2fe' : '#e5e7eb'};padding:2px 7px;border-radius:8px;font-weight:600;white-space:nowrap;">${escHtml(ownerName(srcId))}</span></td>`;
+            };
             
             // Hide search results, show history
             document.getElementById('searchPodsResults').style.display = 'none';
@@ -9828,7 +9982,7 @@
                 const { data: pods, error } = await supabase
                     .from('pods')
                     .select('*')
-                    .eq('customer_id', customerId)
+                    .in('customer_id', historyIds)
                     .order('date', { ascending: false });
                 
                 if (error) throw error;
@@ -9839,7 +9993,7 @@
                     const { data: tmData, error: tmError } = await supabase
                         .from('tank_movements')
                         .select('*')
-                        .eq('customer_id', customerId)
+                        .in('customer_id', historyIds)
                         .order('date', { ascending: false });
                     if (tmError) throw tmError;
                     tankMovements = tmData || [];
@@ -9854,8 +10008,8 @@
                 try {
                     const { data: ceStatus, error: ceError } = await supabase
                         .from('calendar_event_status')
-                        .select('event_id, status, actioned_by, actioned_at')
-                        .eq('linked_customer_id', customerId)
+                        .select('event_id, status, actioned_by, actioned_at, linked_customer_id')
+                        .in('linked_customer_id', historyIds)
                         .eq('status', 'cancelled');
                     if (ceError) throw ceError;
                     const statusRows = ceStatus || [];
@@ -9871,6 +10025,7 @@
                             const m = metaByEvent[r.event_id] || {};
                             return {
                                 event_id: r.event_id,
+                                customer_id: r.linked_customer_id,
                                 date: m.event_date || r.actioned_at || null,
                                 title: m.event_title || '(event removed)',
                                 actioned_by: r.actioned_by || null
@@ -9888,19 +10043,22 @@
                 try {
                     const { data: skipData, error: skipError } = await supabase
                         .from('customer_monthly_skips')
-                        .select('skip_date, reason, skipped_by, is_rental_only')
-                        .eq('customer_id', customerId)
+                        .select('customer_id, skip_date, reason, skipped_by, is_rental_only')
+                        .in('customer_id', historyIds)
                         .order('skip_date', { ascending: false });
                     if (skipError) throw skipError;
                     skips = skipData || [];
                     if (skips.length) {
                         const { data: sisRows } = await supabase
                             .from('skipped_invoice_status')
-                            .select('service_date, invoiced, checked_sent')
-                            .eq('customer_id', customerId);
-                        const sisByDate = {};
-                        (sisRows || []).forEach(r => { sisByDate[r.service_date] = r; });
-                        skips.forEach(s => { s._inv = sisByDate[s.skip_date] || null; });
+                            .select('customer_id, service_date, invoiced, checked_sent')
+                            .in('customer_id', historyIds);
+                        // Keyed by customer AND date: across a lineage the same
+                        // service date can appear for two customers, and a
+                        // date-only key would cross the invoiced flags over.
+                        const sisByKey = {};
+                        (sisRows || []).forEach(r => { sisByKey[r.customer_id + '|' + r.service_date] = r; });
+                        skips.forEach(s => { s._inv = sisByKey[s.customer_id + '|' + s.skip_date] || null; });
                     }
                 } catch (skipErr) {
                     console.warn('Search PODs: skips load failed:', skipErr);
@@ -9946,15 +10104,16 @@
 
                 // Merge all three sources into one date-sorted list (newest first)
                 const historyRows = [];
-                pods.forEach(p => historyRows.push({ kind: 'pod', date: p.date, sortTime: new Date(p.date).getTime() || 0, pod: p }));
-                tankMovements.forEach(tm => historyRows.push({ kind: 'tm', date: tm.date, sortTime: new Date(tm.date).getTime() || 0, tm }));
-                cancelledEvents.forEach(ev => historyRows.push({ kind: 'cancelled', date: ev.date, sortTime: new Date(ev.date).getTime() || 0, ev }));
-                skips.forEach(s => historyRows.push({ kind: 'skip', date: s.skip_date, sortTime: new Date(s.skip_date).getTime() || 0, skip: s }));
+                pods.forEach(p => historyRows.push({ kind: 'pod', date: p.date, sortTime: new Date(p.date).getTime() || 0, pod: p, srcId: p.customer_id }));
+                tankMovements.forEach(tm => historyRows.push({ kind: 'tm', date: tm.date, sortTime: new Date(tm.date).getTime() || 0, tm, srcId: tm.customer_id }));
+                cancelledEvents.forEach(ev => historyRows.push({ kind: 'cancelled', date: ev.date, sortTime: new Date(ev.date).getTime() || 0, ev, srcId: ev.customer_id }));
+                skips.forEach(s => historyRows.push({ kind: 'skip', date: s.skip_date, sortTime: new Date(s.skip_date).getTime() || 0, skip: s, srcId: s.customer_id }));
                 historyRows.sort((a, b) => b.sortTime - a.sortTime);
 
                 let tableHtml = '<div class="card" style="overflow-x: auto;"><table style="width: 100%; border-collapse: collapse; font-size: 13px;">';
                 tableHtml += `<thead><tr style="background: #1e3a8a; color: white;">
                     <th style="padding: 10px 8px; text-align: left;">Date</th>
+                    ${showOwnerCol ? '<th style="padding: 10px 8px; text-align: left;">Customer</th>' : ''}
                     <th style="padding: 10px 8px; text-align: left;">Day</th>
                     <th style="padding: 10px 8px; text-align: left;">Type</th>
                     <th style="padding: 10px 8px; text-align: left;">Serviced</th>
@@ -9967,6 +10126,7 @@
                     const date = new Date(row.date);
                     const formattedDate = isNaN(date.getTime()) ? '-' : date.toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' });
                     const bgColor = idx % 2 === 0 ? 'white' : '#f9fafb';
+                    const ownerTd = ownerCell(row.srcId);
 
                     // ── Tank movement row ──
                     if (row.kind === 'tm') {
@@ -9984,7 +10144,7 @@
                         const tmNotes = tmNotesParts.join('<br>') || '-';
                         tableHtml += `<tr style="background: ${bgColor}; border-bottom: 1px solid #e5e7eb;"
                                           onmouseover="this.style.background='#eff6ff'" onmouseout="this.style.background='${bgColor}'">
-                            <td style="padding: 10px 8px; white-space: nowrap;">${formattedDate}</td>
+                            <td style="padding: 10px 8px; white-space: nowrap;">${formattedDate}</td>${ownerTd}
                             <td style="padding: 10px 8px;">-</td>
                             <td style="padding: 10px 8px;">🔄 ${mvType}</td>
                             <td style="padding: 10px 8px;">-</td>
@@ -10001,7 +10161,7 @@
                         const by = ev.actioned_by ? `<strong>Cancelled by:</strong> ${ev.actioned_by}` : '-';
                         tableHtml += `<tr style="background: ${bgColor}; border-bottom: 1px solid #e5e7eb;"
                                           onmouseover="this.style.background='#fef2f2'" onmouseout="this.style.background='${bgColor}'">
-                            <td style="padding: 10px 8px; white-space: nowrap;">${formattedDate}</td>
+                            <td style="padding: 10px 8px; white-space: nowrap;">${formattedDate}</td>${ownerTd}
                             <td style="padding: 10px 8px;">-</td>
                             <td style="padding: 10px 8px;">📅 ${ev.title || 'Calendar Event'}</td>
                             <td style="padding: 10px 8px;">-</td>
@@ -10025,7 +10185,7 @@
                         if (s.skipped_by) skipNotes.push(`<strong>Skipped by:</strong> ${s.skipped_by}`);
                         tableHtml += `<tr style="background: ${bgColor}; border-bottom: 1px solid #e5e7eb;"
                                           onmouseover="this.style.background='#fffbeb'" onmouseout="this.style.background='${bgColor}'">
-                            <td style="padding: 10px 8px; white-space: nowrap;">${formattedDate}</td>
+                            <td style="padding: 10px 8px; white-space: nowrap;">${formattedDate}</td>${ownerTd}
                             <td style="padding: 10px 8px;">-</td>
                             <td style="padding: 10px 8px;">⏭️ Skipped</td>
                             <td style="padding: 10px 8px;"><span style="color: #dc2626;">✗ No</span></td>
@@ -10064,9 +10224,9 @@
                     else if (pod.tank_serviced === 'no') servicedDisplay = '<span style="color: #dc2626;">✗ No</span>';
                     
                     tableHtml += `<tr style="background: ${bgColor}; cursor: pointer; border-bottom: 1px solid #e5e7eb;" 
-                                      onclick="viewSearchPodDetail('${pod.id}', ${customerId})"
+                                      onclick="viewSearchPodDetail('${pod.id}', ${pod.customer_id || customerId})"
                                       onmouseover="this.style.background='#eff6ff'" onmouseout="this.style.background='${bgColor}'">
-                        <td style="padding: 10px 8px; white-space: nowrap;">${formattedDate}</td>
+                        <td style="padding: 10px 8px; white-space: nowrap;">${formattedDate}</td>${ownerTd}
                         <td style="padding: 10px 8px;">${pod.run_day || '-'}</td>
                         <td style="padding: 10px 8px;">${pod.service_type || 'Service'}</td>
                         <td style="padding: 10px 8px;">${servicedDisplay}</td>
@@ -15229,11 +15389,13 @@
         
         async function loadCustomerHistory(customerId, customerName) {
             try {
-                // Fetch ALL PODs for this customer from the database
+                // Fetch ALL PODs for this customer from the database, plus any
+                // previous owner of the same site linked through predecessorId -
+                // the point of the link is that the site's history reads as one.
                 const { data: pods, error } = await supabase
                     .from('pods')
                     .select('*')
-                    .eq('customer_id', customerId)
+                    .in('customer_id', customerLineageIds(customerId))
                     .order('date', { ascending: false });
                 
                 if (error) throw error;
@@ -15279,6 +15441,15 @@
                 const historyHtml = pods.map(pod => {
                     const date = new Date(pod.date);
                     const formattedDate = date.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+
+                    // Name the owner on rows that came from a previous owner, so a
+                    // merged history never reads as all this customer's own work.
+                    const srcName = pod.customer_id !== customerId
+                        ? ((db.customers.find(c => c.id === pod.customer_id) || {}).name || pod.customer_name || '')
+                        : '';
+                    const ownerChip = srcName
+                        ? ` <span style="background:#eef2ff;color:#3730a3;border:1px solid #c7d2fe;padding:1px 7px;border-radius:8px;font-size:10px;font-weight:600;">${escHtml(srcName)}</span>`
+                        : '';
                     
                     // Service status
                     let statusBadge = '';
@@ -15306,9 +15477,9 @@
                     if (pod.notes) notesHtml += `<div class="pod-history-notes">💬 ${pod.notes}</div>`;
                     
                     return `
-                        <div class="pod-history-item" onclick="viewHistoryPod('${pod.id}', ${customerId})">
+                        <div class="pod-history-item" onclick="viewHistoryPod('${pod.id}', ${pod.customer_id || customerId})">
                             <div style="display: flex; justify-content: space-between; align-items: center;">
-                                <span class="pod-history-date">${formattedDate}</span>
+                                <span class="pod-history-date">${formattedDate}${ownerChip}</span>
                                 ${statusBadge}
                             </div>
                             <div class="pod-history-details">
@@ -15568,6 +15739,41 @@
         }
 
         // Customer Edit Modal Functions
+        // Picker for "took over from". Leaves out the customer itself and anything
+        // that would close a loop, and floats near-identical names to the top
+        // because the usual pattern is "Name (old)" -> "Name".
+        function renderPredecessorOptions(customer) {
+            const sel = document.getElementById('editCustomerPredecessor');
+            if (!sel) return;
+            const base = baseCustomerName(customer.name);
+            const likely = [], rest = [];
+            db.customers
+                .filter(c => canBePredecessorOf(c.id, customer.id))
+                .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+                .forEach(c => {
+                    const cb = baseCustomerName(c.name);
+                    const near = base && cb && (cb === base || cb.startsWith(base) || base.startsWith(cb));
+                    (near ? likely : rest).push(c);
+                });
+            const opt = c => `<option value="${c.id}">${escHtml(c.name)}</option>`;
+            sel.innerHTML = '<option value="">Not linked &mdash; original owner</option>'
+                + (likely.length ? `<optgroup label="Likely match">${likely.map(opt).join('')}</optgroup>` : '')
+                + `<optgroup label="All customers">${rest.map(opt).join('')}</optgroup>`;
+            sel.value = customer.predecessorId != null ? String(customer.predecessorId) : '';
+
+            // The other direction isn't editable here — it's a property of the
+            // newer record — so show it as a read-only note instead.
+            const note = document.getElementById('editCustomerSuccessorNote');
+            if (note) {
+                const succ = customerSuccessors(customer.id);
+                note.innerHTML = succ.length
+                    ? '&#128279; Taken over by <strong>'
+                      + succ.map(x => escHtml(x.name)).join('</strong>, <strong>') + '</strong>'
+                    : '';
+                note.style.display = succ.length ? 'block' : 'none';
+            }
+        }
+
         function showCustomerEditModal(customerId) {
             const customer = db.customers.find(c => c.id === customerId);
             if (!customer) {
@@ -15623,6 +15829,8 @@
             document.getElementById('editCustomerDoNotEmail').checked = customer.doNotEmail === true;
             document.getElementById('editCustomerChemSeparateInvoice').checked = customer.chemSeparateInvoice === true;
             document.getElementById('editCustomerMonthlyRental').checked = customer.monthlyRental === true;
+
+            renderPredecessorOptions(customer);
 
             // Tank config. Editing is open to everyone (the previous steve-only gate
             // was lifted when this merged into the customer profile page).
@@ -15809,6 +16017,11 @@
             customer.chemSeparateInvoice = document.getElementById('editCustomerChemSeparateInvoice').checked;
             customer.monthlyRental = document.getElementById('editCustomerMonthlyRental').checked;
 
+            // Ownership link — written through its own targeted update, like tank
+            // config, so import/bulk paths can't wipe it.
+            const predRaw = document.getElementById('editCustomerPredecessor').value;
+            const predecessorId = predRaw ? parseInt(predRaw, 10) : null;
+
             // Tank config: count, per-tank name/carbsolve/ownership.
             // Written through a targeted update (not the general upsert) so bulk
             // and import save paths can never null out a customer's tank config.
@@ -15837,6 +16050,10 @@
                 await db.saveCustomer(customer);
                 const ok = await db.saveTankLabels(customerId, tankLabelsToSave, tankCount);
                 if (ok) customer.tankLabels = tankLabelsToSave;
+                if ((customer.predecessorId ?? null) !== predecessorId) {
+                    const predOk = await db.savePredecessor(customerId, predecessorId);
+                    if (predOk) customer.predecessorId = predecessorId;
+                }
                 hideCustomerEditModal();
                 renderCustomerList();
                 if (document.getElementById('customerAdminList')) renderCustomerAdminList();
