@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oz Tank - Service POD Manager v11.45</title>
+    <title>Oz Tank - Service POD Manager v11.46</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -10066,8 +10066,8 @@
 
                 // Stats
                 const totalPods = pods.length;
-                const servicesCompleted = pods.filter(p => p.tank_serviced === 'yes' || (p.is_quick_complete && p.tank_serviced !== 'no')).length;
-                const rentalOnly = pods.filter(p => (p.service_notes || '').toLowerCase().includes('no service required') || (p.notes || '').toLowerCase().includes('no service required')).length;
+                const servicesCompleted = pods.filter(podWasServiced).length;
+                const rentalOnly = pods.filter(podIsRentalOnly).length;
                 const totalProducts = pods.reduce((sum, p) => {
                     const products = p.products || [];
                     return sum + products.reduce((pSum, prod) => pSum + (prod.quantity || 0), 0);
@@ -10219,9 +10219,9 @@
                     if (pod.is_ad_hoc) statusBadge += ' <span style="background: #f3e8ff; color: #7e22ce; padding: 2px 8px; border-radius: 12px; font-size: 11px;">Ad-Hoc</span>';
                     
                     // Tank serviced
-                    let servicedDisplay = '-';
-                    if (pod.tank_serviced === 'yes') servicedDisplay = '<span style="color: #16a34a;">✓ Yes</span>';
-                    else if (pod.tank_serviced === 'no') servicedDisplay = '<span style="color: #dc2626;">✗ No</span>';
+                    const servicedDisplay = podWasServiced(pod)
+                        ? '<span style="color: #16a34a;">✓ Yes</span>'
+                        : '<span style="color: #dc2626;">✗ No</span>';
                     
                     tableHtml += `<tr style="background: ${bgColor}; cursor: pointer; border-bottom: 1px solid #e5e7eb;" 
                                       onclick="viewSearchPodDetail('${pod.id}', ${pod.customer_id || customerId})"
@@ -13364,6 +13364,45 @@
         // "Check" customer whose visit resulted in product going out was reading
         // as "Serviced". Report what actually happened: a Check visit that
         // delivered line items is a delivery; one that didn't is just a check.
+        // Whether a POD records an actual service.
+        //
+        // tank_serviced is legacy: it is only ever 'yes'/'no' on old records.
+        // Both save paths write null now — the quick-complete path and the full
+        // POD form — so anything keyed on tank_serviced === 'yes' silently read
+        // every modern POD as not serviced. That is why the history table showed
+        // "-" in Serviced on rows the same table counted as Services Done, and
+        // why the POD detail view and the customer PDF printed "null".
+        //
+        // A POD exists because a worker completed the job, so it counts as
+        // serviced unless something says otherwise.
+
+        // Rental-only visits are flagged two ways: the is_rental_only column on
+        // newer PODs, and a "no service required" note on older ones.
+        function podIsRentalOnly(pod) {
+            if (!pod) return false;
+            if (pod.is_rental_only === true || pod.isRentalOnly === true) return true;
+            const txt = ((pod.service_notes || pod.serviceNotes || '') + ' '
+                       + (pod.notes || '')).toLowerCase();
+            return txt.includes('no service required');
+        }
+
+        function podWasServiced(pod) {
+            if (!pod) return false;
+            const legacy = pod.tank_serviced || pod.tankServiced;
+            if (legacy === 'yes') return true;
+            if (legacy === 'no') return false;
+            if (podIsRentalOnly(pod)) return false;
+            // Multi-tank PODs carry a per-tank breakdown; one tank done is a service.
+            const tanks = pod.tank_services || pod.tankServices;
+            if (Array.isArray(tanks) && tanks.length) return tanks.some(t => t && t.serviced);
+            return true;
+        }
+
+        function podServicedText(pod) {
+            if (podIsRentalOnly(pod)) return 'No (rental only)';
+            return podWasServiced(pod) ? 'Yes' : 'No';
+        }
+
         function podStatusLabel(pod, customer) {
             const type = (pod && pod.serviceType) || (customer && customer.serviceType) || 'Service';
             if (type === 'Delivery' || (customer && customer.serviceType === 'Delivery')) return 'Delivered';
@@ -14876,7 +14915,7 @@
 
                         <div class="pod-section">
                             <h3>Service Details</h3>
-                            <div class="pod-field"><strong>Tank Serviced:</strong> <span>${pod.tankServiced}</span></div>
+                            <div class="pod-field"><strong>Tank Serviced:</strong> <span>${podServicedText(pod)}</span></div>
                             ${pod.serviceNotes ? `<div class="pod-field"><strong>Service Notes:</strong> <span>${pod.serviceNotes}</span></div>` : ''}
                         </div>
 
@@ -14975,7 +15014,7 @@
 
             pdf.setFontSize(10);
             pdf.setTextColor(0, 0, 0);
-            pdf.text(`Tank Serviced: ${pod.tankServiced}`, 20, yPos);
+            pdf.text(`Tank Serviced: ${podServicedText(pod)}`, 20, yPos);
             yPos += 6;
             if (pod.serviceNotes) {
                 pdf.text(`Service Notes: ${pod.serviceNotes}`, 20, yPos);
@@ -15402,8 +15441,8 @@
                 
                 // Calculate stats
                 const totalPods = pods.length;
-                const servicesCompleted = pods.filter(p => p.tank_serviced === 'yes' || (p.is_quick_complete && p.tank_serviced !== 'no')).length;
-                const rentalOnly = pods.filter(p => (p.service_notes || '').toLowerCase().includes('no service required') || (p.notes || '').toLowerCase().includes('no service required')).length;
+                const servicesCompleted = pods.filter(podWasServiced).length;
+                const rentalOnly = pods.filter(podIsRentalOnly).length;
                 const totalProducts = pods.reduce((sum, p) => {
                     const products = p.products || [];
                     return sum + products.reduce((pSum, prod) => pSum + (prod.quantity || 0), 0);
@@ -15452,16 +15491,19 @@
                         : '';
                     
                     // Service status
-                    let statusBadge = '';
-                    if (pod.tank_serviced === 'yes') {
+                    // Quick is how the job was recorded, not whether it was done, so
+                    // it now sits alongside the outcome instead of replacing it.
+                    let statusBadge;
+                    if (podIsRentalOnly(pod)) {
+                        statusBadge = '<span style="background: #fef3c7; color: #92400e; padding: 2px 8px; border-radius: 12px; font-size: 11px;">📋 Rental Only</span>';
+                    } else if (podWasServiced(pod)) {
                         const label = pod.service_type === 'Delivery' ? '✓ Delivered' : '✓ Serviced';
                         statusBadge = `<span style="background: #dcfce7; color: #166534; padding: 2px 8px; border-radius: 12px; font-size: 11px;">${label}</span>`;
-                    } else if (pod.tank_serviced === 'no' && (pod.service_notes || '').toLowerCase().includes('no service required')) {
-                        statusBadge = '<span style="background: #fef3c7; color: #92400e; padding: 2px 8px; border-radius: 12px; font-size: 11px;">📋 Rental Only</span>';
-                    } else if (pod.tank_serviced === 'no') {
+                    } else {
                         statusBadge = '<span style="background: #fee2e2; color: #991b1b; padding: 2px 8px; border-radius: 12px; font-size: 11px;">✗ Not Serviced</span>';
-                    } else if (pod.is_quick_complete) {
-                        statusBadge = '<span style="background: #dbeafe; color: #1e40af; padding: 2px 8px; border-radius: 12px; font-size: 11px;">⚡ Quick</span>';
+                    }
+                    if (pod.is_quick_complete) {
+                        statusBadge += ' <span style="background: #dbeafe; color: #1e40af; padding: 2px 8px; border-radius: 12px; font-size: 11px;">⚡ Quick</span>';
                     }
                     
                     // Products summary
