@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oz Tank - Service POD Manager v11.48</title>
+    <title>Oz Tank - Service POD Manager v11.49</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -9709,8 +9709,10 @@
         let currentAdminDateFilter = null;
 
         // ─── OAuth client keepalive ──────────────────────────────────────
-        // Google deletes an OAuth client after 5 months with no Sign-in with
-        // Google flow. A restored session does not count - only a real
+        // Google deletes an OAuth client after 6 months with no Sign-in with
+        // Google flow, warning at 5. Confirmed against the client's "Last used
+        // date" in the Cloud Console, which is the field to check if in doubt
+        // (it lags by a day or more). A restored session does not count - only a real
         // credential exchange does - so this records every genuine one,
         // whoever performs it. A worker re-auth keeps the client alive just as
         // well as the monthly maintenance sign-in, so the banner tracks the
@@ -9772,7 +9774,7 @@
                 body = `🔑 <strong>No Google sign-in recorded yet.</strong> Nothing has been logged since this was added, so the clock is unknown. ${how}`;
             } else if (days >= KEEPALIVE_URGENT_DAYS) {
                 bg = '#fee2e2'; border = '#fca5a5'; color = '#991b1b';
-                body = `🔑 <strong>OAuth keepalive overdue — ${days} days.</strong> Google deletes the client at about 150 days, which would break every new sign-in and every re-auth. ${how}`;
+                body = `🔑 <strong>OAuth keepalive overdue — ${days} days.</strong> Google warns at about 5 months and deletes at 6, which would break every new sign-in and every re-auth. ${how}`;
             } else if (days >= KEEPALIVE_DUE_DAYS) {
                 bg = '#fef3c7'; border = '#fcd34d'; color = '#92400e';
                 body = `🔑 <strong>OAuth keepalive due.</strong> Last Google sign-in was ${whenTxt}. ${how}`;

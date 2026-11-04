@@ -277,7 +277,7 @@ Generic key/value store. Keys in use:
 
 - `oauth_last_google_signin` — JSON `{at, by}`, written on every genuine
   Google credential exchange (not on a restored session). Google deletes an
-  OAuth client after ~5 months without a Sign-in with Google flow, and the
+  OAuth client after ~6 months without a Sign-in with Google flow, and the
   app's saved session never expires, so this tracks the real clock. Drives
   the keepalive banner on the Search PODs screen (admin only).
 
