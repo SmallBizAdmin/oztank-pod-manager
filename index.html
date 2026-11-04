@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oz Tank - Service POD Manager v11.47</title>
+    <title>Oz Tank - Service POD Manager v11.48</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -2809,6 +2809,8 @@
                 </div>
             </div>
 
+            <div id="keepaliveBanner" style="display: none; margin-bottom: 12px;"></div>
+
             <div class="card">
                 <div class="form-group">
                     <label>Search by Customer Name</label>
@@ -3696,6 +3698,9 @@
                         setTimeout(() => location.reload(), 2000);
                     } else {
                         console.log('Supabase session established');
+                        // A real Google credential was just exchanged - this is
+                        // the flow Google counts, so log it for the banner.
+                        recordGoogleSignIn();
                         initializeApp();
                     }
                 } else {
@@ -9703,6 +9708,83 @@
         // Track date filter for admin runsheet
         let currentAdminDateFilter = null;
 
+        // ─── OAuth client keepalive ──────────────────────────────────────
+        // Google deletes an OAuth client after 5 months with no Sign-in with
+        // Google flow. A restored session does not count - only a real
+        // credential exchange does - so this records every genuine one,
+        // whoever performs it. A worker re-auth keeps the client alive just as
+        // well as the monthly maintenance sign-in, so the banner tracks the
+        // last flow by anyone rather than only the keepalive account.
+        const KEEPALIVE_SETTING_KEY = 'oauth_last_google_signin';
+        const KEEPALIVE_DUE_DAYS = 30;
+        const KEEPALIVE_URGENT_DAYS = 120;
+
+        async function recordGoogleSignIn() {
+            if (!supabase) return;
+            try {
+                const { error } = await supabase.from('settings').upsert({
+                    key: KEEPALIVE_SETTING_KEY,
+                    value: JSON.stringify({
+                        at: new Date().toISOString(),
+                        by: (currentUser && (currentUser.name || currentUser.email)) || 'unknown'
+                    }),
+                    updated_at: new Date().toISOString()
+                }, { onConflict: 'key' });
+                if (error) throw error;
+            } catch (e) {
+                // Never block sign-in over bookkeeping.
+                console.error('Could not record Google sign-in:', e);
+            }
+        }
+
+        async function renderKeepaliveBanner() {
+            const el = document.getElementById('keepaliveBanner');
+            if (!el) return;
+
+            // Steve's maintenance job, so only Steve is shown it.
+            if (!currentUser || (currentUser.email || '').toLowerCase() !== 'steve.oztank@gmail.com') {
+                el.style.display = 'none';
+                return;
+            }
+
+            let at = null, by = '';
+            try {
+                const { data } = await supabase.from('settings')
+                    .select('value').eq('key', KEEPALIVE_SETTING_KEY).maybeSingle();
+                if (data && data.value) {
+                    const parsed = JSON.parse(data.value);
+                    if (parsed && parsed.at) { at = new Date(parsed.at); by = parsed.by || ''; }
+                }
+            } catch (e) {
+                console.error('Could not read keepalive setting:', e);
+            }
+
+            const days = at ? Math.floor((Date.now() - at.getTime()) / 86400000) : null;
+            const whenTxt = at
+                ? `${days === 0 ? 'today' : days === 1 ? 'yesterday' : days + ' days ago'}`
+                  + (by ? ` by ${escHtml(by)}` : '')
+                : '';
+            const how = 'Sign in as <strong>Auth Keepalive</strong> in a private window.';
+
+            let bg, border, color, body;
+            if (days === null) {
+                bg = '#fef3c7'; border = '#fcd34d'; color = '#92400e';
+                body = `🔑 <strong>No Google sign-in recorded yet.</strong> Nothing has been logged since this was added, so the clock is unknown. ${how}`;
+            } else if (days >= KEEPALIVE_URGENT_DAYS) {
+                bg = '#fee2e2'; border = '#fca5a5'; color = '#991b1b';
+                body = `🔑 <strong>OAuth keepalive overdue — ${days} days.</strong> Google deletes the client at about 150 days, which would break every new sign-in and every re-auth. ${how}`;
+            } else if (days >= KEEPALIVE_DUE_DAYS) {
+                bg = '#fef3c7'; border = '#fcd34d'; color = '#92400e';
+                body = `🔑 <strong>OAuth keepalive due.</strong> Last Google sign-in was ${whenTxt}. ${how}`;
+            } else {
+                bg = '#f9fafb'; border = '#e5e7eb'; color = '#6b7280';
+                body = `🔑 OAuth keepalive fine — last Google sign-in ${whenTxt}. Next due in ${KEEPALIVE_DUE_DAYS - days} days.`;
+            }
+
+            el.style.display = 'block';
+            el.innerHTML = `<div style="background:${bg};border:1px solid ${border};color:${color};padding:10px 14px;border-radius:8px;font-size:13px;line-height:1.5;">${body}</div>`;
+        }
+
         function showSearchPodsView() {
             showView('exportView');
             document.getElementById('searchPodsInput').value = '';
@@ -9711,6 +9793,7 @@
             document.getElementById('searchPodsHistoryContainer').style.display = 'none';
             // Load unassigned PODs/tank movements section
             loadUnassignedSection();
+            renderKeepaliveBanner();
             // Focus the search input
             setTimeout(() => document.getElementById('searchPodsInput').focus(), 100);
         }
