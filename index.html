@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oz Tank - Service POD Manager v11.46</title>
+    <title>Oz Tank - Service POD Manager v11.47</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -3450,6 +3450,15 @@
         // ==================== GOOGLE AUTHENTICATION ====================
         const GOOGLE_CLIENT_ID = '776401812901-dvloaf4ajtdf5uplbaqohbdh08q79oqq.apps.googleusercontent.com';
         
+        // Maintenance sign-in. Google deletes an OAuth client that has gone
+        // 5 months without a Sign-in with Google flow, and this app's saved
+        // session never expires - so day-to-day use restores from localStorage
+        // and never touches Google. A monthly sign-in with this account keeps
+        // the client alive. It records no work, so it never appears in any
+        // worker roster, dropdown or My Day selector (those are built from
+        // service_days.employee and completed_by, not from this list).
+        const KEEPALIVE_EMAIL = 'mcconnell.steve.j@gmail.com';
+
         // Allowed email addresses (whitelist)
         const ALLOWED_EMAILS = [
             'allan.oztank@gmail.com',
@@ -3460,7 +3469,8 @@
             'red.oztank@gmail.com',
             'david.oztank@gmail.com',
             'steve.oztank@gmail.com',
-            'deanna.oztank@gmail.com'
+            'deanna.oztank@gmail.com',
+            KEEPALIVE_EMAIL
         ];
         
         const ADMIN_EMAILS = ['steve.oztank@gmail.com'];
@@ -3547,9 +3557,15 @@
             try {
                 const payload = decodeJwtPayload(response.credential);
                 
+                // The keepalive account carries a fixed name rather than its
+                // Google profile name: in the header it is obvious which account
+                // is signed in, and should anything ever be recorded under it the
+                // row cannot be mistaken for the real Steve's work.
+                const isKeepalive = (payload.email || '').toLowerCase() === KEEPALIVE_EMAIL;
+
                 const user = {
                     email: payload.email,
-                    name: normalizeWorkerName(payload.name),
+                    name: isKeepalive ? 'Auth Keepalive' : normalizeWorkerName(payload.name),
                     picture: payload.picture,
                     token: response.credential
                 };
