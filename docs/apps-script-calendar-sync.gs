@@ -1,8 +1,23 @@
 // ============================================================
 // OZ TANK - GOOGLE CALENDAR SYNC TO SUPABASE
-// Version 13 - Move-aware reconciliation + actioned-row protection
+// Version 14 - Actioned rows are never re-dated
 //
-// What changed vs v12:
+// What changed vs v13:
+//  0. MOVE RECONCILIATION NO LONGER TOUCHES ACTIONED ROWS. Every instance
+//     of a recurring series shares one Google event id, so an old completed
+//     occurrence and a brand-new one land in the same group. The date-order
+//     pairing would then drag a months-old tick onto fresh work - including
+//     onto FUTURE dates, which show as done and get skipped in the field.
+//     Observed 2026-11-05: ticks from 1 Jul and 1 Sep sitting on 4 Nov,
+//     11 Nov and 5 Jan events, each gap exactly one sync window wide.
+//     Rule 2 below made it self-sustaining - actioned rows are never
+//     cleaned up, so they survived as permanent candidates to be dragged
+//     again on the next run. A row carrying a tick, POD or tank movement
+//     now stays on its own date. A genuinely moved job that was already
+//     ticked keeps its tick on the original date, which is far safer than
+//     marking work nobody has done as complete.
+//
+// What changed in v13 vs v12:
 //  1. MOVED EVENTS KEEP THEIR ROW. Before upserting, the script fetches
 //     the existing DB rows and pairs "date disappeared" with "date
 //     appeared" within the same (calendar, event id) group — a moved
@@ -214,7 +229,9 @@ function reconcileMovedWorkerEvents(existingRows, desiredEvents) {
     (desiredByKey[groupKey(e)] = desiredByKey[groupKey(e)] || []).push(e);
   });
 
-  let patched = 0;
+  // First pass: work out the candidate pairings without touching anything.
+  const plan = [];
+  const candidateIds = [];
 
   for (const key in desiredByKey) {
     const desired = desiredByKey[key];
@@ -231,15 +248,47 @@ function reconcileMovedWorkerEvents(existingRows, desiredEvents) {
       .filter(e => !existingDates.has(e.event_date))
       .sort((a, b) => a.event_date.localeCompare(b.event_date));
 
-    const pairs = Math.min(missingRows.length, newEvents.length);
+    if (missingRows.length === 0 || newEvents.length === 0) continue;
+
+    plan.push({ missingRows, newEvents });
+    missingRows.forEach(r => candidateIds.push(r.id));
+  }
+
+  if (plan.length === 0) return 0;
+
+  // A row that already carries a tick, POD or tank movement is never re-dated.
+  // Recurring instances all share one Google event id, so without this an old
+  // completed occurrence gets paired with a brand-new one and its months-old
+  // tick lands on work nobody has done yet. If the check cannot be verified,
+  // move nothing: re-dating is the destructive half of this function.
+  const actioned = findActionedRowIds(candidateIds);
+  if (actioned === null) {
+    console.log('  ⚠️ Could not verify actioned rows - skipping move reconciliation this run');
+    return 0;
+  }
+
+  let patched = 0;
+  let held = 0;
+
+  for (const group of plan) {
+    const movable = group.missingRows.filter(r => {
+      if (actioned.has(r.id)) { held++; return false; }
+      return true;
+    });
+
+    const pairs = Math.min(movable.length, group.newEvents.length);
     for (let i = 0; i < pairs; i++) {
-      const row = missingRows[i];
-      const ev = newEvents[i];
+      const row = movable[i];
+      const ev = group.newEvents[i];
       if (patchWorkerEventRow(row.id, ev)) {
         patched++;
         console.log(`  ↪️ Moved: "${ev.event_title}" ${row.event_date} → ${ev.event_date} (row ${row.id} kept)`);
       }
     }
+  }
+
+  if (held > 0) {
+    console.log(`  🛡️ ${held} actioned row(s) held on their original date`);
   }
 
   return patched;
@@ -312,6 +361,39 @@ function insertWorkerEvents(events) {
 // referenced by a tick status, POD, or tank movement. Those keep their
 // history; if the tick is later removed they become deletable.
 // ============================================================
+// Which of these worker_calendar_events row ids have history hanging off
+// them - a tick, a POD or a tank movement. Returns a Set, or null if any
+// check failed, so callers can fail safe rather than act on partial data.
+function findActionedRowIds(rowIds) {
+  const ids = Array.from(new Set(rowIds.filter(id => id != null)));
+  if (ids.length === 0) return new Set();
+
+  const found = new Set();
+  const refChecks = [
+    { table: 'calendar_event_status', column: 'event_id' },
+    { table: 'pods', column: 'calendar_event_id' },
+    { table: 'tank_movements', column: 'calendar_event_id' }
+  ];
+
+  for (const check of refChecks) {
+    for (const chunk of chunkArray(ids, 200)) {
+      const url = `${SUPABASE_URL}/rest/v1/${check.table}?select=${check.column}&${check.column}=in.(${chunk.join(',')})`;
+      const resp = UrlFetchApp.fetch(url, {
+        method: 'GET',
+        headers: supabaseHeaders(),
+        muteHttpExceptions: true
+      });
+      if (resp.getResponseCode() >= 400) {
+        console.log(`  ⚠️ Reference check on ${check.table} failed: ${resp.getContentText()}`);
+        return null;
+      }
+      JSON.parse(resp.getContentText()).forEach(r => found.add(r[check.column]));
+    }
+  }
+
+  return found;
+}
+
 function deleteStaleWorkerEvents(minDate, maxDate, syncRunId) {
   // 1. Find stale candidates
   const staleUrl = `${SUPABASE_URL}/rest/v1/worker_calendar_events` +
@@ -332,28 +414,10 @@ function deleteStaleWorkerEvents(minDate, maxDate, syncRunId) {
   if (staleIds.length === 0) return 0;
 
   // 2. Find which of those are actioned (protected)
-  const protectedIds = new Set();
-  const refChecks = [
-    { table: 'calendar_event_status', column: 'event_id' },
-    { table: 'pods', column: 'calendar_event_id' },
-    { table: 'tank_movements', column: 'calendar_event_id' }
-  ];
-
-  for (const check of refChecks) {
-    for (const chunk of chunkArray(staleIds, 200)) {
-      const url = `${SUPABASE_URL}/rest/v1/${check.table}?select=${check.column}&${check.column}=in.(${chunk.join(',')})`;
-      const resp = UrlFetchApp.fetch(url, {
-        method: 'GET',
-        headers: supabaseHeaders(),
-        muteHttpExceptions: true
-      });
-      if (resp.getResponseCode() < 400) {
-        JSON.parse(resp.getContentText()).forEach(r => protectedIds.add(r[check.column]));
-      } else {
-        console.log(`  ⚠️ Protection check on ${check.table} failed — protecting ALL stale rows this run`);
-        return 0; // fail safe: delete nothing if we can't verify
-      }
-    }
+  const protectedIds = findActionedRowIds(staleIds);
+  if (protectedIds === null) {
+    console.log('  ⚠️ Protection check failed — protecting ALL stale rows this run');
+    return 0; // fail safe: delete nothing if we can't verify
   }
 
   const deletableIds = staleIds.filter(id => !protectedIds.has(id));
