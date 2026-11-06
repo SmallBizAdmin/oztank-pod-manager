@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oz Tank - Service POD Manager v11.49</title>
+    <title>Oz Tank - Service POD Manager v11.50</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -3724,19 +3724,25 @@
 
         // Load Supabase dynamically
         function loadSupabase() {
-            return new Promise((resolve, reject) => {
-                const script = document.createElement('script');
-                script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3/dist/umd/supabase.js';
-                script.onload = () => {
+            // 2.39.3 (Jan 2024) could wedge its session lock after a phone resumed
+            // from the background: every call then waited forever, nothing errored,
+            // nothing queued. 2.117.3 is the Oct 2026 release; the API surface this
+            // app uses is unchanged.
+            //
+            // Loaded as a module, not a script tag. The newer UMD bundle opens with
+            // `var supabase = ...`, which collides with this page's own `supabase`
+            // client variable and throws before the library exists. The ESM build
+            // declares nothing global; we hand the module to window.supabase so the
+            // existing createClient call path is untouched.
+            return import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/+esm')
+                .then(mod => {
+                    window.supabase = mod;
                     console.log('Supabase library loaded');
-                    resolve();
-                };
-                script.onerror = () => {
-                    console.error('Failed to load Supabase');
-                    reject(new Error('Failed to load Supabase library'));
-                };
-                document.head.appendChild(script);
-            });
+                })
+                .catch(err => {
+                    console.error('Failed to load Supabase', err);
+                    throw new Error('Failed to load Supabase library');
+                });
         }
 
         // Initialize Supabase
@@ -3856,7 +3862,7 @@
         function reloadForUpdate() {
             // Warn if there's unsynced work — a reload is safe (the queue lives in
             // localStorage) but an in-progress form that was never saved is not.
-            const pending = getOfflineQueue().length + getFailedSyncItems().length;
+            const pending = pendingQueueItems().length + getFailedSyncItems().length;
             if (pending > 0 && !confirm(`${pending} item${pending > 1 ? 's' : ''} still waiting to sync. They are saved on this phone and will survive the reload. Reload now?`)) {
                 return;
             }
@@ -3869,6 +3875,139 @@
         let isOnline = navigator.onLine;
         const CACHE_KEY = 'ozTankOfflineCache';
         const QUEUE_KEY = 'ozTankOfflineQueue';
+
+        // ── Write-ahead queue ───────────────────────────────────────
+        // Every save is written to this phone BEFORE the database client is
+        // touched, and only removed once the database has confirmed it. Until
+        // v11.50 the queue was only written in the catch - so a call that never
+        // returned left the work in memory alone. That is exactly what the
+        // server showed for two phones (2 and 5 Nov 2026): a full workday of
+        // ticking jobs with not one request reaching Supabase, and nothing
+        // queued, failed or reported afterwards. Now a hung client, a tab the
+        // OS kills mid-request and a dead signal all leave the item on disk
+        // for the drain to replay.
+        //
+        // A live write carries an `inflight` timestamp while its request is
+        // out. The drain and the sync bar leave it alone for its deadline
+        // plus a margin, so a live write and its replay never race; after
+        // that it is an ordinary queued item.
+        const WRITE_TIMEOUT_MS = 20000;
+        const INFLIGHT_GRACE_MS = WRITE_TIMEOUT_MS + 10000;
+
+        function newQueueId() {
+            return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+        }
+
+        // Items from before v11.50 have no qid; fall back to type + queuedAt,
+        // which is set once at enqueue and survives retries.
+        function queueItemKey(item) {
+            if (!item) return '';
+            return item.qid || (item.type + '@' + (item.queuedAt || JSON.stringify(item.data || null)));
+        }
+
+        function isInFlight(item) {
+            return !!(item && item.inflight && (Date.now() - item.inflight) < INFLIGHT_GRACE_MS);
+        }
+
+        // What the worker should see as pending. Live writes inside their
+        // window are excluded, or the sync bar would flash on every save.
+        function pendingQueueItems() {
+            return getOfflineQueue().filter(i => !isInFlight(i));
+        }
+
+        // Returns false if the phone refused the write (storage full).
+        function writeQueue(queue) {
+            try {
+                localStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
+                return true;
+            } catch (e) {
+                console.error('❌ Could not write offline queue (storage full?):', e);
+                return false;
+            }
+        }
+
+        // Persist a save before attempting it. Returns the queue id, or null
+        // when the phone could not store it - the caller then has nothing but
+        // the live write and must say so if that fails too.
+        function enqueueWriteAhead(item) {
+            const queue = getOfflineQueue();
+            const qid = newQueueId();
+            queue.push({ ...item, qid, queuedAt: new Date().toISOString(), inflight: Date.now() });
+            return writeQueue(queue) ? qid : null;
+        }
+
+        // The database confirmed the write: drop the phone's copy.
+        function dequeueWriteAhead(qid) {
+            if (!qid) return;
+            removeQueueItem(qid);
+        }
+
+        // The write failed or blew its deadline: keep the copy, hand it to
+        // the drain. Nothing is lost either way.
+        function releaseWriteAhead(qid) {
+            if (!qid) return;
+            updateQueueItem(qid, { inflight: null });
+        }
+
+        function removeQueueItem(key) {
+            const queue = getOfflineQueue();
+            const next = queue.filter(i => queueItemKey(i) !== key);
+            if (next.length !== queue.length) writeQueue(next);
+            updateOfflineUI();
+        }
+
+        function updateQueueItem(key, patch) {
+            const queue = getOfflineQueue();
+            const item = queue.find(i => queueItemKey(i) === key);
+            if (item) {
+                Object.assign(item, patch);
+                writeQueue(queue);
+            }
+            updateOfflineUI();
+        }
+
+        // Race a database call against a deadline. A hung client never
+        // resolves and never rejects; without this a save waits forever and
+        // the worker's only move - closing the app - is the one that loses it.
+        function withTimeout(promise, ms, label) {
+            let timer;
+            const deadline = new Promise((_, reject) => {
+                timer = setTimeout(() => {
+                    const err = new Error((label || 'Database call') + ' timed out after ' + Math.round(ms / 1000) + 's');
+                    err.code = 'TIMEOUT';
+                    reject(err);
+                }, ms);
+            });
+            return Promise.race([Promise.resolve(promise), deadline]).finally(() => clearTimeout(timer));
+        }
+
+        function isTimeout(err) {
+            return !!(err && err.code === 'TIMEOUT');
+        }
+
+        // Every calendar_event_status write goes through here: status, notes,
+        // photos and links. Write-ahead, deadline, and the replay shape the
+        // drain already understands.
+        async function writeCalendarEventRow(item, label) {
+            if (!isOnline) {
+                addToOfflineQueue(item);
+                return;
+            }
+            const qid = enqueueWriteAhead(item);
+            try {
+                const query = item.type === 'calEventUpdate'
+                    ? supabase.from('calendar_event_status').update(item.data.patch).eq('event_id', item.data.eventId)
+                    : supabase.from('calendar_event_status').upsert(item.data, { onConflict: 'event_id' });
+                const { error } = await withTimeout(query, WRITE_TIMEOUT_MS, label);
+                if (error) throw error;
+                dequeueWriteAhead(qid);
+            } catch (e) {
+                console.warn(label + ' failed, left queued for sync:', e);
+                if (qid) releaseWriteAhead(qid);
+                else addToOfflineQueue(item);
+                if (isTimeout(e)) showConnectionLostBar();
+            }
+        }
         
         // Update offline indicator
         function updateOfflineUI() {
@@ -3877,7 +4016,7 @@
             const text = document.getElementById('offlineText');
             const badge = document.getElementById('offlineQueueBadge');
             const viewBtn = document.getElementById('offlineViewBtn');
-            const queue = getOfflineQueue();
+            const queue = pendingQueueItems();
             const failed = getFailedSyncItems();
 
             // Explicit button only in the failed state — that's the one needing action
@@ -3980,6 +4119,90 @@
             location.reload();
         }
 
+        // ── Connection watchdog ─────────────────────────────────────
+        // A database client can wedge: every call waits forever, nothing
+        // errors, nothing queues, the screen looks normal. Supabase's own
+        // records showed exactly this from two phones (2 and 5 Nov 2026): a
+        // full workday with not one token refresh, from a client that
+        // refreshes hourly whenever the app is in the foreground. Prove the
+        // connection on every return to the foreground, after a long idle,
+        // and whenever a write blows its deadline. When the proof fails, say
+        // so and offer the one recovery that always works - a reload, which
+        // releases whatever the client is stuck on and restores the stored
+        // session without a Google sign-in. The write-ahead queue makes that
+        // reload free: nothing saved is in memory alone.
+        const CONNECTION_CHECK_MS = 10000;
+        const CONNECTION_RECHECK_MIN_MS = 60 * 1000;
+        const CONNECTION_IDLE_CHECK_MS = 10 * 60 * 1000;
+        let _lastConnectionCheck = 0;
+        let _connectionCheckRunning = false;
+
+        async function checkDbConnection(reason) {
+            if (!supabase || !isOnline || _connectionCheckRunning) return;
+            if (document.getElementById('reAuthBar')) return;
+            _connectionCheckRunning = true;
+            _lastConnectionCheck = Date.now();
+            try {
+                // A tiny authenticated read: it has to pass through the
+                // client's session lock and the network, the two places a
+                // wedge lives.
+                const { error } = await withTimeout(
+                    supabase.from('service_days').select('name').limit(1),
+                    CONNECTION_CHECK_MS, 'Connection check');
+                if (error) throw error;
+                hideConnectionLostBar();
+            } catch (e) {
+                if (isTimeout(e)) {
+                    console.error('Connection check hung (' + reason + ') — client is not responding');
+                    showConnectionLostBar();
+                } else if (isAuthError(e)) {
+                    showReAuthBar();
+                } else {
+                    // A plain network failure — the offline handling owns that.
+                    console.warn('Connection check failed (' + reason + '):', e && e.message);
+                }
+            } finally {
+                _connectionCheckRunning = false;
+            }
+        }
+
+        function showConnectionLostBar() {
+            if (document.getElementById('connLostBar') || document.getElementById('reAuthBar')) return;
+            const bar = document.createElement('div');
+            bar.id = 'connLostBar';
+            bar.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:300;background:#b45309;color:white;padding:10px 14px;display:flex;align-items:center;justify-content:center;gap:10px;font-size:14px;font-weight:600;flex-wrap:wrap;text-align:center;';
+            bar.innerHTML = `<span>⚠️ The app has lost its connection to the database — your saved work is safe on this phone</span>
+                <button onclick="reconnectApp()" style="background:white;color:#b45309;border:none;border-radius:6px;padding:6px 14px;font-weight:700;cursor:pointer;">Reconnect</button>`;
+            document.body.appendChild(bar);
+        }
+
+        function hideConnectionLostBar() {
+            const bar = document.getElementById('connLostBar');
+            if (bar) bar.remove();
+        }
+
+        function reconnectApp() {
+            // A reload keeps the queue and the stored session. The only thing
+            // it can lose is a form that was never saved, so say so.
+            const podView = document.getElementById('podView');
+            const formOpen = podView && podView.classList.contains('active');
+            if (formOpen && !confirm('A POD form is open. Anything typed in it that has not been saved will be lost. Reconnect now?')) return;
+            location.replace(location.pathname + '?v=' + Date.now());
+        }
+
+        function setupConnectionWatchdog() {
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState !== 'visible') return;
+                if (Date.now() - _lastConnectionCheck < CONNECTION_RECHECK_MIN_MS) return;
+                checkDbConnection('resume');
+            });
+            setInterval(() => {
+                if (document.visibilityState !== 'visible') return;
+                if (Date.now() - _lastConnectionCheck < CONNECTION_IDLE_CHECK_MS) return;
+                checkDbConnection('idle');
+            }, 60 * 1000);
+        }
+
         // ── Sync Issues screen (tap the offline/failed banner) ──────
         function describeSyncItem(item) {
             const d = item.data || {};
@@ -4011,7 +4234,7 @@
 
         function showSyncIssuesModal() {
             const failed = getFailedSyncItems();
-            const queue = getOfflineQueue();
+            const queue = pendingQueueItems();
             const existing = document.getElementById('syncIssuesModal');
             if (existing) existing.remove();
 
@@ -4252,33 +4475,23 @@
             }
         }
         
-        // Add item to offline queue.
+        // Add item to offline queue (the offline path - the item is not in
+        // flight, the drain owns it from here).
         // Returns true if the item was safely persisted, false if it could NOT be
         // stored (e.g. localStorage quota exceeded by photo-heavy PODs). Never throws,
         // so callers can react instead of crashing the save flow mid-write.
         function addToOfflineQueue(item) {
             const queue = getOfflineQueue();
-            queue.push({ ...item, queuedAt: new Date().toISOString() });
-            try {
-                localStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
-            } catch (e) {
-                // Most likely QuotaExceededError. The work is NOT saved and NOT queued —
-                // the worker must know so they don't navigate away and lose it.
-                console.error('❌ Could not queue offline item (storage full?):', e);
+            queue.push({ ...item, qid: newQueueId(), queuedAt: new Date().toISOString() });
+            if (!writeQueue(queue)) {
+                // The work is NOT saved and NOT queued — the worker must know
+                // so they don't navigate away and lose it.
                 showToast('⚠️ Storage full — this entry was NOT saved. Please free space or tell the office before leaving this screen.', 'error');
                 return false;
             }
             updateOfflineUI();
             console.log('📥 Added to offline queue:', item.type);
             return true;
-        }
-        
-        // Remove item from queue by index
-        function removeFromQueue(index) {
-            const queue = getOfflineQueue();
-            queue.splice(index, 1);
-            localStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
-            updateOfflineUI();
         }
         
         // Cache data for offline use
@@ -4303,96 +4516,125 @@
             }
         }
         
-        // Process offline queue when back online
+        // Drain the queue. Runs on load, on the 'online' event, every 45s
+        // while something is pending, and after a failed-item retry. Items
+        // still inside a live write's window are left to that write.
         async function processOfflineQueue() {
             if (!isOnline || !supabase) return;
-            
-            const queue = getOfflineQueue();
-            if (queue.length === 0) return;
+            if (window._drainingQueue) return;
 
-            // Never burn retries against a dead database session — every write
-            // would fail. Prompt a re-login and leave the queue untouched.
-            if (!(await hasSupabaseSession())) {
-                console.warn('processOfflineQueue: no Supabase session — prompting re-auth');
-                showReAuthBar();
-                return;
-            }
+            const snapshot = getOfflineQueue().filter(i => !isInFlight(i));
+            if (snapshot.length === 0) return;
 
-            console.log(`🔄 Processing ${queue.length} queued items...`);
-            updateOfflineUI();
-            
-            let processed = 0;
-            let failed = 0;
-            
-            for (let i = 0; i < queue.length; i++) {
-                const item = queue[i];
+            window._drainingQueue = true;
+            try {
+                // Never burn retries against a dead database session — every
+                // write would fail. Prompt a re-login and leave the queue
+                // untouched. A session check that never answers is the wedged
+                // client, which is a different prompt.
+                let hasSession;
                 try {
-                    if (item.type === 'pod') {
-                        await syncQueuedPod(item.data);
-                        processed++;
-                    } else if (item.type === 'tankMovement') {
-                        await syncQueuedTankMovement(item.data);
-                        processed++;
-                    } else if (item.type === 'deletePod') {
-                        await syncQueuedDeletePod(item.data);
-                        processed++;
-                    } else if (item.type === 'calEventUpsert') {
-                        await syncQueuedCalEventUpsert(item.data);
-                        processed++;
-                    } else if (item.type === 'calEventUpdate') {
-                        await syncQueuedCalEventUpdate(item.data);
-                        processed++;
-                    } else {
-                        // Unknown type: never drop it silently. Throw so it follows the
-                        // normal retry path and, if it keeps failing, surfaces in the
-                        // failed-sync banner instead of vanishing.
-                        throw new Error('Unknown offline queue item type: ' + item.type);
-                    }
-                    removeFromQueue(0); // Always remove first item since we process in order
-                    if (item.lastError) {
-                        // A previously-failing item finally synced — close its office report
-                        markSyncIssuesByFingerprint([syncIssueFingerprint(item)], 'resolved');
-                    }
+                    hasSession = await withTimeout(hasSupabaseSession(), CONNECTION_CHECK_MS, 'Session check');
                 } catch (e) {
-                    console.error('Failed to sync queued item:', e);
-                    if (isAuthError(e)) {
-                        // Auth died mid-run: stop entirely, don't count these
-                        // attempts against any item — they can only fail.
-                        showReAuthBar();
-                        break;
+                    if (isTimeout(e)) {
+                        console.warn('processOfflineQueue: session check hung — client is not responding');
+                        showConnectionLostBar();
+                        return;
                     }
-                    failed++;
-                    // Move to end of queue to retry later
-                    const failedItem = queue.shift();
-                    failedItem.retryCount = (failedItem.retryCount || 0) + 1;
-                    failedItem.lastError = (e && e.message) ? e.message : String(e);
-                    if (failedItem.retryCount < 3) {
-                        queue.push(failedItem);
-                    } else {
-                        // Retries exhausted. Do NOT drop silently — move to the failed
-                        // store so it surfaces in the banner for the worker/office.
-                        addFailedSyncItem(failedItem, failedItem.lastError);
+                    hasSession = false;
+                }
+                if (!hasSession) {
+                    console.warn('processOfflineQueue: no Supabase session — prompting re-auth');
+                    showReAuthBar();
+                    return;
+                }
+
+                console.log(`🔄 Processing ${snapshot.length} queued items...`);
+                updateOfflineUI();
+
+                let processed = 0;
+                let failed = 0;
+
+                for (const item of snapshot) {
+                    const key = queueItemKey(item);
+                    try {
+                        await withTimeout(replayQueuedItem(item), WRITE_TIMEOUT_MS, 'Sync of ' + item.type);
+                        removeQueueItem(key);
+                        processed++;
+                        if (item.lastError) {
+                            // A previously-failing item finally synced — close its office report
+                            markSyncIssuesByFingerprint([syncIssueFingerprint(item)], 'resolved');
+                        }
+                    } catch (e) {
+                        console.error('Failed to sync queued item:', e);
+                        if (isTimeout(e)) {
+                            // The client stopped answering mid-run. Nothing is
+                            // counted against the items — they can only hang.
+                            showConnectionLostBar();
+                            break;
+                        }
+                        if (isAuthError(e)) {
+                            // Auth died mid-run: stop entirely, don't count these
+                            // attempts against any item — they can only fail.
+                            showReAuthBar();
+                            break;
+                        }
+                        failed++;
+                        const retryCount = (item.retryCount || 0) + 1;
+                        const lastError = (e && e.message) ? e.message : String(e);
+                        if (retryCount < 3) {
+                            updateQueueItem(key, { retryCount, lastError });
+                        } else {
+                            // Retries exhausted. Do NOT drop silently — move to the failed
+                            // store so it surfaces in the banner for the worker/office.
+                            removeQueueItem(key);
+                            addFailedSyncItem({ ...item, retryCount, lastError }, lastError);
+                        }
                     }
-                    localStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
                 }
-            }
-            
-            updateOfflineUI();
-            
-            if (processed > 0) {
-                showToast(`✅ Synced ${processed} item${processed > 1 ? 's' : ''}`, 'success');
-                // Reload data to reflect synced changes
-                if (db && db.load) {
-                    await db.load();
+
+                updateOfflineUI();
+
+                if (processed > 0) {
+                    showToast(`✅ Synced ${processed} item${processed > 1 ? 's' : ''}`, 'success');
+                    // Reload data to reflect synced changes
+                    if (db && db.load) {
+                        await db.load();
+                    }
                 }
+                if (failed > 0) {
+                    showToast(`⚠️ ${failed} item${failed > 1 ? 's' : ''} failed to sync`, 'error');
+                }
+            } finally {
+                window._drainingQueue = false;
             }
-            if (failed > 0) {
-                showToast(`⚠️ ${failed} item${failed > 1 ? 's' : ''} failed to sync`, 'error');
-            }
+        }
+
+        async function replayQueuedItem(item) {
+            if (item.type === 'pod') return syncQueuedPod(item.data, !!item.edit);
+            if (item.type === 'tankMovement') return syncQueuedTankMovement(item.data);
+            if (item.type === 'deletePod') return syncQueuedDeletePod(item.data);
+            if (item.type === 'calEventUpsert') return syncQueuedCalEventUpsert(item.data);
+            if (item.type === 'calEventUpdate') return syncQueuedCalEventUpdate(item.data);
+            // Unknown type: never drop it silently. Throw so it follows the
+            // normal retry path and, if it keeps failing, surfaces in the
+            // failed-sync banner instead of vanishing.
+            throw new Error('Unknown offline queue item type: ' + item.type);
         }
         
         // Sync a queued POD
-        async function syncQueuedPod(podData) {
+        async function syncQueuedPod(podData, edit) {
+            // A worker's edit of an existing POD replays as an upsert: their
+            // intent is explicit, and an insert would hit the id and be
+            // mistaken for "already landed" below, dropping the edit.
+            if (edit) {
+                const { error } = await supabase
+                    .from('pods')
+                    .upsert(podData);
+                if (error) throw error;
+                return;
+            }
+
             // Check if POD already exists for this customer+date.
             // If yes, the live save already landed — drop the queued copy (do NOT overwrite,
             // since the queued podData may be stale and would clobber later edits).
@@ -4425,11 +4667,12 @@
             }
         }
         
-        // Sync a queued tank movement
+        // Sync a queued tank movement. Upsert, like the live save: a replay
+        // of a write that did land is then a no-op rather than a PK error.
         async function syncQueuedTankMovement(tmData) {
             const { error } = await supabase
                 .from('tank_movements')
-                .insert([tmData]);
+                .upsert(tmData);
             if (error) throw error;
         }
         
@@ -4482,7 +4725,7 @@
         // recovers). processOfflineQueue self-guards on !isOnline, missing supabase, and
         // empty queue, so this is a no-op except when there is genuinely work to flush.
         setInterval(() => {
-            if (isOnline && getOfflineQueue().length > 0) {
+            if (isOnline && pendingQueueItems().length > 0) {
                 processOfflineQueue();
             }
         }, 45000);
@@ -5756,32 +5999,11 @@
                 if (status) {
                     this.calendarEventStatus[eventId] = { status, actioned_by: actionedBy, actioned_at: actionedAt };
                     const payload = { event_id: eventId, status, updated_at: actionedAt, actioned_by: actionedBy, actioned_at: actionedAt };
-                    // Offline: queue instead of silently dropping the completion.
-                    if (!isOnline) { addToOfflineQueue({ type: 'calEventUpsert', data: payload }); return; }
-                    try {
-                        const { error } = await supabase
-                            .from('calendar_event_status')
-                            .upsert(payload, { onConflict: 'event_id' });
-                        if (error) throw error;
-                    } catch (e) {
-                        // Dropped connection mid-write — queue so it syncs later.
-                        console.warn('saveCalendarEventStatus error, queueing:', e);
-                        addToOfflineQueue({ type: 'calEventUpsert', data: payload });
-                    }
+                    await writeCalendarEventRow({ type: 'calEventUpsert', data: payload }, 'Calendar tick');
                 } else {
                     delete this.calendarEventStatus[eventId];
                     const patch = { status: null, updated_at: new Date().toISOString(), actioned_by: null, actioned_at: null };
-                    if (!isOnline) { addToOfflineQueue({ type: 'calEventUpdate', data: { eventId, patch } }); return; }
-                    try {
-                        const { error } = await supabase
-                            .from('calendar_event_status')
-                            .update(patch)
-                            .eq('event_id', eventId);
-                        if (error) throw error;
-                    } catch (e) {
-                        console.warn('saveCalendarEventStatus clear error, queueing:', e);
-                        addToOfflineQueue({ type: 'calEventUpdate', data: { eventId, patch } });
-                    }
+                    await writeCalendarEventRow({ type: 'calEventUpdate', data: { eventId, patch } }, 'Calendar untick');
                 }
             },
             
@@ -5809,16 +6031,7 @@
                     delete this.calendarEventNotes[eventId];
                 }
                 const payload = { event_id: eventId, notes: notes || null, updated_at: new Date().toISOString() };
-                if (!isOnline) { addToOfflineQueue({ type: 'calEventUpsert', data: payload }); return; }
-                try {
-                    const { error } = await supabase
-                        .from('calendar_event_status')
-                        .upsert(payload, { onConflict: 'event_id' });
-                    if (error) throw error;
-                } catch (e) {
-                    console.warn('saveCalendarEventNotes error, queueing:', e);
-                    addToOfflineQueue({ type: 'calEventUpsert', data: payload });
-                }
+                await writeCalendarEventRow({ type: 'calEventUpsert', data: payload }, 'Calendar notes save');
             },
 
             getCalendarEventPhotos(eventId) {
@@ -5833,16 +6046,7 @@
                     delete this.calendarEventPhotos[eventId];
                 }
                 const payload = { event_id: eventId, photos: arr.length ? arr : null, updated_at: new Date().toISOString() };
-                if (!isOnline) { addToOfflineQueue({ type: 'calEventUpsert', data: payload }); return; }
-                try {
-                    const { error } = await supabase
-                        .from('calendar_event_status')
-                        .upsert(payload, { onConflict: 'event_id' });
-                    if (error) throw error;
-                } catch (e) {
-                    console.warn('saveCalendarEventPhotos error, queueing:', e);
-                    addToOfflineQueue({ type: 'calEventUpsert', data: payload });
-                }
+                await writeCalendarEventRow({ type: 'calEventUpsert', data: payload }, 'Calendar photos save');
             },
 
             // Normalize an event title for use as a title→customer key.
@@ -5946,30 +6150,11 @@
                 if (customerId != null) {
                     this.calendarEventLinks[eventId] = customerId;
                     const payload = { event_id: eventId, linked_customer_id: customerId, linked_by: linkedBy, linked_at: linkedAt, updated_at: linkedAt };
-                    if (!isOnline) { addToOfflineQueue({ type: 'calEventUpsert', data: payload }); return; }
-                    try {
-                        const { error } = await supabase
-                            .from('calendar_event_status')
-                            .upsert(payload, { onConflict: 'event_id' });
-                        if (error) throw error;
-                    } catch (e) {
-                        console.warn('saveCalendarEventLink error, queueing:', e);
-                        addToOfflineQueue({ type: 'calEventUpsert', data: payload });
-                    }
+                    await writeCalendarEventRow({ type: 'calEventUpsert', data: payload }, 'Calendar link save');
                 } else {
                     delete this.calendarEventLinks[eventId];
                     const patch = { linked_customer_id: null, linked_by: null, linked_at: null, updated_at: new Date().toISOString() };
-                    if (!isOnline) { addToOfflineQueue({ type: 'calEventUpdate', data: { eventId, patch } }); return; }
-                    try {
-                        const { error } = await supabase
-                            .from('calendar_event_status')
-                            .update(patch)
-                            .eq('event_id', eventId);
-                        if (error) throw error;
-                    } catch (e) {
-                        console.warn('saveCalendarEventLink clear error, queueing:', e);
-                        addToOfflineQueue({ type: 'calEventUpdate', data: { eventId, patch } });
-                    }
+                    await writeCalendarEventRow({ type: 'calEventUpdate', data: { eventId, patch } }, 'Calendar link clear');
                 }
             },
             
@@ -6127,7 +6312,8 @@
                 }
             },
             
-            async savePOD(pod) {
+            async savePOD(pod, opts = {}) {
+                const edit = !!(opts && opts.edit);
                 // Prepare the data object for Supabase
                 const podData = {
                     id: pod.id,
@@ -6160,11 +6346,9 @@
                     order_number: pod.orderNumber || null
                 };
                 
-                // If offline, queue the POD for later sync
-                if (!isOnline) {
-                    addToOfflineQueue({ type: 'pod', data: podData });
-                    
-                    // Also add to local db.pods array so it shows in the UI
+                // Keep db.pods in sync on every path so callers never push
+                // (which previously caused duplicate local entries).
+                const commitLocal = () => {
                     const existingIndex = this.pods.findIndex(p => p.id === pod.id);
                     if (existingIndex >= 0) {
                         this.pods[existingIndex] = pod;
@@ -6172,136 +6356,139 @@
                         this.pods.push(pod);
                     }
                     this._syncProgressPod(pod);
-                    
-                    // Update cache with new pod
-                    
+                };
+
+                // If offline, queue the POD for later sync
+                if (!isOnline) {
+                    if (!addToOfflineQueue({ type: 'pod', data: podData, edit })) {
+                        return false; // storage full — the worker has been told
+                    }
+                    commitLocal();
                     showToast('📴 POD saved offline - will sync when connected', 'success');
                     return true;
                 }
-                
+
+                // Write-ahead: on this phone first, then the database.
+                const qid = enqueueWriteAhead({ type: 'pod', data: podData, edit });
+
                 try {
-                    const { data, error } = await supabase
-                        .from('pods')
-                        .upsert(podData);
+                    const { error } = await withTimeout(
+                        supabase.from('pods').upsert(podData),
+                        WRITE_TIMEOUT_MS, 'POD save');
                     if (error) {
                         // 23505 = unique_violation on pods_customer_date_unique index.
                         // Means a POD already exists for this customer+date — treat as success
                         // and keep the local cache in sync so the UI shows the tick.
                         if (error.code === '23505') {
                             console.log('savePOD: duplicate caught by DB constraint for customer_id=' + podData.customer_id + ' date=' + podData.date);
-                            const existingIndex = this.pods.findIndex(p => p.id === pod.id);
-                            if (existingIndex >= 0) {
-                                this.pods[existingIndex] = pod;
-                            } else {
-                                this.pods.push(pod);
-                            }
-                            this._syncProgressPod(pod);
+                            dequeueWriteAhead(qid);
+                            commitLocal();
                             return true;
                         }
                         throw error;
                     }
-                    
-                    // Update cache after successful save
-                    const existingIndex = this.pods.findIndex(p => p.id === pod.id);
-                    if (existingIndex >= 0) {
-                        this.pods[existingIndex] = pod;
-                    } else {
-                        this.pods.push(pod);
-                    }
-                    this._syncProgressPod(pod);
-                    
+
+                    dequeueWriteAhead(qid);
+                    commitLocal();
                     return true;
                 } catch (error) {
                     console.error('Error saving POD:', error);
-                    
-                    // Before queueing, check whether the write actually landed despite the client-side error.
-                    // Flaky mobile networks often drop the response after a successful write, which previously
-                    // caused this catch to queue a duplicate that would then replay later.
+
+                    if (isTimeout(error)) {
+                        // The client never answered. The write-ahead copy stays
+                        // queued for the drain; tell the worker the app is stuck
+                        // so they reconnect rather than keep working into a void.
+                        releaseWriteAhead(qid);
+                        commitLocal();
+                        showConnectionLostBar();
+                        showToast('⚠️ POD saved on your phone — the app is not responding. Tap Reconnect.', 'error');
+                        return true;
+                    }
+
+                    // Before leaving it queued, check whether the write actually landed despite
+                    // the client-side error. Flaky mobile networks often drop the response after a
+                    // successful write, which would otherwise replay as a duplicate.
                     if (podData.customer_id) {
                         try {
-                            const { data: existing } = await supabase
-                                .from('pods')
-                                .select('id')
-                                .eq('customer_id', podData.customer_id)
-                                .eq('date', podData.date)
-                                .maybeSingle();
+                            const { data: existing } = await withTimeout(
+                                supabase
+                                    .from('pods')
+                                    .select('id')
+                                    .eq('customer_id', podData.customer_id)
+                                    .eq('date', podData.date)
+                                    .maybeSingle(),
+                                CONNECTION_CHECK_MS, 'POD verify');
                             if (existing) {
-                                console.log('savePOD: write succeeded despite client error, skipping queue');
-                                const existingIndex = this.pods.findIndex(p => p.id === pod.id);
-                                if (existingIndex >= 0) {
-                                    this.pods[existingIndex] = pod;
-                                } else {
-                                    this.pods.push(pod);
-                                }
-                                this._syncProgressPod(pod);
+                                console.log('savePOD: write succeeded despite client error, dropping queued copy');
+                                dequeueWriteAhead(qid);
+                                commitLocal();
                                 return true;
                             }
                         } catch (verifyError) {
-                            // Verification itself failed — fall through to queue as before
-                            console.log('savePOD: could not verify, queueing for sync');
+                            // Verification itself failed — leave it queued as before
+                            console.log('savePOD: could not verify, leaving queued for sync');
                         }
                     }
-                    
-                    // If save genuinely failed (or we couldn't verify), queue for later.
-                    // Keep db.pods in sync here too so the caller never needs to push
-                    // (which previously caused duplicate local entries).
-                    addToOfflineQueue({ type: 'pod', data: podData });
-                    const queuedIndex = this.pods.findIndex(p => p.id === pod.id);
-                    if (queuedIndex >= 0) {
-                        this.pods[queuedIndex] = pod;
-                    } else {
-                        this.pods.push(pod);
+
+                    // The save genuinely failed (or we couldn't verify): the drain owns it.
+                    if (qid) {
+                        releaseWriteAhead(qid);
+                    } else if (!addToOfflineQueue({ type: 'pod', data: podData, edit })) {
+                        // Storage full AND the write failed: nothing holds this POD.
+                        showToast('❌ POD NOT saved — no storage and no connection. Do not leave this screen.', 'error');
+                        return false;
                     }
-                    this._syncProgressPod(pod);
+                    commitLocal();
                     showToast('⚠️ POD queued for sync (connection issue)', 'error');
                     return true; // Return true since it's queued
                 }
             },
             
             async deletePOD(podId) {
-                // If offline, queue the delete and remove from local array
-                if (!isOnline) {
-                    addToOfflineQueue({ type: 'deletePod', data: { id: podId } });
-                    
-                    // Remove from local array
+                const dropLocal = () => {
                     const index = this.pods.findIndex(p => p.id === podId);
                     if (index >= 0) {
                         this._syncProgressPod(this.pods[index], true);
                         this.pods.splice(index, 1);
                     }
-                    
-                    // Update cache
-                    
+                };
+
+                // If offline, queue the delete and remove from local array
+                if (!isOnline) {
+                    if (!addToOfflineQueue({ type: 'deletePod', data: { id: podId } })) return false;
+                    dropLocal();
                     showToast('📴 Delete queued - will sync when connected', 'success');
                     return true;
                 }
-                
+
+                // Write-ahead, same as a save: a delete the client never
+                // performs must not quietly come back on the next load.
+                const qid = enqueueWriteAhead({ type: 'deletePod', data: { id: podId } });
+
                 try {
                     // Delete invoice_status row first (FK constraint)
-                    await supabase
-                        .from('invoice_status')
-                        .delete()
-                        .eq('pod_id', podId);
+                    await withTimeout(
+                        supabase.from('invoice_status').delete().eq('pod_id', podId),
+                        WRITE_TIMEOUT_MS, 'Invoice status delete');
 
-                    const { error } = await supabase
-                        .from('pods')
-                        .delete()
-                        .eq('id', podId);
+                    const { error } = await withTimeout(
+                        supabase.from('pods').delete().eq('id', podId),
+                        WRITE_TIMEOUT_MS, 'POD delete');
                     if (error) throw error;
-                    
-                    // Remove from local array and update cache
-                    const index = this.pods.findIndex(p => p.id === podId);
-                    if (index >= 0) {
-                        this._syncProgressPod(this.pods[index], true);
-                        this.pods.splice(index, 1);
-                    }
-                    
+
+                    dequeueWriteAhead(qid);
+                    dropLocal();
                     return true;
                 } catch (error) {
                     console.error('Error deleting POD:', error);
-                    
-                    // Queue for later if it fails
-                    addToOfflineQueue({ type: 'deletePod', data: { id: podId } });
+                    if (qid) {
+                        releaseWriteAhead(qid);
+                    } else if (!addToOfflineQueue({ type: 'deletePod', data: { id: podId } })) {
+                        showToast('❌ Delete NOT saved — no storage and no connection.', 'error');
+                        return false;
+                    }
+                    dropLocal();
+                    if (isTimeout(error)) showConnectionLostBar();
                     showToast('⚠️ Delete queued for sync', 'error');
                     return true;
                 }
@@ -6531,27 +6718,39 @@
                 
                 // If offline, queue for later sync
                 if (!isOnline) {
-                    addToOfflineQueue({ type: 'tankMovement', data: tmData });
-                    
+                    if (!addToOfflineQueue({ type: 'tankMovement', data: tmData })) {
+                        return false; // storage full — the worker has been told
+                    }
                     // Also add to local array so it shows in UI
                     this.tankMovements.push(movement);
-                    
                     showToast('📴 Tank movement saved offline - will sync when connected', 'success');
                     return true;
                 }
-                
+
+                // Write-ahead: on this phone first, then the database.
+                const qid = enqueueWriteAhead({ type: 'tankMovement', data: tmData });
+
                 try {
-                    const { data, error } = await supabase
-                        .from('tank_movements')
-                        .upsert(tmData);
+                    const { error } = await withTimeout(
+                        supabase.from('tank_movements').upsert(tmData),
+                        WRITE_TIMEOUT_MS, 'Tank movement save');
                     if (error) throw error;
+                    dequeueWriteAhead(qid);
                     return true;
                 } catch (error) {
                     console.error('Error saving tank movement:', error);
-                    
-                    // If save fails, queue for later
-                    addToOfflineQueue({ type: 'tankMovement', data: tmData });
-                    showToast('⚠️ Tank movement queued for sync', 'error');
+                    if (qid) {
+                        releaseWriteAhead(qid);
+                    } else if (!addToOfflineQueue({ type: 'tankMovement', data: tmData })) {
+                        showToast('❌ Tank movement NOT saved — no storage and no connection. Do not leave this screen.', 'error');
+                        return false;
+                    }
+                    if (isTimeout(error)) {
+                        showConnectionLostBar();
+                        showToast('⚠️ Tank movement saved on your phone — the app is not responding. Tap Reconnect.', 'error');
+                    } else {
+                        showToast('⚠️ Tank movement queued for sync', 'error');
+                    }
                     return true;
                 }
             },
@@ -7134,13 +7333,14 @@
             setupWorkerCalendarEventsRealtime();
             setupTankMovementsRealtime();
             setupWorkerCalendarVisibilityRefresh();
+            setupConnectionWatchdog();
             
             // Connectivity recovery: the browser 'online' event only fires on a live
             // offline→online transition while the app is open. A worker who force-quits
             // on a dead connection and relaunches once back in coverage never sees that
             // event, so the queue would otherwise sit undrained. Drain on init to catch it.
             if (isOnline) {
-                setTimeout(() => { processOfflineQueue(); reportFailedSyncItems(); }, 1500);
+                setTimeout(() => { processOfflineQueue(); reportFailedSyncItems(); checkDbConnection('startup'); }, 1500);
             }
         }
         
@@ -12909,7 +13109,7 @@
             // ──────────────────────────────────────────────────────────────────────
             
             try {
-                const success = await db.savePOD(pod);
+                const success = await db.savePOD(pod, { edit: !!currentEditingPodId });
                 if (success) {
                     // Update or add to local array
                     const existingIndex = db.pods.findIndex(p => p.id === podId);
