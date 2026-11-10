@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oz Tank - Service POD Manager v11.50</title>
+    <title>Oz Tank - Service POD Manager v11.51</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -3309,7 +3309,46 @@
                     <p style="font-size: 12px; color: #6b7280; margin-top: 4px;">Leave as Monthly for regular customers</p>
                 </div>
                 <button class="btn btn-success" onclick="saveCustomerEdit()">💾 Save Changes</button>
+                <button class="btn" onclick="showDuplicateCustomerModal(parseInt(document.getElementById('editCustomerId').value, 10))" style="margin-top: 8px; background: #4f46e5;">⧉ Duplicate Customer</button>
                 <button class="btn btn-secondary" onclick="hideCustomerEditModal()" style="margin-top: 8px;">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Duplicate Customer Modal -->
+    <div id="duplicateCustomerModal" class="search-modal-overlay">
+        <div class="search-modal" style="max-width: 450px;">
+            <div class="search-modal-header" style="background: #4f46e5;">
+                <h2>⧉ Duplicate Customer</h2>
+                <button class="search-modal-close" onclick="hideDuplicateCustomerModal()">×</button>
+            </div>
+            <div class="search-modal-body">
+                <p style="font-size: 13px; color: #374151; line-height: 1.5; margin: 0 0 14px;">
+                    Creates a new customer with the same details as <strong id="duplicateSourceName"></strong> &mdash; run day, address, access code, tanks, carbsolve, schedule and billing flags. Every existing POD, tank movement and invoice stays with the original.
+                </p>
+                <div class="form-group">
+                    <label style="font-weight: 600;">New customer name <span style="color: #b91c1c; font-weight: 500;">&mdash; must be different</span></label>
+                    <input type="text" id="duplicateNewName" style="font-size: 16px;">
+                </div>
+                <div class="form-group">
+                    <label style="display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; cursor: pointer;">
+                        <input type="checkbox" id="duplicateRenameOriginal" onchange="toggleDuplicateRename()" style="width: 18px; height: 18px;">
+                        Rename the original
+                    </label>
+                    <div id="duplicateOriginalNameGroup" style="margin-top: 8px;">
+                        <input type="text" id="duplicateOriginalName" style="font-size: 16px;">
+                        <p style="font-size: 12px; color: #6b7280; margin-top: 4px;">For a change of hands: add &ldquo;(old)&rdquo; so the previous owner's record is easy to tell apart.</p>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label style="display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; cursor: pointer;">
+                        <input type="checkbox" id="duplicateLink" style="width: 18px; height: 18px;">
+                        &#128279; Link as the new owner of this site
+                    </label>
+                    <p style="font-size: 12px; color: #6b7280; margin-top: 4px;">Sets &ldquo;Took Over From&rdquo; on the new record, so opening either one in Search POD shows the site's combined history.</p>
+                </div>
+                <button id="duplicateConfirmBtn" class="btn btn-success" onclick="confirmDuplicateCustomer()">⧉ Create Duplicate</button>
+                <button class="btn btn-secondary" onclick="hideDuplicateCustomerModal()" style="margin-top: 8px;">Cancel</button>
             </div>
         </div>
     </div>
@@ -13302,6 +13341,7 @@
                     </div>
                     <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                         <button class="btn" style="padding: 6px 12px; font-size: 12px; background: #374151;" onclick="showCustomerEditModal(${customer.id})">Edit</button>
+                        <button class="btn" style="padding: 6px 12px; font-size: 12px; background: #4f46e5;" onclick="showDuplicateCustomerModal(${customer.id})">Duplicate</button>
                         <button class="delete-btn" onclick="deleteCustomer(${customer.id})">Delete</button>
                     </div>
                 `;
@@ -16298,6 +16338,137 @@
 
         function hideCustomerEditModal() {
             document.getElementById('customerEditModal').classList.remove('active');
+        }
+
+        // ── Duplicate customer ──────────────────────────────────────
+        // For a change of hands: a new record with the same site details, so
+        // the new owner is billed and configured on their own while every POD,
+        // movement and invoice stays with the record that earned them. The
+        // name must change - two records under one name is how history ends
+        // up filed against the wrong owner - and the copy is linked as the
+        // site's new owner by default so Search POD shows the combined
+        // history (the v11.45 ownership link).
+        let _duplicateSourceId = null;
+
+        function showDuplicateCustomerModal(customerId) {
+            const customer = db.customers.find(c => c.id === customerId);
+            if (!customer) {
+                showToast('Customer not found', 'error');
+                return;
+            }
+            _duplicateSourceId = customerId;
+            const name = (customer.name || '').trim();
+            document.getElementById('duplicateSourceName').textContent = name;
+            document.getElementById('duplicateNewName').value = name;
+            document.getElementById('duplicateRenameOriginal').checked = true;
+            document.getElementById('duplicateOriginalName').value = name + ' (old)';
+            document.getElementById('duplicateLink').checked = true;
+            toggleDuplicateRename();
+            document.getElementById('duplicateCustomerModal').classList.add('active');
+            const input = document.getElementById('duplicateNewName');
+            setTimeout(() => { input.focus(); input.select(); }, 50);
+        }
+
+        function hideDuplicateCustomerModal() {
+            document.getElementById('duplicateCustomerModal').classList.remove('active');
+            _duplicateSourceId = null;
+        }
+
+        function toggleDuplicateRename() {
+            const on = document.getElementById('duplicateRenameOriginal').checked;
+            document.getElementById('duplicateOriginalNameGroup').style.display = on ? 'block' : 'none';
+        }
+
+        function sameCustomerName(a, b) {
+            return (a || '').trim().toLowerCase() === (b || '').trim().toLowerCase();
+        }
+
+        async function confirmDuplicateCustomer() {
+            const source = db.customers.find(c => c.id === _duplicateSourceId);
+            if (!source) {
+                showToast('Customer not found', 'error');
+                return;
+            }
+
+            const newName = document.getElementById('duplicateNewName').value.trim();
+            const rename = document.getElementById('duplicateRenameOriginal').checked;
+            const renamedOriginal = rename ? document.getElementById('duplicateOriginalName').value.trim() : null;
+            const link = document.getElementById('duplicateLink').checked;
+
+            if (!newName) {
+                showToast('Give the new customer a name', 'error');
+                return;
+            }
+            if (sameCustomerName(newName, source.name)) {
+                showToast('The new customer needs a different name — the new trading name, or a suffix', 'error');
+                return;
+            }
+            if (rename && !renamedOriginal) {
+                showToast('Give the original a new name, or untick the rename', 'error');
+                return;
+            }
+            if (rename && sameCustomerName(renamedOriginal, newName)) {
+                showToast('The two names must be different from each other', 'error');
+                return;
+            }
+            // A clash with any other customer defeats the point of a rename.
+            const taken = n => db.customers.some(c => c.id !== source.id && sameCustomerName(c.name, n));
+            if (taken(newName)) {
+                showToast(`A customer called "${newName}" already exists`, 'error');
+                return;
+            }
+            if (rename && taken(renamedOriginal)) {
+                showToast(`A customer called "${renamedOriginal}" already exists`, 'error');
+                return;
+            }
+
+            const btn = document.getElementById('duplicateConfirmBtn');
+            if (btn) btn.disabled = true;
+            try {
+                const copy = {
+                    ...source,
+                    id: Date.now(),
+                    name: newName,
+                    predecessorId: link ? source.id : null,
+                    // Bills-under is a relationship of the old entity, not the site.
+                    invoiceUnderId: null,
+                    tankLabels: source.tankLabels ? JSON.parse(JSON.stringify(source.tankLabels)) : null,
+                    serviceMonths: Array.isArray(source.serviceMonths) ? source.serviceMonths.slice() : (source.serviceMonths || null)
+                };
+
+                if (!(await db.saveCustomer(copy))) return; // saveCustomer has shown the error
+                // Tank config and the ownership link live outside the general
+                // upsert so bulk paths can't wipe them - write them the same way.
+                if (copy.tankCount > 1 || copy.tankLabels) {
+                    await db.saveTankLabels(copy.id, copy.tankLabels, copy.tankCount);
+                }
+                if (link && !(await db.savePredecessor(copy.id, source.id))) {
+                    copy.predecessorId = null;
+                }
+                db.customers.push(copy);
+
+                if (rename) {
+                    const previous = source.name;
+                    source.name = renamedOriginal;
+                    if (!(await db.saveCustomer(source))) source.name = previous;
+                }
+
+                hideDuplicateCustomerModal();
+                hideCustomerEditModal();
+                renderCustomerList();
+                if (document.getElementById('customerAdminList')) renderCustomerAdminList();
+                if (typeof _profileCustomerId !== 'undefined' && _profileCustomerId === source.id) {
+                    renderCustomerProfilePanel(source);
+                }
+                showToast(`Created "${newName}"` + (rename && source.name === renamedOriginal ? ` and renamed the original to "${renamedOriginal}"` : ''), 'success');
+                // Open the copy so anything that differs for the new owner -
+                // billing type, email flags, phone - can be set straight away.
+                showCustomerEditModal(copy.id);
+            } catch (e) {
+                showToast('Error duplicating customer: ' + e.message, 'error');
+            } finally {
+                if (btn) btn.disabled = false;
+            }
         }
         
         async function saveCustomerEdit() {
