@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oz Tank - Service POD Manager v11.51</title>
+    <title>Oz Tank - Service POD Manager v11.52</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -3327,7 +3327,7 @@
                     Creates a new customer with the same details as <strong id="duplicateSourceName"></strong> &mdash; run day, address, access code, tanks, carbsolve, schedule and billing flags. Every existing POD, tank movement and invoice stays with the original.
                 </p>
                 <div class="form-group">
-                    <label style="font-weight: 600;">New customer name <span style="color: #b91c1c; font-weight: 500;">&mdash; must be different</span></label>
+                    <label style="font-weight: 600;">New customer name <span id="duplicateNameHint" style="font-weight: 500;"></span></label>
                     <input type="text" id="duplicateNewName" style="font-size: 16px;">
                 </div>
                 <div class="form-group">
@@ -16377,6 +16377,13 @@
         function toggleDuplicateRename() {
             const on = document.getElementById('duplicateRenameOriginal').checked;
             document.getElementById('duplicateOriginalNameGroup').style.display = on ? 'block' : 'none';
+            // A venue usually keeps its name across a change of hands: with the
+            // original being renamed, the copy can keep the current name.
+            const hint = document.getElementById('duplicateNameHint');
+            if (hint) {
+                hint.textContent = on ? '\u2014 can stay the same' : '\u2014 must be different';
+                hint.style.color = on ? '#6b7280' : '#b91c1c';
+            }
         }
 
         function sameCustomerName(a, b) {
@@ -16399,16 +16406,19 @@
                 showToast('Give the new customer a name', 'error');
                 return;
             }
-            if (sameCustomerName(newName, source.name)) {
-                showToast('The new customer needs a different name — the new trading name, or a suffix', 'error');
-                return;
-            }
             if (rename && !renamedOriginal) {
                 showToast('Give the original a new name, or untick the rename', 'error');
                 return;
             }
+            // The rule is that the two records end up under different names.
+            // With the original being renamed the copy may keep the current
+            // name; without it, the copy is the one that has to change.
             if (rename && sameCustomerName(renamedOriginal, newName)) {
                 showToast('The two names must be different from each other', 'error');
+                return;
+            }
+            if (!rename && sameCustomerName(newName, source.name)) {
+                showToast('Give the new customer a different name, or tick "Rename the original"', 'error');
                 return;
             }
             // A clash with any other customer defeats the point of a rename.
@@ -16436,7 +16446,25 @@
                     serviceMonths: Array.isArray(source.serviceMonths) ? source.serviceMonths.slice() : (source.serviceMonths || null)
                 };
 
-                if (!(await db.saveCustomer(copy))) return; // saveCustomer has shown the error
+                // Rename first so a failure stops before anything is created;
+                // if the copy then fails, put the name back so the two records
+                // can never be left sharing one name.
+                const previousName = source.name;
+                if (rename) {
+                    source.name = renamedOriginal;
+                    if (!(await db.saveCustomer(source))) { // saveCustomer has shown the error
+                        source.name = previousName;
+                        return;
+                    }
+                }
+
+                if (!(await db.saveCustomer(copy))) {
+                    if (rename) {
+                        source.name = previousName;
+                        await db.saveCustomer(source);
+                    }
+                    return;
+                }
                 // Tank config and the ownership link live outside the general
                 // upsert so bulk paths can't wipe them - write them the same way.
                 if (copy.tankCount > 1 || copy.tankLabels) {
@@ -16447,12 +16475,6 @@
                 }
                 db.customers.push(copy);
 
-                if (rename) {
-                    const previous = source.name;
-                    source.name = renamedOriginal;
-                    if (!(await db.saveCustomer(source))) source.name = previous;
-                }
-
                 hideDuplicateCustomerModal();
                 hideCustomerEditModal();
                 renderCustomerList();
@@ -16460,7 +16482,7 @@
                 if (typeof _profileCustomerId !== 'undefined' && _profileCustomerId === source.id) {
                     renderCustomerProfilePanel(source);
                 }
-                showToast(`Created "${newName}"` + (rename && source.name === renamedOriginal ? ` and renamed the original to "${renamedOriginal}"` : ''), 'success');
+                showToast(`Created "${newName}"` + (rename ? ` and renamed the original to "${renamedOriginal}"` : ''), 'success');
                 // Open the copy so anything that differs for the new owner -
                 // billing type, email flags, phone - can be set straight away.
                 showCustomerEditModal(copy.id);
