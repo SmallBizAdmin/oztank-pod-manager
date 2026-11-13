@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oz Tank - Service POD Manager v11.52</title>
+    <title>Oz Tank - Service POD Manager v11.53</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -4929,29 +4929,48 @@
         // place (same row id, new title), and a backgrounded or offline phone
         // misses the realtime refresh. Parsing the cached title silently lost
         // order numbers that the office added to an event on the day of the job.
+        // This read sits BEFORE the save on every calendar-linked job, after
+        // the save lock is taken and outside the write-ahead queue. Until
+        // v11.53 it had no deadline: in a dead spot it could hang, the save
+        // never ran, every further tap of Save was silently ignored, and when
+        // the tab died nothing had been queued (Matt, Swap East Leagues,
+        // 12 Nov 2026 - a connected phone that never got past this call).
+        // An order number is a nicety; it never gets to stand between a worker
+        // and the save. Five seconds, then the cached title.
+        const LIVE_TITLE_TIMEOUT_MS = 5000;
+
         async function fetchLiveEventTitle(eventId) {
             try {
                 if (!supabase || !navigator.onLine) return null;
-                const { data, error } = await supabase
-                    .from('worker_calendar_events')
-                    .select('event_title')
-                    .eq('id', parseInt(eventId))
-                    .maybeSingle();
+                const { data, error } = await withTimeout(
+                    supabase
+                        .from('worker_calendar_events')
+                        .select('event_title')
+                        .eq('id', parseInt(eventId))
+                        .maybeSingle(),
+                    LIVE_TITLE_TIMEOUT_MS, 'Live event title');
                 if (error || !data) return null;
                 return data.event_title || null;
             } catch (e) {
-                return null; // offline / transient — fall back to the cached title
+                if (isTimeout(e)) console.warn('Live event title timed out — using cached title');
+                return null; // offline / transient / slow — fall back to the cached title
             }
         }
 
         // Resolve the order number for a calendar-linked job. Prefers the live
-        // title; falls back to the cached one when offline or the row is gone.
+        // title; falls back to the cached one when offline, slow or the row is
+        // gone. Never throws: a failure here must not leave a save lock engaged.
         async function resolveOrderNumber(eventId) {
-            if (!eventId) return null;
-            const liveTitle = await fetchLiveEventTitle(eventId);
-            if (liveTitle) return extractOrderNumber(liveTitle);
-            const cached = db.findCalendarEvent(eventId);
-            return (cached && cached.eventTitle) ? extractOrderNumber(cached.eventTitle) : null;
+            try {
+                if (!eventId) return null;
+                const liveTitle = await fetchLiveEventTitle(eventId);
+                if (liveTitle) return extractOrderNumber(liveTitle);
+                const cached = db.findCalendarEvent(eventId);
+                return (cached && cached.eventTitle) ? extractOrderNumber(cached.eventTitle) : null;
+            } catch (e) {
+                console.warn('resolveOrderNumber failed — saving without an order number:', e);
+                return null;
+            }
         }
 
         // Shared O/N badge so every admin view renders it identically.
