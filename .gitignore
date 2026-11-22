@@ -1,0 +1,3 @@
+# Local-only working files: MYOB exports and anything else with customer or staff
+# contact details. Never committed, never deployed.
+private/

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oz Tank - Service POD Manager v11.53</title>
+    <title>Oz Tank - Service POD Manager v11.54</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -2586,6 +2586,7 @@
                 <button class="tab" onclick="showAdminTab('serviceDays')">Service Days</button>
                 <button class="tab" onclick="showAdminTab('products')">Products</button>
                 <button class="tab" onclick="showAdminTab('calendarSync')">📅 Calendar Sync</button>
+                <button class="tab" id="monthlyBillingTabBtn" style="display: none;" onclick="showAdminTab('monthlyBilling')">🧾 Monthly Billing</button>
             </div>
 
             <!-- Customer Management -->
@@ -2673,6 +2674,19 @@
                         <!-- Customers will be listed here -->
                     </div>
                 </div>
+            </div>
+
+            <!-- Monthly billing links from MYOB cards (Steve only) -->
+            <div id="monthlyBillingTab" class="admin-tab" style="display: none;">
+                <div class="card">
+                    <h2 style="margin-bottom: 8px;">🧾 Monthly billing &mdash; link from MYOB cards</h2>
+                    <p style="font-size: 13px; color: #4b5563; line-height: 1.5; margin-bottom: 12px;">
+                        Choose the MYOB card export (the full card list). Each unlinked monthly invoice line is paired with its card; ticked rows create the customer from the card and link the line to it. The file is read in this browser only &mdash; it is not uploaded or stored.
+                    </p>
+                    <input type="file" id="myobCardsFile" accept=".xlsx,.xls,.csv,.txt" onchange="handleMyobCardsFile(event)" style="font-size: 14px;">
+                    <div id="myobCardsStatus" style="margin-top: 10px; font-size: 13px; color: #374151;"></div>
+                </div>
+                <div id="monthlyBillingReview"></div>
             </div>
 
             <!-- Service Days Management -->
@@ -8273,6 +8287,7 @@
 
         function showAdminPanelView() {
             showView('adminView');
+            updateMonthlyBillingTabVisibility();
             renderCustomerAdminList();
             renderProductAdminList();
             renderServiceDayAdminList();
@@ -15089,7 +15104,532 @@
             }
         }
 
+        // ── Monthly billing ⇄ MYOB cards (Steve only) ───────────────
+        // Monthly invoice lines come from the invoices calendar as bare titles
+        // ("Inv. Avoca Med S/S - Star") and show a customer only when a title
+        // rule links them. The MYOB card file is the clean source for who those
+        // customers are: every monthly-billed account is a card marked
+        // "Rental … Self Service" with no run day - exactly the set the
+        // day-based Excel import can never bring in. This screen reads the card
+        // export in the browser, pairs each unlinked invoice line with its
+        // card, and creates the customer and the link together.
+        //
+        // The app customer takes the card's name VERBATIM. overdue_dashboard
+        // joins open invoices to customers on the exact MYOB name, so a tidied
+        // name (the "[JVBBG]" dropped) silently loses that customer's run day
+        // and group there. Run day is the invoice day ("14th"): overdue_sheet
+        // already derives the next monthly date from that form, and with no
+        // matching service_days row these customers stay off worker run lists.
+        const MB_OWNER_EMAIL = 'steve.oztank@gmail.com';
+        function canUseMonthlyBilling() {
+            return !!currentUser && (currentUser.email || '').toLowerCase() === MB_OWNER_EMAIL;
+        }
+
+        function updateMonthlyBillingTabVisibility() {
+            const btn = document.getElementById('monthlyBillingTabBtn');
+            const allowed = canUseMonthlyBilling();
+            if (btn) btn.style.display = allowed ? '' : 'none';
+            if (!allowed) {
+                const panel = document.getElementById('monthlyBillingTab');
+                if (panel) panel.style.display = 'none';
+                _mbState = null;
+            }
+        }
+
+        // Words that say what kind of venue it is, not which one.
+        const MB_STOP = new Set('the hotel tavern club inn pub motel resort bar grill and of on pty ltd ptd inc co a t'.split(' '));
+        // Words the office adds to an invoice title: tank size, self-service, group tag.
+        const MB_DESC = new Set(('inv med medium sml small smal large lrge mem m l s ss rental self service star alh wm waymark wmark w mark '
+            + 'avc qvc fnh gema hot new last bi monthly sa').split(' '));
+
+        function mbCanon(x) {
+            return String(x == null ? '' : x).toLowerCase()
+                .replace(/\[[^\]]*\]/g, ' ')
+                .replace(/'/g, '')
+                .replace(/\b(gyg|gyzman y gomez)\b/g, 'guzman y gomez')
+                .replace(/\bmt\b/g, 'mount')
+                .replace(/\brocky\b/g, 'rockhampton')
+                .replace(/\bave\b/g, 'avenue')
+                .replace(/[^a-z0-9]+/g, ' ')
+                .trim();
+        }
+
+        function mbStem(t) {
+            return (t.length > 4 && t.endsWith('s') && !t.endsWith('ss')) ? t.slice(0, -1) : t;
+        }
+
+        function mbToks(x, extra) {
+            return mbCanon(x).split(' ')
+                .filter(t => t.length > 1 && !MB_STOP.has(t) && !(extra && extra.has(t)))
+                .map(mbStem);
+        }
+
+        function mbLcs(a, b) {
+            const row = new Array(b.length + 1).fill(0);
+            for (let i = 1; i <= a.length; i++) {
+                let diag = 0;
+                for (let j = 1; j <= b.length; j++) {
+                    const up = row[j];
+                    row[j] = a[i - 1] === b[j - 1] ? diag + 1 : Math.max(row[j], row[j - 1]);
+                    diag = up;
+                }
+            }
+            return row[b.length];
+        }
+
+        // Same word, allowing the office's spellings: Andergove/Andergrove,
+        // Duggandan/Dugandan, Goondoowindi/Goondiwindi. Short words must be exact.
+        function mbSame(a, b) {
+            return a === b || (a.length >= 5 && b.length >= 5 && (2 * mbLcs(a, b)) / (a.length + b.length) >= 0.84);
+        }
+
+        // How many of `ts` are matched by `other`. Two adjacent words may meet
+        // one joined word ("binna burra" ~ "binnaburra") - exactly, never fuzzily,
+        // or "bundaberg rsl" starts passing for "bundaberg".
+        function mbCovered(ts, other) {
+            const hit = ts.map(t => other.some(o => mbSame(t, o)));
+            for (let i = 0; i < ts.length - 1; i++) {
+                if (other.includes(ts[i] + ts[i + 1])) { hit[i] = true; hit[i + 1] = true; }
+            }
+            const pairs = [];
+            for (let i = 0; i < other.length - 1; i++) pairs.push(other[i] + other[i + 1]);
+            ts.forEach((t, i) => { if (pairs.includes(t)) hit[i] = true; });
+            return hit.filter(Boolean).length;
+        }
+
+        function mbScore(titleT, cardT) {
+            if (!titleT.length || !cardT.length) return 0;
+            return 0.5 * mbCovered(cardT, titleT) / cardT.length + 0.5 * mbCovered(titleT, cardT) / titleT.length;
+        }
+
+        // Custom Field 2 is free text: "Rental Tank - Self Service", "User Owned
+        // Tank. Seld service", "Rentak Tank - Serviced" …
+        function mbClassifyCard(text) {
+            const v = String(text || '').toLowerCase().replace(/[^a-z ]+/g, ' ').replace(/\s+/g, ' ').trim();
+            const own = /\bus\w* own/.test(v) ? 'user_owned' : (/\bren\w*/.test(v) ? 'rental' : null);
+            const mode = /\b(self|seld|sel|serlf|sels|s) serv/.test(v) ? 'self' : (/serv/.test(v) ? 'serviced' : null);
+            return { own, mode };
+        }
+
+        function mbToDate(v) {
+            if (v instanceof Date && !isNaN(v)) return v;
+            const m = /(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(String(v == null ? '' : v));
+            return m ? new Date(+m[3], +m[2] - 1, +m[1]) : null;
+        }
+
+        // The freight note the office types on the end of a title each month.
+        function mbBaseTitle(norm) {
+            return norm.replace(/\s*[+.]\s*(frght|fgrht).*$/, '');
+        }
+
+        function mbOrdinal(n) {
+            const v = n % 100;
+            const suffix = (v >= 11 && v <= 13) ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' }[n % 10] || 'th');
+            return n + suffix;
+        }
+
+        function mbTitleTag(title) {
+            const t = String(title || '').toLowerCase();
+            if (/\bqvc\b/.test(t)) return 'QVC';
+            if (/\bavc\b/.test(t)) return 'AVC';
+            if (/\bstar\b/.test(t)) return 'Star Hotels';
+            if (/\b(waymark|wm|wmark|w\/mark)\b/.test(t)) return 'Waymark Hotels';
+            if (/\bfnh\b/.test(t)) return 'Far North Hotels';
+            if (/\bgema\b/.test(t)) return 'GEMA Group Holdings Pty Ltd';
+            if (/\balh\b/.test(t)) return 'ALH Group';
+            return '';
+        }
+
+        // Rows as XLSX.utils.sheet_to_json gives them, keyed by MYOB's headers.
+        function mbParseCards(rows) {
+            const g = (r, k) => String(r[k] == null ? '' : r[k]).trim();
+            return rows.filter(r => g(r, 'Type') === 'Customer' && g(r, 'Name')).map(r => {
+                const cls = mbClassifyCard(g(r, 'Custom Field 2'));
+                const address = g(r, 'Address Summary');
+                // the trading name sometimes leads the address: "t/a Australian Hotel Murgon 65 Lamb St …"
+                const ta = /^\s*t\/?a\s+(.+?)\s+\d/i.exec(address);
+                return {
+                    name: g(r, 'Name'),
+                    cardId: g(r, 'Card ID').replace('*None', ''),
+                    tank: g(r, 'Custom Field 1'),
+                    says: g(r, 'Custom Field 2'),
+                    runDay: g(r, 'Custom List 1'),
+                    group: g(r, 'Custom List 3'),
+                    address,
+                    phone: g(r, 'Phone No. 1'),
+                    lastSale: mbToDate(r['Last Sale/Purchase']),
+                    own: cls.own,
+                    mode: cls.mode,
+                    toks: mbToks(g(r, 'Name')),
+                    taToks: ta ? mbToks(ta[1]) : []
+                };
+            });
+        }
+
+        function mbBestCards(title, cards, n) {
+            const tt = mbToks(title, MB_DESC);
+            const out = [];
+            for (const c of cards) {
+                const score = Math.max(mbScore(tt, c.toks), c.taToks.length ? mbScore(tt, c.taToks) : 0);
+                // a self-service card is the expected shape - prefer it on a tie
+                if (score > 0) out.push({ rank: score + (c.mode === 'self' ? 0.03 : 0), score, card: c });
+            }
+            out.sort((a, b) => b.rank - a.rank);
+            return out.slice(0, n || 3);
+        }
+
+        function mbConfidence(best) {
+            if (!best.length) return 'NONE';
+            const top = best[0].score;
+            const margin = top - (best.length > 1 ? best[1].score : 0);
+            if (top >= 0.99 && margin >= 0.15) return 'A';
+            if (top >= 0.99 && best[0].card.mode === 'self' && (best.length < 2 || best[1].card.mode !== 'self')) return 'A';
+            if (top >= 0.80 && margin >= 0.10) return 'B';
+            return 'C';
+        }
+
+        // Pure: cards + invoice entries in, review rows out.
+        //   resolveLinkedId(baseTitle) -> customer id already linked by a title rule, or null
+        function mbBuildProposals(cards, entries, resolveLinkedId, customers, today) {
+            const groups = new Map();
+            for (const e of entries) {
+                const norm = String(e.event_title || '').trim().replace(/\s+/g, ' ').toLowerCase();
+                if (!norm) continue;
+                const base = mbBaseTitle(norm);
+                let g = groups.get(base);
+                if (!g) { g = { base, sample: e.event_title, variants: new Set(), days: {}, count: 0, lastDate: '' }; groups.set(base, g); }
+                g.variants.add(norm);
+                g.count++;
+                if (norm === base) g.sample = e.event_title;   // show the clean wording, not a freight-noted one
+                const date = String(e.event_date || '');
+                const day = parseInt(date.slice(8, 10), 10);
+                if (day) g.days[day] = (g.days[day] || 0) + 1;
+                if (date > g.lastDate) g.lastDate = date;
+            }
+
+            const cardByName = new Map(cards.map(c => [c.name.trim().toLowerCase(), c]));
+            const onCalendar = new Set();
+            const proposals = [];
+
+            for (const g of groups.values()) {
+                const best = mbBestCards(g.base, cards, 3);
+                if (best.length && best[0].score >= 0.6) onCalendar.add(best[0].card.name);
+
+                const linkedId = resolveLinkedId(g.base);
+                if (linkedId != null) {
+                    const cust = customers.find(c => c.id === linkedId);
+                    const card = cust ? cardByName.get(String(cust.name || '').trim().toLowerCase()) : null;
+                    if (card) onCalendar.add(card.name);
+                    continue;
+                }
+
+                const conf = mbConfidence(best);
+                const pick = best.length ? best[0].card : null;
+                const flags = [];
+                if (!pick) {
+                    flags.push('no MYOB card found');
+                } else {
+                    const tag = mbTitleTag(g.base);
+                    if (tag && pick.group && tag !== pick.group && !(tag === 'AVC' && pick.group === 'Aus Venue Co')) {
+                        flags.push(`calendar says ${tag}, MYOB says ${pick.group}`);
+                    }
+                    if (conf !== 'A' && best.length > 1 && best[1].card.mode === 'self' && best[1].score >= best[0].score - 0.10) {
+                        flags.push(`could also be ${best[1].card.name}`);
+                    }
+                    if (pick.lastSale && (today.getTime() - pick.lastSale.getTime()) / 86400000 > 75) {
+                        flags.push(`no MYOB sale since ${pick.lastSale.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}`);
+                    }
+                    if (!(pick.own === 'rental' && pick.mode === 'self')) {
+                        flags.push(`card is ${pick.own || 'unknown'} / ${pick.mode || 'unknown'}, not rental self-service`);
+                    }
+                    if (pick.runDay) flags.push(`card has run day ${pick.runDay}`);
+                }
+
+                // the invoice day: the day of the month this line most often falls on
+                let day = 0, most = 0;
+                Object.keys(g.days).map(Number).sort((a, b) => a - b).forEach(d => { if (g.days[d] > most) { most = g.days[d]; day = d; } });
+
+                proposals.push({
+                    base: g.base, sample: g.sample, count: g.count, variants: g.variants.size, lastDate: g.lastDate,
+                    runDay: day ? mbOrdinal(day) : 'N/A',
+                    best, pickIndex: pick ? 0 : -1, conf, flags,
+                    // confident and unremarkable is ticked; anything else waits for a look
+                    ticked: !!pick && !flags.length && (conf === 'A' || conf === 'B')
+                });
+            }
+
+            proposals.sort((a, b) => (a.ticked - b.ticked) || String(a.sample).localeCompare(String(b.sample)));
+
+            // The other direction: a card says a rental tank is out on self-service,
+            // but nothing on the invoices calendar bills it.
+            const orphans = cards
+                .filter(c => c.own === 'rental' && c.mode === 'self' && !c.runDay && c.group !== 'ALH Group' && !onCalendar.has(c.name))
+                .sort((a, b) => (b.lastSale ? b.lastSale.getTime() : 0) - (a.lastSale ? a.lastSale.getTime() : 0));
+
+            return { proposals, orphans };
+        }
+
+        function mbCustomerFromCard(card, runDay, id, order) {
+            const userOwned = card.own === 'user_owned';
+            return {
+                id,
+                name: card.name,                    // verbatim - overdue_dashboard joins on it
+                runDay,
+                address: card.address,
+                phone: card.phone,
+                serviceType: 'Self Service',
+                carbsolve: '',
+                waste: '',
+                code: '',
+                notes: card.tank || '',
+                invoiceType: '',
+                specialInstructions: '',
+                businessGroup: card.group || '',
+                order,
+                serviceMonths: null,
+                tankOwnership: userOwned ? 'user_owned' : 'rental',
+                emailManually: false,
+                noDeliveryFee: false,
+                doNotEmail: false,
+                chemSeparateInvoice: false,
+                monthlyRental: !userOwned,
+                tankCount: 1,
+                tankLabels: null,
+                predecessorId: null,
+                invoiceUnderId: null
+            };
+        }
+
+        // Held in memory only; cleared when anyone but the owner is signed in.
+        let _mbState = null;
+
+        function mbSetStatus(html) {
+            const el = document.getElementById('myobCardsStatus');
+            if (el) el.innerHTML = html;
+        }
+
+        async function handleMyobCardsFile(event) {
+            if (!canUseMonthlyBilling()) return;
+            const file = event.target.files[0];
+            if (!file) return;
+            mbSetStatus('Reading the card file…');
+            try {
+                const buf = await file.arrayBuffer();
+                const workbook = XLSX.read(new Uint8Array(buf), { type: 'array', cellDates: true });
+                const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { defval: '' });
+                const cards = mbParseCards(rows);
+                if (!cards.length) {
+                    mbSetStatus('<span style="color:#b91c1c;">No customer cards found in that file. It needs MYOB\'s card list with the Name, Type, Custom Field and Custom List columns.</span>');
+                    return;
+                }
+                _mbState = { cards, proposals: [], orphans: [] };
+                await mbRebuild();
+            } catch (e) {
+                console.error('MYOB card import failed:', e);
+                mbSetStatus(`<span style="color:#b91c1c;">Could not read that file: ${escHtml(e.message || String(e))}</span>`);
+            }
+        }
+
+        async function mbRebuild() {
+            if (!canUseMonthlyBilling() || !_mbState) return;
+            mbSetStatus('Loading the monthly invoice lines…');
+            const since = new Date();
+            since.setDate(1);
+            since.setMonth(since.getMonth() - 4);
+            const entries = await withTimeout(fetchAllFiltered(() => supabase
+                .from('monthly_invoice_entries')
+                .select('id, event_title, event_date')
+                .gte('event_date', formatDateLocal(since))
+                .order('id', { ascending: true })), 60000, 'Loading invoice lines');
+            await db.loadCalendarTitleLinks();
+            const built = mbBuildProposals(_mbState.cards, entries, t => db.resolveTitleLinkCustomer(t), db.customers, new Date());
+            _mbState.proposals = built.proposals;
+            _mbState.orphans = built.orphans;
+            mbSetStatus(`${_mbState.cards.length} customer cards read · ${entries.length} invoice entries since ${escHtml(formatDateLocal(since))}`);
+            renderMonthlyBillingReview();
+        }
+
+        function mbPickedCard(p) {
+            return p.pickIndex >= 0 ? p.best[p.pickIndex].card : null;
+        }
+
+        function mbExistingCustomer(card) {
+            return card ? (db.customers.find(c => sameCustomerName(c.name, card.name)) || null) : null;
+        }
+
+        function renderMonthlyBillingReview() {
+            const el = document.getElementById('monthlyBillingReview');
+            if (!el) return;
+            if (!canUseMonthlyBilling() || !_mbState) { el.innerHTML = ''; return; }
+            const { proposals, orphans } = _mbState;
+            const ticked = proposals.filter(p => p.ticked && p.pickIndex >= 0);
+            const toCreate = new Set(ticked.filter(p => !mbExistingCustomer(mbPickedCard(p))).map(p => mbPickedCard(p).name.toLowerCase())).size;
+
+            const badge = (conf) => {
+                const map = { A: ['#dcfce7', '#166534', 'sure'], B: ['#dbeafe', '#1e40af', 'likely'], C: ['#fef3c7', '#92400e', 'check'], NONE: ['#fee2e2', '#991b1b', 'no card'] };
+                const [bg, fg, label] = map[conf] || map.C;
+                return `<span style="background:${bg};color:${fg};padding:2px 7px;border-radius:8px;font-size:10px;font-weight:700;">${label}</span>`;
+            };
+
+            const rows = proposals.map((p, i) => {
+                const card = mbPickedCard(p);
+                const existing = mbExistingCustomer(card);
+                const options = p.best.map((b, bi) =>
+                    `<option value="${bi}"${bi === p.pickIndex ? ' selected' : ''}>${escHtml(b.card.name)}</option>`).join('')
+                    + `<option value="-1"${p.pickIndex < 0 ? ' selected' : ''}>&mdash; none of these &mdash;</option>`;
+                const cardLine = card
+                    ? `<div style="font-size:11px;color:#6b7280;margin-top:3px;">${escHtml(card.tank || 'no tank on card')}${card.group ? ' · ' + escHtml(card.group) : ''}</div>`
+                    : '';
+                const action = !card ? '<span style="color:#9ca3af;">&mdash;</span>'
+                    : existing ? '<span style="color:#1e40af;font-weight:600;">Link only</span><div style="font-size:11px;color:#6b7280;">customer already in the app</div>'
+                    : `<span style="color:#166534;font-weight:600;">Create + link</span><div style="font-size:11px;color:#6b7280;">run day ${escHtml(p.runDay)}</div>`;
+                const flagHtml = p.flags.map(f => `<div style="font-size:11px;color:#b45309;margin-top:3px;">&#9888; ${escHtml(f)}</div>`).join('');
+                return `
+                    <tr style="border-bottom:1px solid #e5e7eb;vertical-align:top;${p.ticked ? '' : 'background:#fffbeb;'}">
+                        <td style="padding:10px;text-align:center;">
+                            <input type="checkbox" ${p.ticked ? 'checked' : ''} ${card ? '' : 'disabled'} onchange="mbToggle(${i}, this.checked)" style="width:17px;height:17px;cursor:pointer;">
+                        </td>
+                        <td style="padding:10px;">
+                            <div style="font-weight:600;color:#111827;">${escHtml(p.sample)}</div>
+                            <div style="font-size:11px;color:#6b7280;margin-top:3px;">${p.count} entr${p.count === 1 ? 'y' : 'ies'}${p.variants > 1 ? ` · ${p.variants} wordings` : ''} · bills on the ${escHtml(p.runDay)}</div>
+                        </td>
+                        <td style="padding:10px;">
+                            <select onchange="mbPick(${i}, this.value)" style="width:100%;max-width:300px;padding:6px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;">${options}</select>
+                            ${cardLine}
+                        </td>
+                        <td style="padding:10px;font-size:13px;">${action}</td>
+                        <td style="padding:10px;">${badge(p.conf)}${flagHtml}</td>
+                    </tr>`;
+            }).join('');
+
+            const orphanRows = orphans.map(c => {
+                const days = c.lastSale ? Math.round((Date.now() - c.lastSale.getTime()) / 86400000) : null;
+                return `<tr style="border-bottom:1px solid #e5e7eb;">
+                    <td style="padding:8px 10px;font-weight:600;">${escHtml(c.name)}</td>
+                    <td style="padding:8px 10px;font-size:12px;color:#4b5563;">${escHtml(c.tank)}</td>
+                    <td style="padding:8px 10px;font-size:12px;color:#4b5563;">${escHtml(c.group)}</td>
+                    <td style="padding:8px 10px;font-size:12px;">${c.lastSale ? escHtml(c.lastSale.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })) + ` <span style="color:#6b7280;">(${days} days)</span>` : '<span style="color:#b91c1c;">never</span>'}</td>
+                </tr>`;
+            }).join('');
+
+            el.innerHTML = `
+                <div class="admin-section">
+                    <h2 style="margin-bottom:6px;">Unlinked invoice lines (${proposals.length})</h2>
+                    <p style="font-size:13px;color:#4b5563;margin-bottom:12px;">
+                        ${proposals.length ? `${ticked.length} ticked &mdash; ${toCreate} new customer${toCreate === 1 ? '' : 's'} to create. Shaded rows need a look before they are ticked.` : 'Every monthly invoice line is linked to a customer.'}
+                    </p>
+                    ${proposals.length ? `
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+                        <button class="btn btn-success" id="mbApplyBtn" style="width:auto;padding:10px 16px;" onclick="applyMonthlyBillingLinks()">&#10003; Create &amp; link ticked (${ticked.length})</button>
+                        <button class="btn btn-secondary" style="width:auto;padding:10px 16px;" onclick="mbTickAll(false)">Untick all</button>
+                    </div>
+                    <div style="overflow-x:auto;">
+                        <table style="width:100%;border-collapse:collapse;font-size:14px;">
+                            <thead>
+                                <tr style="background:#eef2ff;text-align:left;">
+                                    <th style="padding:10px;width:44px;"></th>
+                                    <th style="padding:10px;">Invoice line</th>
+                                    <th style="padding:10px;">MYOB card</th>
+                                    <th style="padding:10px;width:130px;">Will</th>
+                                    <th style="padding:10px;width:230px;">Match</th>
+                                </tr>
+                            </thead>
+                            <tbody>${rows}</tbody>
+                        </table>
+                    </div>` : ''}
+                </div>
+                <div class="admin-section">
+                    <h2 style="margin-bottom:6px;">Rental self-service cards with no invoice line (${orphans.length})</h2>
+                    <p style="font-size:13px;color:#4b5563;margin-bottom:12px;">
+                        MYOB says a rental tank is out on self-service, there is no run day, and nothing on the invoices calendar in the last four months bills it. Either the tank came back and the card was not updated, or the rental stopped being invoiced.
+                    </p>
+                    ${orphans.length ? `
+                    <div style="overflow-x:auto;">
+                        <table style="width:100%;border-collapse:collapse;font-size:14px;">
+                            <thead><tr style="background:#fef3c7;text-align:left;">
+                                <th style="padding:8px 10px;">MYOB card</th><th style="padding:8px 10px;">Tank</th><th style="padding:8px 10px;">Group</th><th style="padding:8px 10px;">Last MYOB sale</th>
+                            </tr></thead>
+                            <tbody>${orphanRows}</tbody>
+                        </table>
+                    </div>` : '<div style="color:#16a34a;font-weight:600;">None.</div>'}
+                </div>`;
+        }
+
+        function mbToggle(i, checked) {
+            if (!canUseMonthlyBilling() || !_mbState || !_mbState.proposals[i]) return;
+            _mbState.proposals[i].ticked = !!checked;
+            renderMonthlyBillingReview();
+        }
+
+        function mbPick(i, value) {
+            if (!canUseMonthlyBilling() || !_mbState || !_mbState.proposals[i]) return;
+            const p = _mbState.proposals[i];
+            p.pickIndex = parseInt(value, 10);
+            if (p.pickIndex < 0) p.ticked = false;
+            renderMonthlyBillingReview();
+        }
+
+        function mbTickAll(on) {
+            if (!canUseMonthlyBilling() || !_mbState) return;
+            _mbState.proposals.forEach(p => { p.ticked = !!on && p.pickIndex >= 0; });
+            renderMonthlyBillingReview();
+        }
+
+        async function applyMonthlyBillingLinks() {
+            if (!canUseMonthlyBilling() || !_mbState) return;
+            const chosen = _mbState.proposals.filter(p => p.ticked && p.pickIndex >= 0);
+            if (!chosen.length) { showToast('Nothing is ticked', 'error'); return; }
+            const newNames = new Set(chosen.filter(p => !mbExistingCustomer(mbPickedCard(p))).map(p => mbPickedCard(p).name.toLowerCase()));
+            if (!confirm(`Create ${newNames.size} customer${newNames.size === 1 ? '' : 's'} and link ${chosen.length} invoice line${chosen.length === 1 ? '' : 's'}?`)) return;
+
+            const btn = document.getElementById('mbApplyBtn');
+            if (btn) btn.disabled = true;
+            const linkedBy = (currentUser.name || currentUser.email) + ' (MYOB import)';
+            let nextId = Date.now();
+            let created = 0, linked = 0, failed = 0;
+
+            for (let n = 0; n < chosen.length; n++) {
+                const p = chosen[n];
+                const card = mbPickedCard(p);
+                mbSetStatus(`Working… ${n + 1} of ${chosen.length}: ${escHtml(card.name)}`);
+                try {
+                    // one customer per card, however many invoice wordings point at it
+                    let cust = mbExistingCustomer(card);
+                    if (!cust) {
+                        const order = db.customers.filter(c => c.runDay === p.runDay).length;
+                        cust = mbCustomerFromCard(card, p.runDay, nextId++, order);
+                        if (!(await db.saveCustomer(cust))) { failed++; continue; }
+                        db.customers.push(cust);
+                        created++;
+                    }
+                    const key = db.normalizeEventTitle(p.base);
+                    const { error } = await withTimeout(supabase
+                        .from('calendar_event_customer_links')
+                        .upsert({ title_normalized: key, customer_id: cust.id, linked_by: linkedBy, linked_at: new Date().toISOString() },
+                                { onConflict: 'title_normalized' }), WRITE_TIMEOUT_MS, 'Saving link');
+                    if (error) throw error;
+                    if (!db.calendarTitleLinks) db.calendarTitleLinks = {};
+                    db.calendarTitleLinks[key] = cust.id;
+                    linked++;
+                } catch (e) {
+                    console.error('Monthly billing link failed for', p.sample, e);
+                    failed++;
+                    if (isTimeout(e)) { showConnectionLostBar(); break; }
+                }
+            }
+
+            showToast(`Created ${created} customer${created === 1 ? '' : 's'}, linked ${linked} line${linked === 1 ? '' : 's'}${failed ? `, ${failed} failed` : ''}`, failed ? 'error' : 'success');
+            if (document.getElementById('customerAdminList')) renderCustomerAdminList();
+            try {
+                await mbRebuild();   // what is left is what still needs doing
+            } catch (e) {
+                console.error('Could not refresh the review list:', e);
+                mbSetStatus('<span style="color:#b91c1c;">Saved, but the list could not be refreshed. Choose the file again to see what is left.</span>');
+            }
+        }
+
         function showAdminTab(tab) {
+            if (tab === 'monthlyBilling' && !canUseMonthlyBilling()) return;
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.admin-tab').forEach(t => t.style.display = 'none');
             
