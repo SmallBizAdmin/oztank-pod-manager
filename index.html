@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oz Tank - Service POD Manager v11.54</title>
+    <title>Oz Tank - Service POD Manager v11.55</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -10321,6 +10321,71 @@
                 </div>`;
         }
 
+        // ── Monthly invoice lines in a customer's history ──
+        // monthly_invoice_entries has no customer_id: a line belongs to a
+        // customer only through a title rule (calendar_event_customer_links).
+        // So: take the rules that point at these customers, pull the lines
+        // whose title starts with one of them, then let the app's own resolver
+        // decide ownership - the database match is only there to narrow the read.
+        function invoiceTitlePattern(key) {
+            // Words joined by % so odd spacing in a calendar title still matches;
+            // LIKE's own wildcards are escaped.
+            const words = String(key || '').split(' ').filter(Boolean)
+                .map(w => w.replace(/[\\%_]/g, ch => '\\' + ch));
+            return words.length ? '%' + words.join('%') + '%' : null;
+        }
+
+        function invoiceLinesForCustomers(entries, customerIds) {
+            const ids = new Set(customerIds);
+            const seen = new Set();
+            const out = [];
+            (entries || []).forEach(e => {
+                if (!e || seen.has(e.id)) return;
+                const owner = db.resolveTitleLinkCustomer(e.event_title);
+                if (owner == null || !ids.has(owner)) return;
+                seen.add(e.id);
+                out.push(Object.assign({}, e, { customer_id: owner }));
+            });
+            return out;
+        }
+
+        async function fetchInvoiceLinesForCustomers(customerIds) {
+            await db.loadCalendarTitleLinks();
+            const ids = new Set(customerIds);
+            const keys = Object.keys(db.calendarTitleLinks || {}).filter(k => ids.has(db.calendarTitleLinks[k]));
+            if (!keys.length) return [];
+            const batches = await Promise.all(keys.map(key => {
+                const pattern = invoiceTitlePattern(key);
+                if (!pattern) return Promise.resolve([]);
+                return fetchAllFiltered(() => supabase
+                    .from('monthly_invoice_entries')
+                    .select('id, event_date, event_title, invoiced, invoiced_at, invoiced_by, freight_added, checked_sent, notes')
+                    .ilike('event_title', pattern)
+                    .order('event_date', { ascending: false })
+                    .order('id', { ascending: true }));
+            }));
+            return invoiceLinesForCustomers([].concat(...batches), customerIds);
+        }
+
+        function invoiceLineHistoryCells(inv, todayStr) {
+            const pill = (bg, fg, text) => `<span style="background:${bg};color:${fg};padding:2px 8px;border-radius:12px;font-size:11px;white-space:nowrap;">${text}</span>`;
+            const badges = [];
+            if (inv.invoiced) badges.push(pill('#dcfce7', '#166534', 'Invoiced'));
+            else if (inv.event_date > todayStr) badges.push(pill('#f3f4f6', '#4b5563', 'Upcoming'));
+            else badges.push(pill('#fef9c3', '#854d0e', 'Not invoiced'));
+            if (inv.checked_sent) badges.push(pill('#dbeafe', '#1e40af', 'Checked &amp; sent'));
+            if (inv.freight_added) badges.push(pill('#ffedd5', '#9a3412', 'Freight'));
+
+            const notes = [`<strong>Line:</strong> ${escHtml(inv.event_title || '')}`];
+            if (inv.notes) notes.push(`<strong>Notes:</strong> ${escHtml(inv.notes)}`);
+            if (inv.invoiced && inv.invoiced_at) {
+                const when = new Date(inv.invoiced_at);
+                const whenStr = isNaN(when.getTime()) ? '' : when.toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' });
+                notes.push(`<strong>Invoiced:</strong> ${whenStr}${inv.invoiced_by ? ' by ' + escHtml(inv.invoiced_by) : ''}`);
+            }
+            return { status: badges.join(' '), notes: notes.join('<br>') };
+        }
+
         async function loadSearchPodsHistory(customerId) {
             const customer = db.customers.find(c => c.id === customerId);
             if (!customer) return;
@@ -10438,6 +10503,16 @@
                     console.warn('Search PODs: skips load failed:', skipErr);
                 }
 
+                // Monthly invoice lines (the invoices calendar), matched to this
+                // customer by title rule.
+                let invoiceLines = [];
+                try {
+                    invoiceLines = await fetchInvoiceLinesForCustomers(historyIds);
+                } catch (invErr) {
+                    console.warn('Search PODs: monthly invoice lines load failed:', invErr);
+                }
+                const todayStr = formatDateLocal(new Date());
+
                 // Stats
                 const totalPods = pods.length;
                 const servicesCompleted = pods.filter(podWasServiced).length;
@@ -10468,10 +10543,14 @@
                         <div class="customer-stat-value">${skips.length}</div>
                         <div class="customer-stat-label">Skipped</div>
                     </div>
+                    ${invoiceLines.length ? `<div class="customer-stat-card">
+                        <div class="customer-stat-value">${invoiceLines.filter(i => i.invoiced).length}<span style="font-size:14px;color:#6b7280;"> / ${invoiceLines.filter(i => i.invoiced || i.event_date <= todayStr).length}</span></div>
+                        <div class="customer-stat-label">Monthly Invoiced</div>
+                    </div>` : ''}
                 `;
                 
                 // Build table similar to admin runsheet
-                if (pods.length === 0 && tankMovements.length === 0 && cancelledEvents.length === 0 && skips.length === 0) {
+                if (pods.length === 0 && tankMovements.length === 0 && cancelledEvents.length === 0 && skips.length === 0 && invoiceLines.length === 0) {
                     document.getElementById('searchPodsTable').innerHTML = '<div class="card" style="text-align: center; color: #6b7280; padding: 20px;">No service history found</div>';
                     return;
                 }
@@ -10482,6 +10561,7 @@
                 tankMovements.forEach(tm => historyRows.push({ kind: 'tm', date: tm.date, sortTime: new Date(tm.date).getTime() || 0, tm, srcId: tm.customer_id }));
                 cancelledEvents.forEach(ev => historyRows.push({ kind: 'cancelled', date: ev.date, sortTime: new Date(ev.date).getTime() || 0, ev, srcId: ev.customer_id }));
                 skips.forEach(s => historyRows.push({ kind: 'skip', date: s.skip_date, sortTime: new Date(s.skip_date).getTime() || 0, skip: s, srcId: s.customer_id }));
+                invoiceLines.forEach(inv => historyRows.push({ kind: 'invoice', date: inv.event_date, sortTime: new Date(inv.event_date).getTime() || 0, inv, srcId: inv.customer_id }));
                 historyRows.sort((a, b) => b.sortTime - a.sortTime);
 
                 let tableHtml = '<div class="card" style="overflow-x: auto;"><table style="width: 100%; border-collapse: collapse; font-size: 13px;">';
@@ -10525,6 +10605,22 @@
                             <td style="padding: 10px 8px;"><span style="background: #ede9fe; color: #5b21b6; padding: 2px 8px; border-radius: 12px; font-size: 11px;">Tank Move</span></td>
                             <td style="padding: 10px 8px; font-size: 12px;">${tankInfo}</td>
                             <td style="padding: 10px 8px; font-size: 12px;">${tmNotes}</td>
+                        </tr>`;
+                        return;
+                    }
+
+                    // ── Monthly invoice line (no POD - billed off the invoices calendar) ──
+                    if (row.kind === 'invoice') {
+                        const cells = invoiceLineHistoryCells(row.inv, todayStr);
+                        tableHtml += `<tr style="background: ${bgColor}; border-bottom: 1px solid #e5e7eb;"
+                                          onmouseover="this.style.background='#fffbeb'" onmouseout="this.style.background='${bgColor}'">
+                            <td style="padding: 10px 8px; white-space: nowrap;">${formattedDate}</td>${ownerTd}
+                            <td style="padding: 10px 8px;">-</td>
+                            <td style="padding: 10px 8px; white-space: nowrap;">🧾 Monthly Invoice</td>
+                            <td style="padding: 10px 8px;">-</td>
+                            <td style="padding: 10px 8px;">${cells.status}</td>
+                            <td style="padding: 10px 8px; font-size: 12px;">-</td>
+                            <td style="padding: 10px 8px; font-size: 12px;">${cells.notes}</td>
                         </tr>`;
                         return;
                     }
