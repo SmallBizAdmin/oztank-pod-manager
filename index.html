@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oz Tank - Service POD Manager v11.55</title>
+    <title>Oz Tank - Service POD Manager v11.57</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -5144,7 +5144,32 @@
             adminNotice.style.display = noticeHTML ? 'block' : 'none';
         }
         
-        async function refreshForPeriod() {
+        // Calendar navigation and the live-update handler can ask for a refresh while
+        // one is still loading. Overlapping loads used to finish out of order and
+        // leave another week's PODs on screen (every run tile reading 0 done), so
+        // refreshes now run one at a time: a request made mid-load reruns once at
+        // the end, with whatever period is selected by then.
+        let _refreshInFlight = null;
+        let _refreshQueued = false;
+        function refreshForPeriod() {
+            if (_refreshInFlight) {
+                _refreshQueued = true;
+                return _refreshInFlight;
+            }
+            _refreshInFlight = (async () => {
+                try {
+                    do {
+                        _refreshQueued = false;
+                        await refreshForPeriodNow();
+                    } while (_refreshQueued);
+                } finally {
+                    _refreshInFlight = null;
+                }
+            })();
+            return _refreshInFlight;
+        }
+
+        async function refreshForPeriodNow() {
             if (calendarPeriod === 'week') {
                 await db.loadPodsForWeek();
                 await db.loadScheduledDaysForWeek();
@@ -5403,6 +5428,8 @@
             products: [],
             pods: [],
             progressPods: [], // Always holds today's real month — never clobbered by admin calendar navigation
+            roundData: { loaded: false, schedule: {}, pods: [] }, // calendar run dates + light recent PODs (see runPeriod)
+            _podsLoadSeq: 0, // bumped by every month/week POD load, so only the newest result is kept
             serviceDays: [],
             calendarUrl: '',
             invoiceStatus: {},        // pod_id → { invoiced, checkedSent }
@@ -5508,6 +5535,8 @@
                     
                     // Load progress PODs for today's month (always today, never affected by admin calendar nav)
                     await this.loadProgressPods();
+                    // Run dates and recent PODs, so a run brought forward into this month is its own round
+                    await this.loadRoundData();
                     
                     // Load invoice status — paginated to bypass 1000 row default limit
                     {
@@ -5775,6 +5804,7 @@
             
             async loadPodsForMonth() {
                 try {
+                    const loadSeq = ++this._podsLoadSeq;
                     const { start, end } = getMonthDateRange();
                     const startStr = start.toISOString().split('T')[0];
                     const endStr = end.toISOString().split('T')[0];
@@ -5790,6 +5820,9 @@
                     
                     if (podsError) throw podsError;
                     
+                    // A newer month/week load started while this one was in flight (quick
+                    // clicks through the calendar): keep that one's PODs, not these.
+                    if (loadSeq !== this._podsLoadSeq) return;
                     // Map snake_case from DB to camelCase for JS
                     this.pods = (pods || []).map(p => ({
                         id: p.id,
@@ -5835,6 +5868,7 @@
             
             async loadPodsForWeek() {
                 try {
+                    const loadSeq = ++this._podsLoadSeq;
                     const startStr = formatDateLocal(selectedWeekStart);
                     const friday = new Date(selectedWeekStart); // extended to Sunday
                     friday.setDate(friday.getDate() + 6);
@@ -5851,6 +5885,9 @@
                     
                     if (podsError) throw podsError;
                     
+                    // A newer month/week load started while this one was in flight (quick
+                    // clicks through the calendar): keep that one's PODs, not these.
+                    if (loadSeq !== this._podsLoadSeq) return;
                     this.pods = (pods || []).map(p => ({
                         id: p.id,
                         customerId: p.customer_id,
@@ -5954,9 +5991,128 @@
                 console.log(`Loaded ${this.progressPods.length} progress PODs for ${MONTH_NAMES[now.getMonth()]} ${now.getFullYear()}`);
             },
             
+            // Light copy of the last few months' PODs plus the calendar's run dates:
+            // what runPeriod needs to tell one round of a run from the next.
+            async loadRoundData() {
+                try {
+                    const now = new Date();
+                    const from = formatDateLocal(new Date(now.getFullYear(), now.getMonth() - 2, 1));
+                    const to = formatDateLocal(new Date(now.getFullYear(), now.getMonth() + 3, 0));
+                    const [pods, events] = await withTimeout(Promise.all([
+                        fetchAllFiltered(() => supabase
+                            .from('pods')
+                            .select('id, customer_id, run_day, source_run_day, date, timestamp, is_ad_hoc, archived')
+                            .gte('date', from)
+                            .order('date', { ascending: true })
+                            .order('id', { ascending: true })),
+                        fetchAllFiltered(() => supabase
+                            .from('worker_calendar_events')
+                            .select('id, event_date, event_title, service_day_name')
+                            .eq('is_service_day', true)
+                            .gte('event_date', from)
+                            .lte('event_date', to)
+                            .order('event_date', { ascending: true })
+                            .order('id', { ascending: true }))
+                    ]), 15000, 'Run round data');
+                    const schedule = {};
+                    (events || []).forEach(e => {
+                        // Same override as the calendar views: "Pro ..." events are not runs
+                        if (!e.service_day_name || /^Pro[\s-]/i.test(e.event_title || '')) return;
+                        (schedule[e.service_day_name] = schedule[e.service_day_name] || []).push(e.event_date);
+                    });
+                    this.roundData = {
+                        loaded: true,
+                        schedule,
+                        pods: (pods || []).map(p => ({
+                            id: p.id,
+                            customerId: p.customer_id,
+                            runDay: p.run_day,
+                            sourceRunDay: p.source_run_day,
+                            date: p.date,
+                            timestamp: p.timestamp,
+                            isAdHoc: p.is_ad_hoc || false,
+                            archived: p.archived
+                        }))
+                    };
+                } catch (e) {
+                    // Offline or slow: keep what we had. Runsheets then work from the PODs already loaded.
+                    console.warn('Could not load run round data:', e);
+                }
+            },
+
+            _syncRoundPod(pod, remove = false) {
+                if (!pod) return;
+                const list = this.roundData.pods;
+                const idx = list.findIndex(p => p.id === pod.id);
+                if (remove) {
+                    if (idx >= 0) list.splice(idx, 1);
+                } else if (idx >= 0) {
+                    list[idx] = pod;
+                } else {
+                    list.push(pod);
+                }
+            },
+
+            // The round a run is in on a given date: which month's round it is and
+            // which venues already have a POD in it. The worker runsheet and the
+            // progress tiles both use this, so they always agree.
+            runPeriod(runDay, refDate) {
+                const byId = new Map();
+                const take = p => {
+                    if (p && p.date && (p.runDay === runDay || p.sourceRunDay === runDay)) byId.set(String(p.id), p);
+                };
+                this.roundData.pods.forEach(take);
+                this.progressPods.forEach(take);
+                this.pods.forEach(take);   // the live list wins
+                const pods = [...byId.values()].sort((a, b) =>
+                    String(b.date).localeCompare(String(a.date)) ||
+                    String(b.timestamp || '').localeCompare(String(a.timestamp || '')));
+
+                // Rounds are worked out from the month before last onward. Dates older
+                // than last month have too little history behind them: plain calendar month.
+                const now = new Date();
+                const windowStart = formatDateLocal(new Date(now.getFullYear(), now.getMonth() - 2, 1));
+                const earliestRef = formatDateLocal(new Date(now.getFullYear(), now.getMonth() - 1, 1));
+                let rounds = [];
+                if (refDate >= earliestRef) {
+                    const venues = {};
+                    pods.forEach(p => {
+                        if (p.date < windowStart || p.customerId == null) return;
+                        (venues[p.date] = venues[p.date] || new Set()).add(p.customerId);
+                    });
+                    const venuesByDate = {};
+                    Object.keys(venues).forEach(d => { venuesByDate[d] = venues[d].size; });
+                    const venueCount = this.customers.filter(c => c.runDay === runDay).length;
+                    const scheduled = (this.roundData.schedule[runDay] || []).filter(d => d >= windowStart);
+                    rounds = buildRunRounds(scheduled, venuesByDate, Math.max(3, Math.ceil(venueCount / 3)));
+                }
+
+                const month = runServiceMonth(rounds, refDate);
+                const monthOf = d => runServiceMonth(rounds, d);
+                const done = new Map();   // venue -> its latest POD in this round
+                pods.forEach(p => {
+                    if (p.customerId == null || done.has(p.customerId)) return;
+                    if (monthOf(p.date) === month) done.set(p.customerId, p);
+                });
+                const skips = this.monthlySkips || {};
+                return {
+                    rounds,
+                    month,
+                    monthIndex: Number(month.slice(5, 7)) - 1,
+                    year: Number(month.slice(0, 4)),
+                    early: month !== ymOfDate(refDate),
+                    podFor: customerId => done.get(customerId) || null,
+                    isSkipped: customerId => {
+                        const prefix = `${customerId}-`;
+                        return Object.keys(skips).some(k =>
+                            k.startsWith(prefix) && monthOf(k.slice(prefix.length)) === month);
+                    }
+                };
+            },
             // Mirror individual pod saves/deletes into progressPods so it stays correct
             // even when db.pods has been replaced by admin calendar navigation.
             _syncProgressPod(pod, remove = false) {
+                this._syncRoundPod(pod, remove);
                 const now = new Date();
                 const podDate = pod.date ? new Date(pod.date + 'T00:00:00') : null;
                 const isThisMonth = podDate &&
@@ -7021,6 +7177,67 @@
             return serviceMonths.includes(month + 1);
         }
         
+        // ── Run rounds ────────────────────────────────────────────────────────
+        // "Completed" on a runsheet is judged per month: a venue is done once it
+        // has a POD for that run in the month. That breaks when a run is brought
+        // forward: December's Day 15 done on 30 November would show every venue
+        // already ticked from the 2 November visit. So each run's dates are
+        // grouped into rounds, and a round that starts in a month which already
+        // has one counts as the NEXT month's round.
+        const ROUND_GAP_DAYS = 10;   // run dates further apart than this are separate rounds
+
+        function ymOfDate(dateStr) {
+            return String(dateStr).slice(0, 7);
+        }
+
+        function ymAfter(ym) {
+            const y = Number(ym.slice(0, 4));
+            const m = Number(ym.slice(5, 7));
+            return m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, '0')}`;
+        }
+
+        function daysBetween(fromStr, toStr) {
+            const t = s => Date.UTC(Number(s.slice(0, 4)), Number(s.slice(5, 7)) - 1, Number(s.slice(8, 10)));
+            return Math.round((t(toStr) - t(fromStr)) / 86400000);
+        }
+
+        // scheduledDates: the run's dates in the calendar. venuesByDate: { date:
+        // venues with a POD that day }. A date missing from the calendar still
+        // starts a round when at least minVenues were done on it (the calendar
+        // does not hold every run); a stray makeup visit does not.
+        function buildRunRounds(scheduledDates, venuesByDate, minVenues) {
+            const anchors = new Set(scheduledDates || []);
+            Object.keys(venuesByDate || {}).forEach(d => {
+                if (venuesByDate[d] >= minVenues) anchors.add(d);
+            });
+            const rounds = [];
+            [...anchors].sort().forEach(d => {
+                const last = rounds[rounds.length - 1];
+                if (last && daysBetween(last.end, d) <= ROUND_GAP_DAYS) last.end = d;
+                else rounds.push({ start: d, end: d, month: null });
+            });
+            let prev = null;
+            rounds.forEach(r => {
+                const cal = ymOfDate(r.start);
+                // The month is already taken (an earlier round started in it, or was
+                // brought forward into it), so this round is the following month's.
+                r.month = (prev !== null && prev >= cal) ? ymAfter(cal) : cal;
+                prev = r.month;
+            });
+            return rounds;
+        }
+
+        // Which month's round a date belongs to ('YYYY-MM'): its own calendar
+        // month, unless it falls on or after a round brought forward that month.
+        function runServiceMonth(rounds, dateStr) {
+            const cal = ymOfDate(dateStr);
+            let current = null;
+            for (const r of rounds) {
+                if (r.start <= dateStr) current = r;
+                else break;
+            }
+            return (current && current.month > cal) ? current.month : cal;
+        }
         function isOffMonth(customer, month, year) {
             // Returns true if this customer has a bi-monthly schedule and this is an off-month
             if (!customer.serviceMonths || customer.serviceMonths.length === 0) return false;
@@ -7466,6 +7683,7 @@
                         await refreshForPeriod();
                         // Keep progressPods (today's month) in sync
                         await db.loadProgressPods();
+                        await db.loadRoundData();
                         // Re-render home view if it's active
                         if (document.getElementById('homeView')?.classList.contains('active')) {
                             renderRunDays();
@@ -12171,16 +12389,21 @@
         
         function createServiceDayCard(serviceDay, today, countMonth, countYear, progressPods, isOtherWorker = false) {
             const allCustomers = db.customers.filter(c => c.runDay === serviceDay.name);
-            
-            // Filter out skipped customers AND off-month customers for this month
-            const activeCustomers = allCustomers.filter(c => 
-                !db.isCustomerSkippedInMonth(c.id, countMonth, countYear) && 
-                !isOffMonth(c, countMonth, countYear)
+
+            // The round this run is in today: normally this month's, but a run brought
+            // forward (December's done on 30 November) counts as next month's.
+            const period = db.runPeriod(serviceDay.name, formatDateLocal(new Date()));
+            const periodSkipped = new Map(allCustomers.map(c => [c.id, period.isSkipped(c.id)]));
+
+            // Filter out skipped customers AND off-month customers for this round
+            const activeCustomers = allCustomers.filter(c =>
+                !periodSkipped.get(c.id) &&
+                !isOffMonth(c, period.monthIndex, period.year)
             );
-            const skippedCount = allCustomers.filter(c => db.isCustomerSkippedInMonth(c.id, countMonth, countYear)).length;
-            const offMonthCount = allCustomers.filter(c => 
-                !db.isCustomerSkippedInMonth(c.id, countMonth, countYear) && 
-                isOffMonth(c, countMonth, countYear)
+            const skippedCount = allCustomers.filter(c => periodSkipped.get(c.id)).length;
+            const offMonthCount = allCustomers.filter(c =>
+                !periodSkipped.get(c.id) &&
+                isOffMonth(c, period.monthIndex, period.year)
             ).length;
             const excludedCount = skippedCount + offMonthCount;
             const count = activeCustomers.length;
@@ -12191,16 +12414,8 @@
             const currentYear = now.getFullYear();
             const isHistorical = countYear < currentYear || (countYear === currentYear && countMonth < currentMonth);
             
-            // Count PODs completed in the specified month (only for active customers)
-            // Use progressPods parameter which may be different from db.pods for cross-month weeks
-            const completedCount = activeCustomers.filter(customer => 
-                progressPods.some(pod => {
-                    if (pod.customerId !== customer.id) return false;
-                    if (pod.runDay !== serviceDay.name && pod.sourceRunDay !== serviceDay.name) return false;
-                    const podDate = new Date(pod.date + 'T00:00:00');
-                    return podDate.getMonth() === countMonth && podDate.getFullYear() === countYear;
-                })
-            ).length;
+            // Venues with a POD for this run in the current round (same rule as the runsheet)
+            const completedCount = activeCustomers.filter(customer => period.podFor(customer.id)).length;
             
             const completionPercent = count > 0 ? Math.round((completedCount / count) * 100) : 0;
             const isFullyCompleted = count > 0 && completedCount === count;
@@ -12228,6 +12443,9 @@
             const dateLine = serviceDay.date ? 
                 `<div style="font-size: 12px; color: #6b7280; margin-top: 4px;">${formatServiceDate(serviceDay.date)}</div>` : '';
             
+            // Say so when the tile is showing next month's round, done early
+            const roundLine = period.early ?
+                `<div style="font-size: 11px; font-weight: 600; color: #1e40af; margin-top: 2px;">${MONTH_NAMES[period.monthIndex]} round</div>` : '';
             const employeeLine = isOtherWorker && serviceDay.employee ? 
                 `<div style="font-size: 11px; color: #9ca3af; margin-top: 2px;">👤 ${serviceDay.employee}</div>` : '';
             
@@ -12248,6 +12466,7 @@
                 <h3>${serviceDay.name}</h3>
                 ${employeeLine}
                 ${dateLine}
+                ${roundLine}
                 <p>${statusText}</p>
                 ${isFullyCompleted ? '<span class="completion-badge">✓ Complete</span>' : ''}
                 <div class="progress-bar" style="width: ${completionPercent}%"></div>
@@ -12352,31 +12571,21 @@
 
             // Only count active customers (not skipped, not off-month)
             const summaryWorkDate = currentServiceDate || formatDateLocal(new Date());
-            const summaryDateObj = new Date(summaryWorkDate + 'T00:00:00');
-            const summaryCheckMonth = summaryDateObj.getMonth();
-            const summaryCheckYear = summaryDateObj.getFullYear();
+            // Off-months and "done" follow the round being worked: next month's when
+            // the run has been brought forward (see db.runPeriod).
+            const summaryPeriod = db.runPeriod(currentRunDay, summaryWorkDate);
             const active = customers.filter(c => {
                 if (db.isCustomerSkipped(c.id, summaryWorkDate)) return false;
-                if (isOffMonth(c, summaryCheckMonth, summaryCheckYear)) return false;
+                if (isOffMonth(c, summaryPeriod.monthIndex, summaryPeriod.year)) return false;
                 return true;
             });
 
             const total = active.length;
 
-            // Completed count — month-wide match scoped to this run day, so it agrees
-            // with the per-customer tick count in the list below (e.g. 8 PODs on Apr 8
-            // + 2 on Apr 9 → header reads 10/10, same as the progress tile).
-            const podDate = currentServiceDate || formatDateLocal(new Date());
-            const summaryPodDateObj = new Date(podDate + 'T00:00:00');
-            const completedCount = active.filter(c =>
-                db.pods.find(p => {
-                    if (p.customerId !== c.id) return false;
-                    const pd = new Date(p.date + 'T00:00:00');
-                    return pd.getMonth() === summaryPodDateObj.getMonth() &&
-                           pd.getFullYear() === summaryPodDateObj.getFullYear() &&
-                           (p.runDay === currentRunDay || p.sourceRunDay === currentRunDay);
-                })
-            ).length;
+            // Completed count: any POD for this run in the round being worked, so it
+            // agrees with the ticks in the list below and with the progress tile
+            // (e.g. 8 PODs on Apr 8 + 2 on Apr 9 reads 10/10).
+            const completedCount = active.filter(c => summaryPeriod.podFor(c.id)).length;
 
             // Type breakdown
             const typeCounts = {};
@@ -12493,8 +12702,12 @@
             // For off-month and skip checks, use the actual work date's month
             // (may differ from selectedMonth when event crosses into next month)
             const workDateObj = new Date(workDate + 'T00:00:00');
-            const checkMonth = isHistorical ? selectedMonth : workDateObj.getMonth();
-            const checkYear = isHistorical ? selectedYear : workDateObj.getFullYear();
+            // The round being worked decides off-months and what counts as done:
+            // normally the work date's month, next month's when the run has been
+            // brought forward (see db.runPeriod).
+            const period = isHistorical ? null : db.runPeriod(currentRunDay, workDate);
+            const checkMonth = isHistorical ? selectedMonth : period.monthIndex;
+            const checkYear = isHistorical ? selectedYear : period.year;
             
             // Update header with date context
             let headerText = currentRunDay;
@@ -12560,6 +12773,15 @@
                 notice.innerHTML = '<strong>📋 Historical View</strong>Viewing completed PODs from ' + MONTH_NAMES[selectedMonth] + ' ' + selectedYear;
                 list.appendChild(notice);
             }
+            // A run brought forward: say which month's round this is, since the
+            // month's earlier visit no longer ticks anything here.
+            if (period && period.early) {
+                const notice = document.createElement('li');
+                notice.className = 'historical-notice';
+                notice.innerHTML = '<strong>' + MONTH_NAMES[period.monthIndex] + ' round, done early</strong>'
+                    + currentRunDay + ' has already had its ' + MONTH_NAMES[workDateObj.getMonth()] + ' round, so this visit counts as ' + MONTH_NAMES[period.monthIndex] + '. Every venue starts unticked.';
+                list.appendChild(notice);
+            }
             
             customers.forEach((customer, index) => {
                 // Check if customer is skipped for this specific run date (or anywhere in month for historical)
@@ -12579,23 +12801,18 @@
                 // Treat off-month as effectively skipped (auto-strikethrough)
                 const effectivelySkipped = isSkipped || customerIsOffMonth;
                 
-                // Find completed POD for the displayed month. Match any POD in the
-                // work date's month where this run day is the source — so PODs split
-                // across the primary run date plus any makeup/ad-hoc dates all show
-                // as completed, consistent with the progress tile counts.
-                const completedPod = db.pods.find(pod => {
-                    if (pod.customerId !== customer.id) return false;
-                    const podDate = new Date(pod.date + 'T00:00:00');
-                    if (isHistorical) {
+                // Find the venue's POD for this run in the round being worked. Any
+                // date in the round counts, so PODs split across the run date plus
+                // makeup/ad-hoc dates all show as completed, matching the progress
+                // tile. A second round in the same month starts unticked.
+                const completedPod = isHistorical
+                    ? db.pods.find(pod => {
+                        if (pod.customerId !== customer.id) return false;
+                        const podDate = new Date(pod.date + 'T00:00:00');
                         // Historical view: match any pod in that month/year
                         return podDate.getMonth() === selectedMonth && podDate.getFullYear() === selectedYear;
-                    } else {
-                        // Current month: month-wide match scoped to this run day
-                        return podDate.getMonth() === workDateObj.getMonth() &&
-                               podDate.getFullYear() === workDateObj.getFullYear() &&
-                               (pod.runDay === currentRunDay || pod.sourceRunDay === currentRunDay);
-                    }
-                });
+                    })
+                    : period.podFor(customer.id);
                 
                 const li = document.createElement('li');
                 li.className = `customer-item ${completedPod ? 'completed' : ''} ${effectivelySkipped ? 'skipped' : ''}`;
@@ -14016,6 +14233,9 @@
             `;
             tbody.appendChild(backRow);
             
+            // Off-months follow the round this date belongs to (next month's when the
+            // run was brought forward), the same as the worker runsheet.
+            const adminPeriod = db.runPeriod(serviceDayName, selectedDate);
             customers.forEach(customer => {
                 // Find POD for this customer on the exact selected date.
                 // Exclude ad-hoc PODs (repairs/deliveries against calendar events)
@@ -14029,8 +14249,7 @@
                 const skipReason = isSkipped ? db.getSkipReason(customer.id, selectedDate) : '';
 
                 // Check if this is an off-month for bi-monthly customers
-                const selectedDateObj2 = new Date(selectedDate + 'T00:00:00');
-                const customerIsOffMonth = isOffMonth(customer, selectedDateObj2.getMonth(), selectedDateObj2.getFullYear());
+                const customerIsOffMonth = isOffMonth(customer, adminPeriod.monthIndex, adminPeriod.year);
                 const scheduleLabel = getScheduleLabel(customer.serviceMonths);
                 
                 const tr = document.createElement('tr');
