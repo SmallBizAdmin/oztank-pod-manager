@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oz Tank - Service POD Manager v11.59</title>
+    <title>Oz Tank - Service POD Manager v11.60</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -6178,6 +6178,20 @@
                         const prefix = `${customerId}-`;
                         return Object.keys(skips).some(k =>
                             k.startsWith(prefix) && monthOf(k.slice(prefix.length)) === month);
+                    },
+                    // The day this venue was skipped for the round being worked, or null.
+                    // A skip on the work date itself always counts. One from another day
+                    // of the round counts too (the run opened from its tile on a later
+                    // day), unless the venue has been done since.
+                    skipDateFor: (customerId, workDate) => {
+                        if (skips[`${customerId}-${workDate}`]) return workDate;
+                        if (done.has(customerId)) return null;
+                        const prefix = `${customerId}-`;
+                        const dates = Object.keys(skips)
+                            .filter(k => k.startsWith(prefix) && monthOf(k.slice(prefix.length)) === month)
+                            .map(k => k.slice(prefix.length))
+                            .sort();
+                        return dates.length ? dates[dates.length - 1] : null;
                     }
                 };
             },
@@ -12689,7 +12703,7 @@
             // the run has been brought forward (see db.runPeriod).
             const summaryPeriod = db.runPeriod(currentRunDay, summaryWorkDate);
             const active = customers.filter(c => {
-                if (db.isCustomerSkipped(c.id, summaryWorkDate)) return false;
+                if (summaryPeriod.skipDateFor(c.id, summaryWorkDate)) return false;
                 if (isOffMonth(c, summaryPeriod.monthIndex, summaryPeriod.year)) return false;
                 return true;
             });
@@ -12822,6 +12836,10 @@
             const period = isHistorical ? null : db.runPeriod(currentRunDay, workDate);
             const checkMonth = isHistorical ? selectedMonth : period.monthIndex;
             const checkYear = isHistorical ? selectedYear : period.year;
+            // Skips follow the round as well: one recorded on the run day still shows
+            // when the run is opened from its tile on a later day. Gives the day the
+            // skip was recorded, which the edit and unskip actions need.
+            const skipDateOf = c => (isHistorical ? null : period.skipDateFor(c.id, workDate));
             
             // Update header with date context
             let headerText = currentRunDay;
@@ -12836,12 +12854,12 @@
             // Count skipped and off-month customers
             const skippedCount = customers.filter(c => isHistorical
                 ? db.isCustomerSkippedInMonth(c.id, checkMonth, checkYear)
-                : db.isCustomerSkipped(c.id, workDate)
+                : !!skipDateOf(c)
             ).length;
             const offMonthCount = customers.filter(c => {
                 const skipped = isHistorical
                     ? db.isCustomerSkippedInMonth(c.id, checkMonth, checkYear)
-                    : db.isCustomerSkipped(c.id, workDate);
+                    : !!skipDateOf(c);
                 return !skipped && isOffMonth(c, checkMonth, checkYear);
             }).length;
             const excludedTotal = skippedCount + offMonthCount;
@@ -12901,14 +12919,15 @@
             // for this run when only one week is loaded (see db.loadHistoryPods)
             const historyPods = isHistorical ? db.podsWithHistory() : null;
             customers.forEach((customer, index) => {
-                // Check if customer is skipped for this specific run date (or anywhere in month for historical)
+                // Check if customer is skipped for the round being worked (or anywhere in the month for historical)
+                const skipDate = skipDateOf(customer);
                 const isSkipped = isHistorical
                     ? db.isCustomerSkippedInMonth(customer.id, checkMonth, checkYear)
-                    : db.isCustomerSkipped(customer.id, workDate);
+                    : !!skipDate;
                 const skipReason = isSkipped
                     ? (isHistorical
                         ? db.getSkipReasonInMonth(customer.id, checkMonth, checkYear)
-                        : db.getSkipReason(customer.id, workDate))
+                        : db.getSkipReason(customer.id, skipDate))
                     : '';
                 
                 // Check if this is an off-month for bi-monthly customers
@@ -13032,7 +13051,7 @@
                         ` : ''}
                         ${!isHistorical && !customerIsOffMonth ? `
                             <button class="skip-btn ${isSkipped ? 'active' : ''}" 
-                                    onclick="event.stopPropagation(); toggleCustomerSkip(${customer.id}, ${isSkipped})" 
+                                    onclick="event.stopPropagation(); toggleCustomerSkip(${customer.id}, ${isSkipped}, '${skipDate || ''}')" 
                                     title="${isSkipped ? 'Unskip this customer' : 'Skip this customer for this month'}">
                                 ${isSkipped ? '↩️' : '⏭️'}
                             </button>
@@ -13081,10 +13100,9 @@
                         !e.target.classList.contains('done-checkbox') &&
                         !e.target.classList.contains('skip-btn') &&
                         e.target.type !== 'checkbox') {
-                        const clickDate = currentServiceDate || formatDateLocal(new Date());
-                        const currentlySkipped = db.isCustomerSkipped(customer.id, clickDate);
-                        if (currentlySkipped) {
-                            showSkipReasonModal(customer.id, clickDate, true);
+                        // skipDate is the day the skip was recorded, which may not be the day being viewed
+                        if (skipDate) {
+                            showSkipReasonModal(customer.id, skipDate, true);
                         } else {
                             showPodView(customer);
                         }
@@ -13165,8 +13183,10 @@
         }
 
         // Toggle customer skip status for the current run date
-        async function toggleCustomerSkip(customerId, isCurrentlySkipped) {
-            const skipDate = currentServiceDate || formatDateLocal(new Date());
+        async function toggleCustomerSkip(customerId, isCurrentlySkipped, skippedOn) {
+            // skippedOn: the day an existing skip was recorded (it can differ from the
+            // day being viewed when the run is opened from its tile)
+            const skipDate = (isCurrentlySkipped && skippedOn) || currentServiceDate || formatDateLocal(new Date());
 
             if (isCurrentlySkipped) {
                 const success = await db.removeMonthlySkip(customerId, skipDate);
