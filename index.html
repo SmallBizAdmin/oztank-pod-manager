@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oz Tank - Service POD Manager v11.57</title>
+    <title>Oz Tank - Service POD Manager v11.58</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -5180,6 +5180,9 @@
             // Tank movements only have a per-month loader; align it to the navigated period
             // so the admin calendar/list reflects the current view rather than the boot month
             await db.loadTankMovementsForMonth();
+            // Another request arrived while this one was loading: what is in memory may
+            // be a mix of two periods, and the rerun is about to draw the right one.
+            if (_refreshQueued) return;
             renderAdminCalendar();
             // Also refresh list view if visible
             if (document.getElementById('adminListContainer') && 
@@ -5430,6 +5433,10 @@
             progressPods: [], // Always holds today's real month — never clobbered by admin calendar navigation
             roundData: { loaded: false, schedule: {}, pods: [] }, // calendar run dates + light recent PODs (see runPeriod)
             _podsLoadSeq: 0, // bumped by every month/week POD load, so only the newest result is kept
+            _podsLoadLatest: null, // the most recently started month/week POD load
+            historyPods: [], // a past month's PODs for the runsheet last opened in Week view (see loadHistoryPods)
+            _historyKey: null,
+            _historyLoading: false,
             serviceDays: [],
             calendarUrl: '',
             invoiceStatus: {},        // pod_id → { invoiced, checkedSent }
@@ -5802,9 +5809,29 @@
                 }
             },
             
-            async loadPodsForMonth() {
+            // Month and week loads start here. A load overtaken by a newer one (quick
+            // clicks through the calendar) does not apply its PODs, and does not let
+            // its caller redraw early either: it finishes when the newer load has.
+            _trackPodsLoad(run) {
+                const loadSeq = ++this._podsLoadSeq;
+                const mine = run(loadSeq).then(async applied => {
+                    if (applied === false && this._podsLoadLatest && this._podsLoadLatest !== mine) {
+                        await this._podsLoadLatest;
+                    }
+                });
+                this._podsLoadLatest = mine;
+                return mine;
+            },
+
+            loadPodsForMonth() {
+                return this._trackPodsLoad(loadSeq => this._loadPodsForMonth(loadSeq));
+            },
+
+            loadPodsForWeek() {
+                return this._trackPodsLoad(loadSeq => this._loadPodsForWeek(loadSeq));
+            },
+            async _loadPodsForMonth(loadSeq) {
                 try {
-                    const loadSeq = ++this._podsLoadSeq;
                     const { start, end } = getMonthDateRange();
                     const startStr = start.toISOString().split('T')[0];
                     const endStr = end.toISOString().split('T')[0];
@@ -5822,7 +5849,7 @@
                     
                     // A newer month/week load started while this one was in flight (quick
                     // clicks through the calendar): keep that one's PODs, not these.
-                    if (loadSeq !== this._podsLoadSeq) return;
+                    if (loadSeq !== this._podsLoadSeq) return false;
                     // Map snake_case from DB to camelCase for JS
                     this.pods = (pods || []).map(p => ({
                         id: p.id,
@@ -5866,9 +5893,8 @@
                 }
             },
             
-            async loadPodsForWeek() {
+            async _loadPodsForWeek(loadSeq) {
                 try {
-                    const loadSeq = ++this._podsLoadSeq;
                     const startStr = formatDateLocal(selectedWeekStart);
                     const friday = new Date(selectedWeekStart); // extended to Sunday
                     friday.setDate(friday.getDate() + 6);
@@ -5887,7 +5913,7 @@
                     
                     // A newer month/week load started while this one was in flight (quick
                     // clicks through the calendar): keep that one's PODs, not these.
-                    if (loadSeq !== this._podsLoadSeq) return;
+                    if (loadSeq !== this._podsLoadSeq) return false;
                     this.pods = (pods || []).map(p => ({
                         id: p.id,
                         customerId: p.customer_id,
@@ -5928,20 +5954,24 @@
             },
             
             // Load PODs for a specific month (used for progress tiles)
-            async loadPodsForSpecificMonth(month, year) {
+            async loadPodsForSpecificMonth(month, year, customerIds = null) {
                 try {
                     const start = new Date(year, month, 1);
                     const end = new Date(year, month + 1, 0);
                     const startStr = formatDateLocal(start);
                     const endStr = formatDateLocal(end);
                     
-                    const pods = await fetchAllFiltered(() => supabase
-                        .from('pods')
-                        .select('*')
-                        .gte('date', startStr)
-                        .lte('date', endStr)
-                        .order('timestamp', { ascending: false })
-                        .order('id', { ascending: false }));
+                    const pods = await fetchAllFiltered(() => {
+                        let query = supabase
+                            .from('pods')
+                            .select('*')
+                            .gte('date', startStr)
+                            .lte('date', endStr);
+                        if (customerIds && customerIds.length) query = query.in('customer_id', customerIds);
+                        return query
+                            .order('timestamp', { ascending: false })
+                            .order('id', { ascending: false });
+                    });
                     const podsError = null;
                     
                     if (podsError) throw podsError;
@@ -5984,6 +6014,30 @@
                 }
             },
             
+            // A past month's PODs for a set of venues, for the worker runsheet's
+            // historical view. In Week view db.pods holds one week only, so without
+            // this a past month's runsheet showed every venue as Not Serviced.
+            async loadHistoryPods(customerIds, month, year) {
+                const ids = [...customerIds].sort((a, b) => a - b);
+                const key = `${year}-${month}:${ids.join(',')}`;
+                if (!ids.length || key === this._historyKey) return false;
+                this._historyLoading = true;
+                try {
+                    const pods = await this.loadPodsForSpecificMonth(month, year, ids);
+                    this.historyPods = pods;
+                    this._historyKey = pods.length ? key : null;
+                } finally {
+                    this._historyLoading = false;
+                }
+                return true;
+            },
+
+            // db.pods plus any history PODs it does not already hold
+            podsWithHistory() {
+                if (!this.historyPods.length) return this.pods;
+                const have = new Set(this.pods.map(p => p.id));
+                return this.pods.concat(this.historyPods.filter(p => !have.has(p.id)));
+            },
             // Always loads today's real month into this.progressPods — unaffected by admin calendar nav
             async loadProgressPods() {
                 const now = new Date();
@@ -6042,6 +6096,11 @@
 
             _syncRoundPod(pod, remove = false) {
                 if (!pod) return;
+                const h = this.historyPods.findIndex(p => p.id === pod.id);
+                if (h >= 0) {
+                    if (remove) this.historyPods.splice(h, 1);
+                    else this.historyPods[h] = pod;
+                }
                 const list = this.roundData.pods;
                 const idx = list.findIndex(p => p.id === pod.id);
                 if (remove) {
@@ -7684,6 +7743,7 @@
                         // Keep progressPods (today's month) in sync
                         await db.loadProgressPods();
                         await db.loadRoundData();
+                        db._historyKey = null;   // past-month runsheet PODs reload next time one is opened
                         // Re-render home view if it's active
                         if (document.getElementById('homeView')?.classList.contains('active')) {
                             renderRunDays();
@@ -8013,6 +8073,22 @@
             adHocSourceRunDay = null;
             showView('customerListView');
             renderCustomerList();
+            // Past month in Week view: only one week of PODs is loaded, so fetch this
+            // run's PODs for that month and redraw once they arrive.
+            if (isPastMonth() && calendarPeriod === 'week') {
+                const ids = db.customers.filter(c => c.runDay === runDay).map(c => c.id);
+                const month = selectedMonth;
+                const year = selectedYear;
+                const redrawIfStillHere = () => {
+                    if (currentRunDay === runDay && selectedMonth === month && selectedYear === year
+                        && document.getElementById('customerListView').classList.contains('active')) {
+                        renderCustomerList();
+                    }
+                };
+                const loading = db.loadHistoryPods(ids, month, year);
+                if (db._historyLoading) renderCustomerList();   // show the "loading" notice
+                loading.then(fetched => { if (fetched) redrawIfStillHere(); }, redrawIfStillHere);
+            }
         }
 
         // Ensure a <select> contains the given value as an option (injecting it if missing).
@@ -8038,13 +8114,16 @@
             // For historical months, only show existing PODs
             if (isPastMonth()) {
                 // Find POD for this customer in the selected month/year
-                const existingPod = db.pods.find(pod => {
+                const existingPod = db.podsWithHistory().find(pod => {
                     if (pod.customerId !== customer.id) return false;
                     const podDate = new Date(pod.date + 'T00:00:00');
                     return podDate.getMonth() === selectedMonth && podDate.getFullYear() === selectedYear;
                 });
                 
                 if (existingPod) {
+                    // Fetched for the historical list only: add it to the loaded PODs so
+                    // the buttons on the POD screen, which look it up by id, find it.
+                    if (!db.pods.some(p => p.id === existingPod.id)) db.pods.push(existingPod);
                     showExistingPod(existingPod);
                 } else {
                     showToast('No POD recorded for this customer in ' + MONTH_NAMES[selectedMonth] + ' ' + selectedYear, 'error');
@@ -12770,7 +12849,7 @@
             if (isHistorical) {
                 const notice = document.createElement('li');
                 notice.className = 'historical-notice';
-                notice.innerHTML = '<strong>📋 Historical View</strong>Viewing completed PODs from ' + MONTH_NAMES[selectedMonth] + ' ' + selectedYear;
+                notice.innerHTML = '<strong>📋 Historical View</strong>' + (db._historyLoading ? 'Loading PODs from ' : 'Viewing completed PODs from ') + MONTH_NAMES[selectedMonth] + ' ' + selectedYear + (db._historyLoading ? '…' : '');
                 list.appendChild(notice);
             }
             // A run brought forward: say which month's round this is, since the
@@ -12783,6 +12862,9 @@
                 list.appendChild(notice);
             }
             
+            // Historical view looks through the month's PODs, including any fetched
+            // for this run when only one week is loaded (see db.loadHistoryPods)
+            const historyPods = isHistorical ? db.podsWithHistory() : null;
             customers.forEach((customer, index) => {
                 // Check if customer is skipped for this specific run date (or anywhere in month for historical)
                 const isSkipped = isHistorical
@@ -12806,7 +12888,7 @@
                 // makeup/ad-hoc dates all show as completed, matching the progress
                 // tile. A second round in the same month starts unticked.
                 const completedPod = isHistorical
-                    ? db.pods.find(pod => {
+                    ? historyPods.find(pod => {
                         if (pod.customerId !== customer.id) return false;
                         const podDate = new Date(pod.date + 'T00:00:00');
                         // Historical view: match any pod in that month/year
