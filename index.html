@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oz Tank - Service POD Manager v11.58</title>
+    <title>Oz Tank - Service POD Manager v11.59</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -6032,6 +6032,19 @@
                 return true;
             },
 
+            // A venue's POD on a date. db.pods follows the period selected in Admin and
+            // can hold another week for a moment after coming back to Home, so today's
+            // month (progressPods) is checked as well: missing an existing POD here would
+            // offer a blank form and allow a second POD for the same visit.
+            findPodOnDate(customerId, date, skipAdHoc = false) {
+                const match = p => p.customerId === customerId && p.date === date && !(skipAdHoc && p.isAdHoc);
+                let pod = this.pods.find(match);
+                if (!pod) {
+                    pod = this.progressPods.find(match);
+                    if (pod) this.pods.push(pod);   // so the screens that look it up by id find it
+                }
+                return pod || null;
+            },
             // db.pods plus any history PODs it does not already hold
             podsWithHistory() {
                 if (!this.historyPods.length) return this.pods;
@@ -8046,6 +8059,31 @@
             }
         });
 
+        // Put the shared period selection back on today. Returns false when it already is.
+        function resetPeriodToNow() {
+            const now = new Date();
+            const thisMonday = getMondayOfWeek(now);
+            if (selectedMonth === now.getMonth() && selectedYear === now.getFullYear()
+                && formatDateLocal(selectedWeekStart) === formatDateLocal(thisMonday)) {
+                return false;
+            }
+            selectedMonth = now.getMonth();
+            selectedYear = now.getFullYear();
+            selectedWeekStart = thisMonday;
+            updateMonthDisplay();
+            updatePeriodDisplay();
+            return true;
+        }
+
+        async function reloadAfterPeriodReset() {
+            await refreshForPeriod();       // PODs, run dates and tank movements for the current period
+            await db.loadMonthlySkips();    // skips are loaded for the selected month
+            if (document.getElementById('homeView').classList.contains('active')) {
+                renderRunDays();
+            } else if (document.getElementById('customerListView').classList.contains('active')) {
+                renderCustomerList();
+            }
+        }
         function showHomeView(skipHistory) {
             // Clean up any existing other-workers-section before re-rendering
             const existingOther = document.querySelector('.other-workers-section');
@@ -8059,6 +8097,11 @@
             adHocCustomerName = '';
             adHocServiceType = 'Service';
             adHocSourceRunDay = null;
+            // The period picked in Admin also decides what the run tiles here open (a
+            // past month opens that month's history) and which PODs are loaded, but
+            // nothing on this screen shows it. Home always means now: drop any other
+            // period and reload the current one.
+            if (resetPeriodToNow()) reloadAfterPeriodReset();
             updateWorkerPeriodDisplay(); // Sync worker period display
             renderRunDays(); // Refresh run days to show updated progress
         }
@@ -8136,11 +8179,7 @@
                 // Check if POD already exists for this customer on the work date.
                 // Exclude ad-hoc PODs (e.g. Repairs) so they don't surface on the
                 // regular runsheet service line for the same customer/date.
-                let existingPod = db.pods.find(pod => 
-                    pod.customerId === customer.id && 
-                    pod.date === workDate &&
-                    !pod.isAdHoc
-                );
+                let existingPod = db.findPodOnDate(customer.id, workDate, true);
                 
                 if (existingPod) {
                     // Show existing POD with edit option
@@ -12295,9 +12334,7 @@
                 const nowUTC = new Date();
                 const podDate = currentServiceDate || formatDateLocal(new Date());
                 
-                const existingPod = db.pods.find(pod => 
-                    pod.customerId === customerId && pod.date === podDate
-                );
+                const existingPod = db.findPodOnDate(customerId, podDate);
                 
                 if (existingPod) {
                     showToast('POD already exists', 'warning');
@@ -12350,9 +12387,7 @@
                 }
             } else {
                 const podDate = currentServiceDate || formatDateLocal(new Date());
-                const existingPod = db.pods.find(pod => 
-                    pod.customerId === customerId && pod.date === podDate
-                );
+                const existingPod = db.findPodOnDate(customerId, podDate);
                 
                 if (existingPod) {
                     const hasDetails = existingPod.signature || existingPod.photo || 
