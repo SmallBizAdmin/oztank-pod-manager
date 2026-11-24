@@ -48,6 +48,7 @@ Snapshot taken **2026-11-02** (after adding `customers.predecessor_id`).
 | do_not_email | boolean | YES | false |
 | chem_separate_invoice | boolean | YES | false (carbsolve billed on its own invoice, no delivery fee) |
 | monthly_rental | boolean | YES | false (recurring rental charged monthly regardless of service) |
+| run_day_since | timestamptz | YES | when `run_day` was last changed in the app's customer edit screen (v11.61+); null = never moved, the app then uses `created_at`. Renaming a run does not set it. Added by hand: `alter table customers add column if not exists run_day_since timestamptz;` |
 
 Note: `"order"` is a reserved word — always double-quote it in SQL.
 

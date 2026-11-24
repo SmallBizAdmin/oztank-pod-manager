@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oz Tank - Service POD Manager v11.60</title>
+    <title>Oz Tank - Service POD Manager v11.61</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -329,6 +329,9 @@
             border-left: 4px solid #16a34a;
         }
 
+        .customer-item.not-due {
+            opacity: 0.7;
+        }
         .customer-item.skipped {
             background: #f9fafb;
             border-left: 4px solid #9ca3af;
@@ -5484,6 +5487,8 @@
                         id: c.id,
                         name: c.name,
                         runDay: c.run_day,
+                        createdAt: c.created_at || null,
+                        runDaySince: c.run_day_since || null, // set when the run day is changed (column may not exist yet)
                         address: c.address,
                         phone: c.phone,
                         serviceType: c.service_type,
@@ -6167,6 +6172,9 @@
                     if (monthOf(p.date) === month) done.set(p.customerId, p);
                 });
                 const skips = this.monthlySkips || {};
+                // The last run date of the round being worked, once it has one
+                const roundEnds = rounds.filter(r => r.month === month).map(r => r.end).sort();
+                const roundEnd = roundEnds.length ? roundEnds[roundEnds.length - 1] : null;
                 return {
                     rounds,
                     month,
@@ -6192,6 +6200,15 @@
                             .map(k => k.slice(prefix.length))
                             .sort();
                         return dates.length ? dates[dates.length - 1] : null;
+                    },
+                    // A venue added to this run (created, or moved onto it) after the
+                    // round was run starts with the next round: it is not counted or
+                    // shown as outstanding in this one, unless it has been done anyway.
+                    roundEnd,
+                    startsNextRound: customer => {
+                        if (!roundEnd || done.has(customer.id)) return false;
+                        const joined = runJoinDate(customer);
+                        return !!joined && joined > roundEnd;
                     }
                 };
             },
@@ -6474,6 +6491,13 @@
             
             async saveCustomer(customer) {
                 try {
+                    // A venue being created now: note when, so it is not counted in a
+                    // round that was run before it existed (the database sets its own
+                    // created_at; this is the copy held until the next reload).
+                    if (!this.customers.some(c => c.id === customer.id)) {
+                        customer.createdAt = new Date().toISOString();
+                        customer.runDaySince = null;
+                    }
                     const { data, error } = await supabase
                         .from('customers')
                         .upsert({
@@ -6508,6 +6532,24 @@
                 }
             },
             
+            // When a venue's run day is changed, record when. Kept out of the general
+            // upsert so renaming a run (which rewrites run_day on every venue in it)
+            // and the bulk/import paths never touch it. If the column has not been
+            // added to the database yet this fails quietly: the change is then only
+            // remembered until the app reloads.
+            async saveRunDaySince(customerId, isoTime) {
+                try {
+                    const { error } = await supabase
+                        .from('customers')
+                        .update({ run_day_since: isoTime })
+                        .eq('id', customerId);
+                    if (error) throw error;
+                    return true;
+                } catch (error) {
+                    console.warn('Could not record the run day change time (is customers.run_day_since missing?):', error);
+                    return false;
+                }
+            },
             // Targeted predecessor update. Kept out of the general upsert for the
             // same reason as tank labels: bulk and import save paths build customer
             // objects without this field and would otherwise null the link out.
@@ -7287,6 +7329,14 @@
             return Math.round((t(toStr) - t(fromStr)) / 86400000);
         }
 
+        // The day a venue joined the run it is on now (Brisbane date): when its run
+        // day was last changed, else when it was created. null when unknown.
+        function runJoinDate(customer) {
+            const stamp = customer.runDaySince || customer.createdAt;
+            if (!stamp) return null;
+            const d = new Date(stamp);
+            return isNaN(d) ? null : d.toLocaleDateString('en-CA', { timeZone: 'Australia/Brisbane' });
+        }
         // scheduledDates: the run's dates in the calendar. venuesByDate: { date:
         // venues with a POD that day }. A date missing from the calendar still
         // starts a round when at least minVenues were done on it (the calendar
@@ -7890,6 +7940,8 @@
                             id: c.id,
                             name: c.name,
                             runDay: c.run_day,
+                            createdAt: c.created_at || null,
+                            runDaySince: c.run_day_since || null, // set when the run day is changed (column may not exist yet)
                             address: c.address,
                             phone: c.phone,
                             serviceType: c.service_type,
@@ -8767,7 +8819,12 @@
                     );
                     sortedServiceDaysOnDate.forEach(sd => {
                         const pods = podsOnDate.filter(p => p.runDay === sd.serviceDayName);
-                        const totalCustomers = db.customers.filter(c => c.runDay === sd.serviceDayName).length;
+                        // Venues on the run by this date (one added later still counts if it has a POD that day)
+                        const totalCustomers = db.customers.filter(c => {
+                            if (c.runDay !== sd.serviceDayName) return false;
+                            const joined = runJoinDate(c);
+                            return !joined || joined <= dateStr || pods.some(p => p.customerId === c.id);
+                        }).length;
                         const isInvoiced = db.isServiceDayInvoiced(sd.serviceDayName, dateStr);
                         const workerColor = getWorkerColor(sd.calendarOwner);
                         const workerBgColor = getWorkerColorLight(sd.calendarOwner);
@@ -9596,7 +9653,12 @@
             totalCustomers = eventsOnDate.length;
             } else {
             completedCount = pods.filter(p => !p.isAdHoc).length;
-            totalCustomers = db.customers.filter(c => c.runDay === runDay).length;
+            // Venues on the run by this date (one added later still counts if it has a POD that day)
+            totalCustomers = db.customers.filter(c => {
+                if (c.runDay !== runDay) return false;
+                const joined = runJoinDate(c);
+                return !joined || joined <= dateStr || pods.some(p => p.customerId === c.id);
+            }).length;
              }
                 // Check if this service day is invoiced
                 const isInvoiced = db.isServiceDayInvoiced(runDay, dateStr);
@@ -12526,14 +12588,21 @@
             // Filter out skipped customers AND off-month customers for this round
             const activeCustomers = allCustomers.filter(c =>
                 !periodSkipped.get(c.id) &&
-                !isOffMonth(c, period.monthIndex, period.year)
+                !isOffMonth(c, period.monthIndex, period.year) &&
+                !period.startsNextRound(c)
             );
             const skippedCount = allCustomers.filter(c => periodSkipped.get(c.id)).length;
             const offMonthCount = allCustomers.filter(c =>
                 !periodSkipped.get(c.id) &&
                 isOffMonth(c, period.monthIndex, period.year)
             ).length;
-            const excludedCount = skippedCount + offMonthCount;
+            // Added to the run after this round was run: starts with the next one
+            const newCount = allCustomers.filter(c =>
+                !periodSkipped.get(c.id) &&
+                !isOffMonth(c, period.monthIndex, period.year) &&
+                period.startsNextRound(c)
+            ).length;
+            const excludedCount = skippedCount + offMonthCount + newCount;
             const count = activeCustomers.length;
             
             // Check if we're viewing a past month
@@ -12584,9 +12653,11 @@
             
             // Add excluded indicator if any (skipped + off-month)
             if (excludedCount > 0) {
-                const excludedLabel = skippedCount > 0 && offMonthCount > 0 
-                    ? `${skippedCount} skipped, ${offMonthCount} off-month`
-                    : (offMonthCount > 0 ? `${offMonthCount} off-month` : `${skippedCount} skipped`);
+                const excludedLabel = [
+                    skippedCount > 0 ? `${skippedCount} skipped` : '',
+                    offMonthCount > 0 ? `${offMonthCount} off-month` : '',
+                    newCount > 0 ? `${newCount} new, from next round` : ''
+                ].filter(Boolean).join(', ');
                 statusText += ` <span style="font-size: 11px; color: #9ca3af;">(${excludedLabel})</span>`;
             }
             
@@ -12705,6 +12776,7 @@
             const active = customers.filter(c => {
                 if (summaryPeriod.skipDateFor(c.id, summaryWorkDate)) return false;
                 if (isOffMonth(c, summaryPeriod.monthIndex, summaryPeriod.year)) return false;
+                if (summaryPeriod.startsNextRound(c)) return false;
                 return true;
             });
 
@@ -12809,7 +12881,7 @@
             const allItems = document.querySelectorAll('#customerList .customer-item');
 
             allItems.forEach(item => {
-                const isDone = item.classList.contains('completed') || item.classList.contains('skipped');
+                const isDone = item.classList.contains('completed') || item.classList.contains('skipped') || item.classList.contains('not-due');
                 item.style.display = (showRemainingOnly && isDone) ? 'none' : '';
             });
 
@@ -12862,13 +12934,19 @@
                     : !!skipDateOf(c);
                 return !skipped && isOffMonth(c, checkMonth, checkYear);
             }).length;
-            const excludedTotal = skippedCount + offMonthCount;
+            // Added to the run after this round was run: starts with the next one
+            const startsNext = c => !isHistorical && !skipDateOf(c) && !isOffMonth(c, checkMonth, checkYear)
+                && period.startsNextRound(c);
+            const newCount = customers.filter(startsNext).length;
+            const excludedTotal = skippedCount + offMonthCount + newCount;
             const activeCount = customers.length - excludedTotal;
             let countText = `${customers.length} customers`;
             if (excludedTotal > 0) {
-                const excludedLabel = skippedCount > 0 && offMonthCount > 0 
-                    ? `${skippedCount} skipped, ${offMonthCount} off-month`
-                    : (offMonthCount > 0 ? `${offMonthCount} off-month` : `${skippedCount} skipped`);
+                const excludedLabel = [
+                    skippedCount > 0 ? `${skippedCount} skipped` : '',
+                    offMonthCount > 0 ? `${offMonthCount} off-month` : '',
+                    newCount > 0 ? `${newCount} new, from next round` : ''
+                ].filter(Boolean).join(', ');
                 countText = `${activeCount} active (${excludedLabel})`;
             }
             document.getElementById('customerCount').textContent = countText;
@@ -12951,7 +13029,9 @@
                     : period.podFor(customer.id);
                 
                 const li = document.createElement('li');
-                li.className = `customer-item ${completedPod ? 'completed' : ''} ${effectivelySkipped ? 'skipped' : ''}`;
+                // Joined the run after this round was run and not done since: not due yet
+                const notDueYet = startsNext(customer);
+                li.className = `customer-item ${completedPod ? 'completed' : ''} ${effectivelySkipped ? 'skipped' : ''} ${notDueYet ? 'not-due' : ''}`;
                 li.dataset.customerId = customer.id;
                 
                 // Build schedule badge HTML (only for bi-monthly/quarterly)
@@ -12971,6 +13051,8 @@
                 } else if (customerIsOffMonth && !isSkipped) {
                     skipDisplay = scheduleBadgeHtml;
                     scheduleBadgeHtml = ''; // Don't show twice
+                } else if (notDueYet) {
+                    skipDisplay = '<span class="schedule-badge">🆕 Starts next round</span>';
                 }
                 
                 // Build customer info HTML
@@ -17538,6 +17620,7 @@
             const newName = document.getElementById('editCustomerName').value.trim();
             if (!newName) { showToast('Customer name cannot be empty', 'error'); return; }
             customer.name = newName;
+            const previousRunDay = customer.runDay;
             customer.runDay = document.getElementById('editCustomerRunDay').value.trim();
             customer.address = document.getElementById('editCustomerAddress').value.trim();
             customer.phone = document.getElementById('editCustomerPhone').value.trim();
@@ -17594,7 +17677,13 @@
             }
 
             try {
-                await db.saveCustomer(customer);
+                const saved = await db.saveCustomer(customer);
+                // Moved to another run: note when, so the venue is not counted in a round
+                // of the new run that was run before it joined.
+                if (saved !== false && customer.runDay !== previousRunDay) {
+                    customer.runDaySince = new Date().toISOString();
+                    await db.saveRunDaySince(customerId, customer.runDaySince);
+                }
                 const ok = await db.saveTankLabels(customerId, tankLabelsToSave, tankCount);
                 if (ok) customer.tankLabels = tankLabelsToSave;
                 if ((customer.predecessorId ?? null) !== predecessorId) {
