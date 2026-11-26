@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oz Tank - Service POD Manager v11.61</title>
+    <title>Oz Tank - Service POD Manager v11.62</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -9801,6 +9801,16 @@
             }
         }
 
+        // A job opened from a calendar event is pinned to the event's date. When it is
+        // actually done on a later day (yesterday's job finished this morning), file
+        // it under the day it was done: the earlier day's ad-hoc list has usually been
+        // invoiced by then and the job would be missed. A ticked event with no POD
+        // already shows on the day it was ticked. Jobs done early keep the event's date.
+        function eventJobDate(workDate, calendarEventId) {
+            const today = formatDateLocal(new Date());
+            return (calendarEventId && workDate && workDate < today) ? today : workDate;
+        }
+
         // Tick button handler — opens the ad-hoc modal with a Confirm Complete option
         function handleEventTick(eventId, dateStr) {
             // Pin the work date to the calendar event's own date. This flow never
@@ -13630,7 +13640,7 @@
             const editingOrig = currentEditingPodId ? currentEditingOriginal : null;
             const podDate = (editingOrig && editingOrig.date)
                 ? editingOrig.date
-                : (currentServiceDate || formatDateLocal(nowAEST));
+                : eventJobDate(currentServiceDate || formatDateLocal(nowAEST), currentCalendarEventId);
             
             // Get carbsolve from dropdown (single-tank only)
             const carbsolve = document.getElementById('podCarbsolveDisplay') ? document.getElementById('podCarbsolveDisplay').value : (currentCustomer.carbsolve || '');
@@ -14466,6 +14476,15 @@
                 // Check if customer is skipped for this exact run date
                 const isSkipped = db.isCustomerSkipped(customer.id, selectedDate);
                 const skipReason = isSkipped ? db.getSkipReason(customer.id, selectedDate) : '';
+                // A run split over several days (part done Monday, finished Thursday): a
+                // venue with no POD on this date that was done on another day of the
+                // same round shows when, rather than looking outstanding. It is invoiced
+                // on that day's sheet, so it gets no invoice tick here.
+                const roundPod = (!pod && !isSkipped && adminPeriod.rounds.length) ? adminPeriod.podFor(customer.id) : null;
+                const doneOn = (roundPod && roundPod.date !== selectedDate) ? roundPod.date : null;
+                const doneOnLabel = doneOn
+                    ? new Date(doneOn + 'T00:00:00').toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })
+                    : '';
 
                 // Check if this is an off-month for bi-monthly customers
                 const customerIsOffMonth = isOffMonth(customer, adminPeriod.monthIndex, adminPeriod.year);
@@ -14564,6 +14583,8 @@
                     statusDisplay = '<span style="color: #9ca3af; font-size: 12px;">—</span>';
                 } else if (pod) {
                     statusDisplay = '<span style="color: #16a34a; font-size: 18px;">✓</span>';
+                } else if (doneOn) {
+                    statusDisplay = `<span style="color: #16a34a; font-size: 11px; font-weight: 600; white-space: nowrap;" title="Done on another day of this round">✓ ${doneOnLabel}</span>`;
                 } else {
                     statusDisplay = '-';
                 }
@@ -14588,7 +14609,10 @@
                 // Uses the same billingValue the 📋 badge displays, and the same
                 // mechanism skipped rows use (skipped_invoice_status, customer+date).
                 const isRentAndSS = (billingValue || '').toLowerCase().includes('rent & ss');
-                const isInvoiceable = !isNoInvoice && (!customerIsOffMonth || isRentAndSS);
+                // Done on another day of the round: invoiced on that day's sheet. An invoice
+                // tick already put against this date stays visible so it can be removed.
+                const tickedHere = !!(db.skippedInvoiceStatus[`${customer.id}|${selectedDate}`] || {}).invoiced;
+                const isInvoiceable = !isNoInvoice && (!customerIsOffMonth || isRentAndSS) && !(doneOn && !tickedHere);
                 let invoiced = false;
                 let checkedSent = false;
                 let invoiceCheckboxHtml = '';
@@ -14660,6 +14684,8 @@
                     } else {
                         statusBadgeHtml = `<div style="text-align:center;"><span style="background: #e5e7eb; color: #6b7280; padding: 2px 8px; border-radius: 8px; font-size: 10px;">Skipped</span><div style="display:flex;align-items:center;justify-content:center;gap:4px;margin-top:3px;">${skipToggleBtn}${skipPencil}</div></div>`;
                     }
+                } else if (doneOn) {
+                    statusBadgeHtml = `<div style="text-align:center;"><span style="background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; padding: 2px 8px; border-radius: 8px; font-size: 10px; font-weight: 600; white-space: nowrap;">Done ${doneOnLabel}</span></div>`;
                 }
 
                 // Build carbsolve display — highlight orange if worker used a different size to customer default
@@ -18456,7 +18482,7 @@
             }
             
             const nowUTC = new Date();
-            const workDate = currentServiceDate || formatDateLocal(new Date());
+            const workDate = eventJobDate(currentServiceDate || formatDateLocal(new Date()), tankMovementCalendarEventId);
             
             // If tank movement was initiated from a runsheet, use that runsheet's day
             // If from main menu (tankMovementSourceRunDay is null), always use 'Ad-Hoc'
